@@ -1,0 +1,303 @@
+# =============================================================================
+# Starship Prompt Configuration - Catppuccin Powerline Theme
+# =============================================================================
+# Beautiful, fast, and informative prompt with Catppuccin colors
+# =============================================================================
+
+# Timeout for commands (in milliseconds)
+command_timeout = 1000
+
+# Inserts a blank line between shell prompts
+add_newline = true
+
+# Replace the "❯" symbol in the prompt with "➜"
+[character]
+success_symbol = "[➜](bold green)"
+error_symbol = "[➜](bold red)"
+
+# =============================================================================
+# Catppuccin Color Palette (Mocha)
+# =============================================================================
+
+palette = "catppuccin_mocha"
+
+[palettes.catppuccin_mocha]
+rosewater = "#f5e0dc"
+flamingo = "#f2cdcd"
+pink = "#f5c2e7"
+mauve = "#cba6f7"
+red = "#f38ba8"
+maroon = "#eba0ac"
+peach = "#fab387"
+yellow = "#f9e2af"
+green = "#a6e3a1"
+teal = "#94e2d5"
+sky = "#89dceb"
+sapphire = "#74c7ec"
+blue = "#89b4fa"
+lavender = "#b4befe"
+text = "#cdd6f4"
+subtext1 = "#bac2de"
+subtext0 = "#a6adc8"
+overlay2 = "#9399b2"
+overlay1 = "#7f849c"
+overlay0 = "#6c7086"
+surface2 = "#585b70"
+surface1 = "#45475a"
+surface0 = "#313244"
+base = "#1e1e2e"
+mantle = "#181825"
+crust = "#11111b"
+
+# =============================================================================
+# Format Configuration
+# =============================================================================
+
+format = """
+[](surface0)\
+$os\
+$username\
+[](bg:blue fg:surface0)\
+$directory\
+[](fg:blue bg:green)\
+$git_branch\
+$git_status\
+[](fg:green bg:yellow)\
+$nodejs\
+$rust\
+$golang\
+$python\
+[](fg:yellow bg:red)\
+$docker_context\
+[](fg:red bg:mauve)\
+$time\
+[ ](fg:mauve)\
+$line_break$character"""
+
+# =============================================================================
+# System Information
+# =============================================================================
+
+[os]
+disabled = false
+style = "bg:surface0 fg:text"
+
+[os.symbols]
+Windows = "󰍲"
+Ubuntu = "󰕈"
+SUSE = ""
+Raspbian = "󰐿"
+Mint = "󰣭"
+Macos = "󰀵"
+Manjaro = ""
+Linux = "󰌽"
+Gentoo = "󰣨"
+Fedora = "󰣛"
+Alpine = ""
+Amazon = ""
+Android = ""
+Arch = "󰣇"
+Artix = "󰣇"
+CentOS = ""
+Debian = "󰣚"
+Redhat = "󱄛"
+RedHatEnterprise = "󱄛"
+
+[username]
+show_always = true
+style_user = "bg:surface0 fg:text"
+style_root = "bg:surface0 fg:text"
+format = '[ $user ]($style)'
+
+# =============================================================================
+# Directory Configuration
+# =============================================================================
+
+[directory]
+style = "fg:mantle bg:blue"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = "󰝚 "
+"Pictures" = " "
+"Developer" = "󰲋 "
+
+# =============================================================================
+# Git Configuration
+# =============================================================================
+
+[git_branch]
+symbol = ""
+style = "bg:green"
+format = '[[ $symbol $branch ](fg:base bg:green)]($style)'
+
+[git_status]
+style = "bg:green"
+format = '[[($all_status$ahead_behind )](fg:base bg:green)]($style)'
+
+# =============================================================================
+# Programming Languages
+# =============================================================================
+
+[nodejs]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[rust]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[golang]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[python]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[php]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[java]
+symbol = " "
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[kotlin]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[haskell]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+[swift]
+symbol = ""
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+# =============================================================================
+# Container and Cloud
+# =============================================================================
+
+[docker_context]
+symbol = ""
+style = "bg:red"
+format = '[[ $symbol( $context) ](fg:base bg:red)]($style)'
+
+[kubernetes]
+symbol = "󱃾"
+style = "bg:red"
+format = '[[ $symbol( $context) ](fg:base bg:red)]($style)'
+
+[aws]
+symbol = "  "
+style = "bg:red"
+format = '[[ $symbol( $profile )( $region) ](fg:base bg:red)]($style)'
+
+# =============================================================================
+# Package Managers
+# =============================================================================
+
+[package]
+symbol = "󰏗"
+style = "bg:yellow"
+format = '[[ $symbol( $version) ](fg:base bg:yellow)]($style)'
+
+# =============================================================================
+# Time
+# =============================================================================
+
+[time]
+disabled = false
+time_format = "%R"
+style = "bg:mauve"
+format = '[[  $time ](fg:base bg:mauve)]($style)'
+
+# =============================================================================
+# Command Duration
+# =============================================================================
+
+[cmd_duration]
+min_time = 500
+style = "fg:yellow"
+format = "[$duration]($style)"
+
+# =============================================================================
+# Memory Usage
+# =============================================================================
+
+[memory_usage]
+disabled = false
+threshold = 70
+style = "fg:red"
+format = "RAM: [${ram}]($style)"
+
+# =============================================================================
+# Battery
+# =============================================================================
+
+[battery]
+full_symbol = " "
+charging_symbol = " "
+discharging_symbol = " "
+unknown_symbol = " "
+empty_symbol = " "
+
+[[battery.display]]
+threshold = 20
+style = "fg:red"
+
+[[battery.display]]
+threshold = 50
+style = "fg:yellow"
+
+[[battery.display]]
+threshold = 100
+style = "fg:green"
+
+# =============================================================================
+# Status
+# =============================================================================
+
+[status]
+disabled = false
+style = "fg:red"
+format = "[$symbol$status]($style)"
+
+# =============================================================================
+# Shell
+# =============================================================================
+
+[shell]
+fish_indicator = "󰈺"
+bash_indicator = ""
+zsh_indicator = ""
+disabled = false
+style = "fg:blue"
+format = "[$indicator]($style)"
+
+# =============================================================================
+# Custom Commands
+# =============================================================================
+
+[custom.git_email]
+command = "git config user.email"
+when = "git rev-parse --is-inside-work-tree"
+style = "fg:blue"
+format = "[$output]($style)"
+
+[line_break]
+disabled = false

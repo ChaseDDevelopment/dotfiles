@@ -1,0 +1,222 @@
+# =============================================================================
+# Dotfiles Repository .gitignore
+# =============================================================================
+# Excludes temporary files, logs, and sensitive information
+# =============================================================================
+
+# =============================================================================
+# Installation and Runtime Files
+# =============================================================================
+
+# Installation logs
+install.log
+*.log
+
+# Backup directories
+backups/
+.dotfiles-backup-*/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# =============================================================================
+# Fish Shell Files
+# =============================================================================
+
+# Fish history (contains sensitive command history)
+fish_history
+
+# Fish variables (may contain sensitive environment variables)
+fish_variables
+
+# Compiled fish functions
+*.fish.compiled
+
+# Fish session files
+.fish_history
+
+# =============================================================================
+# Tmux Files
+# =============================================================================
+
+# Tmux plugin directory (these are downloaded by TPM)
+.tmux/plugins/
+
+# Tmux session files
+tmux-session-*
+
+# =============================================================================
+# Neovim Files
+# =============================================================================
+
+# Neovim data directory
+.local/share/nvim/
+.local/state/nvim/
+.cache/nvim/
+
+# Lazy.nvim plugin directory
+.local/share/nvim/lazy/
+
+# Mason LSP installations
+.local/share/nvim/mason/
+
+# Neovim session files
+*.vim
+Session.vim
+.netrwhist
+
+# =============================================================================
+# Node.js and Package Managers
+# =============================================================================
+
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Package manager directories
+.npm/
+.yarn/
+.pnpm-store/
+
+# Lock files (can be regenerated)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# =============================================================================
+# Development Tools
+# =============================================================================
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Compiled files
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# =============================================================================
+# Operating System Files
+# =============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# =============================================================================
+# Security and Sensitive Files
+# =============================================================================
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+id_ecdsa*
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+
+# API keys and secrets
+secrets.json
+config.secret.*
+*.secret
+
+# =============================================================================
+# Archive and Compressed Files
+# =============================================================================
+
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# =============================================================================
+# Runtime and Cache Directories
+# =============================================================================
+
+# Cache directories
+.cache/
+cache/
+tmp/
+temp/
+
+# Runtime directories
+.runtime/
+run/
+
+# =============================================================================
+# Version Control
+# =============================================================================
+
+# Git
+.git/
+*.orig
+
+# Other VCS
+.hg/
+.svn/
+.bzr/
+
+# =============================================================================
+# Custom Exclusions
+# =============================================================================
+
+# Test files and directories
+test-*
+testing/
+experiments/
+
+# Personal notes and drafts
+notes.md
+TODO.md
+PERSONAL.md
+
+# Local configuration overrides
+local.*
+*.local
+
+# =============================================================================
+# Allow Important Files
+# =============================================================================
+
+# Force include important configuration files
+!configs/**/*.fish
+!configs/**/*.conf
+!configs/**/*.toml
+!configs/**/*.json
+!scripts/*.sh
+!install.sh
+!README.md
+!LICENSE
