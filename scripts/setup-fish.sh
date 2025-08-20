@@ -78,8 +78,21 @@ install_fisher() {
     substep "Installing Fisher plugin manager..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        # Install Fisher
-        fish -c "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher"
+        # Download Fisher script to temporary file for safer execution
+        local fisher_script="/tmp/fisher.fish"
+        substep "Downloading Fisher script..."
+        curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish -o "$fisher_script"
+        
+        # Basic validation - check if file exists and has reasonable size
+        if [[ -f "$fisher_script" && -s "$fisher_script" ]]; then
+            substep "Installing Fisher plugin manager..."
+            fish -c "source '$fisher_script' && fisher install jorgebucaran/fisher"
+            rm -f "$fisher_script"
+        else
+            error "Failed to download Fisher script"
+            rm -f "$fisher_script"
+            return 1
+        fi
     else
         substep "[DRY RUN] Would install Fisher plugin manager"
     fi
@@ -109,42 +122,45 @@ setup_fish_variables() {
     substep "Setting up Fish universal variables..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        # Set Fish colors (TokyoNight Night theme)
-        fish -c "set -U fish_color_autosuggestion 565f89"
-        fish -c "set -U fish_color_cancel f7768e"
-        fish -c "set -U fish_color_command 7dcfff"
-        fish -c "set -U fish_color_comment 565f89"
-        fish -c "set -U fish_color_cwd 9ece6a"
-        fish -c "set -U fish_color_cwd_root f7768e"
-        fish -c "set -U fish_color_end ff9e64"
-        fish -c "set -U fish_color_error f7768e"
-        fish -c "set -U fish_color_escape bb9af7"
-        fish -c "set -U fish_color_history_current --bold"
-        fish -c "set -U fish_color_host c0caf5"
-        fish -c "set -U fish_color_host_remote e0af68"
-        fish -c "set -U fish_color_normal c0caf5"
-        fish -c "set -U fish_color_operator 7dcfff"
-        fish -c "set -U fish_color_param bb9af7"
-        fish -c "set -U fish_color_quote e0af68"
-        fish -c "set -U fish_color_redirection '7aa2f7 --bold'"
-        fish -c "set -U fish_color_search_match 'white --background=33467C'"
-        fish -c "set -U fish_color_selection 'white --bold --background=33467C'"
-        fish -c "set -U fish_color_status f7768e"
-        fish -c "set -U fish_color_user 9ece6a"
-        fish -c "set -U fish_color_valid_path --underline"
-        
-        # Disable greeting
-        fish -c "set -U fish_greeting ''"
-        
-        # Set key bindings
-        fish -c "set -U fish_key_bindings fish_default_key_bindings"
-        
-        # Set pager colors (TokyoNight)
-        fish -c "set -U fish_pager_color_completion c0caf5"
-        fish -c "set -U fish_pager_color_description '565f89 -i'"
-        fish -c "set -U fish_pager_color_prefix '7aa2f7 --bold --underline'"
-        fish -c "set -U fish_pager_color_progress 'c0caf5 --background=7aa2f7'"
-        fish -c "set -U fish_pager_color_selected_background --background=33467C"
+        # Batch all Fish variable settings into a single command for better performance
+        fish -c "
+            # Set Fish colors (TokyoNight Night theme)
+            set -U fish_color_autosuggestion 565f89;
+            set -U fish_color_cancel f7768e;
+            set -U fish_color_command 7dcfff;
+            set -U fish_color_comment 565f89;
+            set -U fish_color_cwd 9ece6a;
+            set -U fish_color_cwd_root f7768e;
+            set -U fish_color_end ff9e64;
+            set -U fish_color_error f7768e;
+            set -U fish_color_escape bb9af7;
+            set -U fish_color_history_current --bold;
+            set -U fish_color_host c0caf5;
+            set -U fish_color_host_remote e0af68;
+            set -U fish_color_normal c0caf5;
+            set -U fish_color_operator 7dcfff;
+            set -U fish_color_param bb9af7;
+            set -U fish_color_quote e0af68;
+            set -U fish_color_redirection '7aa2f7 --bold';
+            set -U fish_color_search_match 'white --background=33467C';
+            set -U fish_color_selection 'white --bold --background=33467C';
+            set -U fish_color_status f7768e;
+            set -U fish_color_user 9ece6a;
+            set -U fish_color_valid_path --underline;
+            
+            # Disable greeting
+            set -U fish_greeting '';
+            
+            # Set key bindings
+            set -U fish_key_bindings fish_default_key_bindings;
+            
+            # Set pager colors (TokyoNight)
+            set -U fish_pager_color_completion c0caf5;
+            set -U fish_pager_color_description '565f89 -i';
+            set -U fish_pager_color_prefix '7aa2f7 --bold --underline';
+            set -U fish_pager_color_progress 'c0caf5 --background=7aa2f7';
+            set -U fish_pager_color_selected_background --background=33467C;
+        "
         
         substep "Fish universal variables configured with TokyoNight colors"
     else
@@ -156,12 +172,12 @@ setup_nvm_fish() {
     substep "Setting up NVM for Fish..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        # Install latest LTS Node.js
-        fish -c "nvm install lts"
-        fish -c "nvm use lts"
-        
-        # Set default version (matching your current setup)
-        fish -c "set -U nvm_default_version lts"
+        # Batch NVM commands for better performance
+        fish -c "
+            nvm install lts;
+            nvm use lts;
+            set -U nvm_default_version lts;
+        "
         
         substep "Node.js LTS installed and set as default"
     else

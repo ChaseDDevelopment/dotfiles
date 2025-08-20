@@ -225,8 +225,12 @@ reload_configurations() {
         if check_command fish; then
             substep "Reloading Fish configuration"
             # Source Fish config and reload universal variables
-            fish -c "source ~/.config/fish/config.fish" 2>/dev/null || true
-            substep "Fish configuration reloaded"
+            if fish -c "source ~/.config/fish/config.fish" 2>/dev/null; then
+                substep "Fish configuration reloaded successfully"
+            else
+                warning "Failed to reload Fish configuration"
+                warning "You may need to restart your shell manually"
+            fi
         fi
         
         # Install and reload Tmux plugins if Tmux is running
@@ -234,22 +238,34 @@ reload_configurations() {
             substep "Installing/updating Tmux plugins"
             # Source tmux config
             if tmux list-sessions &>/dev/null; then
-                tmux source-file ~/.tmux.conf 2>/dev/null || true
-                substep "Tmux configuration reloaded"
+                if tmux source-file ~/.tmux.conf 2>/dev/null; then
+                    substep "Tmux configuration reloaded successfully"
+                else
+                    warning "Failed to reload Tmux configuration"
+                    warning "You may need to restart tmux manually"
+                fi
             fi
             
             # Install TPM plugins if TPM is available
             if [[ -f ~/.tmux/plugins/tpm/scripts/install_plugins.sh ]]; then
-                ~/.tmux/plugins/tpm/scripts/install_plugins.sh &>/dev/null || true
-                substep "Tmux plugins installed"
+                if ~/.tmux/plugins/tpm/scripts/install_plugins.sh &>/dev/null; then
+                    substep "Tmux plugins installed successfully"
+                else
+                    warning "Failed to install Tmux plugins"
+                    warning "You may need to install them manually with Prefix + I"
+                fi
             fi
         fi
         
         # Clear Starship cache
         if check_command starship; then
             substep "Clearing Starship cache"
-            rm -rf ~/.cache/starship 2>/dev/null || true
-            substep "Starship cache cleared"
+            if rm -rf ~/.cache/starship 2>/dev/null; then
+                substep "Starship cache cleared successfully"
+            else
+                # This is usually not critical, so just note it
+                substep "Starship cache clearing skipped (not critical)"
+            fi
         fi
         
         success "All configurations reloaded"

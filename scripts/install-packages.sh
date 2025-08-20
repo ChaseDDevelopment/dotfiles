@@ -129,7 +129,21 @@ install_starship() {
     substep "Installing Starship prompt..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        curl -sS https://starship.rs/install.sh | sh -s -- --yes
+        # Download Starship installer to temporary file for safer execution
+        local starship_installer="/tmp/starship-install.sh"
+        substep "Downloading Starship installer..."
+        curl -sS https://starship.rs/install.sh -o "$starship_installer"
+        
+        # Basic validation - check if file exists and has reasonable size
+        if [[ -f "$starship_installer" && -s "$starship_installer" ]]; then
+            substep "Executing Starship installer..."
+            sh "$starship_installer" --yes
+            rm -f "$starship_installer"
+        else
+            error "Failed to download Starship installer"
+            rm -f "$starship_installer"
+            return 1
+        fi
     else
         substep "[DRY RUN] Would install Starship via official installer"
     fi
@@ -144,11 +158,25 @@ install_bun() {
     substep "Installing Bun..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        curl -fsSL https://bun.sh/install | bash
+        # Download Bun installer to temporary file for safer execution
+        local bun_installer="/tmp/bun-install.sh"
+        substep "Downloading Bun installer..."
+        curl -fsSL https://bun.sh/install -o "$bun_installer"
         
-        # Add to PATH for current session
-        export BUN_INSTALL="$HOME/.bun"
-        export PATH="$BUN_INSTALL/bin:$PATH"
+        # Basic validation - check if file exists and has reasonable size
+        if [[ -f "$bun_installer" && -s "$bun_installer" ]]; then
+            substep "Executing Bun installer..."
+            bash "$bun_installer"
+            rm -f "$bun_installer"
+            
+            # Add to PATH for current session
+            export BUN_INSTALL="$HOME/.bun"
+            export PATH="$BUN_INSTALL/bin:$PATH"
+        else
+            error "Failed to download Bun installer"
+            rm -f "$bun_installer"
+            return 1
+        fi
     else
         substep "[DRY RUN] Would install Bun via official installer"
     fi
@@ -245,8 +273,22 @@ install_uv() {
     
     substep "Installing UV..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        export PATH="$HOME/.local/bin:$PATH"
+        # Download UV installer to temporary file for safer execution
+        local uv_installer="/tmp/uv-install.sh"
+        substep "Downloading UV installer..."
+        curl -LsSf https://astral.sh/uv/install.sh -o "$uv_installer"
+        
+        # Basic validation - check if file exists and has reasonable size
+        if [[ -f "$uv_installer" && -s "$uv_installer" ]]; then
+            substep "Executing UV installer..."
+            sh "$uv_installer"
+            rm -f "$uv_installer"
+            export PATH="$HOME/.local/bin:$PATH"
+        else
+            error "Failed to download UV installer"
+            rm -f "$uv_installer"
+            return 1
+        fi
     else
         substep "[DRY RUN] Would install UV via official installer"
     fi
@@ -280,8 +322,22 @@ install_rust() {
     substep "Installing Rust and Cargo..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
+        # Download Rust installer to temporary file for safer execution
+        local rust_installer="/tmp/rustup-init.sh"
+        substep "Downloading Rust installer..."
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$rust_installer"
+        
+        # Basic validation - check if file exists and has reasonable size
+        if [[ -f "$rust_installer" && -s "$rust_installer" ]]; then
+            substep "Executing Rust installer..."
+            sh "$rust_installer" -y
+            rm -f "$rust_installer"
+            source "$HOME/.cargo/env"
+        else
+            error "Failed to download Rust installer"
+            rm -f "$rust_installer"
+            return 1
+        fi
     else
         substep "[DRY RUN] Would install Rust via rustup"
     fi

@@ -76,20 +76,52 @@ backup_neovim_config() {
 }
 
 clone_neovim_config() {
-    substep "Cloning Neovim configuration..."
+    substep "Setting up Neovim configuration..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        # Remove existing config directory if it exists
         if [[ -d "$NEOVIM_CONFIG_DIR" ]]; then
-            rm -rf "$NEOVIM_CONFIG_DIR"
+            # Check if existing directory is a git repository
+            if [[ -d "$NEOVIM_CONFIG_DIR/.git" ]]; then
+                substep "Existing Neovim config found, updating..."
+                cd "$NEOVIM_CONFIG_DIR"
+                
+                # Check if it's the same repository
+                local current_remote
+                current_remote=$(git remote get-url origin 2>/dev/null || echo "")
+                
+                if [[ "$current_remote" == "$NEOVIM_REPO" ]]; then
+                    # Same repo, just pull updates
+                    substep "Pulling latest updates..."
+                    git pull --ff-only || {
+                        warning "Failed to pull updates. There may be local changes."
+                        warning "Consider manually resolving conflicts in $NEOVIM_CONFIG_DIR"
+                    }
+                else
+                    # Different repo, backup and clone new
+                    warning "Existing config is from different repository ($current_remote)"
+                    warning "Backing up existing config and installing new one"
+                    local backup_name="nvim-config-backup-$(date +%Y%m%d-%H%M%S)"
+                    mv "$NEOVIM_CONFIG_DIR" "$HOME/$backup_name"
+                    substep "Backed up existing config to ~/$backup_name"
+                    git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR"
+                fi
+                cd - > /dev/null
+            else
+                # Directory exists but not a git repo, back it up
+                warning "Existing non-git Neovim config found, backing up..."
+                local backup_name="nvim-config-backup-$(date +%Y%m%d-%H%M%S)"
+                mv "$NEOVIM_CONFIG_DIR" "$HOME/$backup_name"
+                substep "Backed up existing config to ~/$backup_name"
+                git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR"
+            fi
+        else
+            # No existing config, just clone
+            git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR"
         fi
         
-        # Clone the repository
-        git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR"
-        
-        substep "Neovim configuration cloned successfully"
+        substep "Neovim configuration setup completed"
     else
-        substep "[DRY RUN] Would clone $NEOVIM_REPO to $NEOVIM_CONFIG_DIR"
+        substep "[DRY RUN] Would setup $NEOVIM_REPO at $NEOVIM_CONFIG_DIR"
     fi
 }
 

@@ -11,8 +11,9 @@ export OS_NAME=""
 export OS_VERSION=""
 export OS_ARCH=""
 export PACKAGE_MANAGER=""
-export INSTALL_CMD=""
-export UPDATE_CMD=""
+# Use arrays instead of strings for commands to prevent injection
+declare -a INSTALL_CMD_ARRAY
+declare -a UPDATE_CMD_ARRAY
 
 detect_os() {
     # Detect architecture
@@ -28,18 +29,33 @@ detect_os() {
         if ! check_command brew; then
             substep "Installing Homebrew..."
             if [[ "$DRY_RUN" == "false" ]]; then
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-                # Add Homebrew to PATH
-                if [[ "$OS_ARCH" == "arm64" ]]; then
-                    eval "$(/opt/homebrew/bin/brew shellenv)"
+                # Download Homebrew installer to temporary file for safer execution
+                local brew_installer="/tmp/homebrew-install.sh"
+                substep "Downloading Homebrew installer..."
+                curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$brew_installer"
+                
+                # Basic validation - check if file exists and has reasonable size
+                if [[ -f "$brew_installer" && -s "$brew_installer" ]]; then
+                    substep "Executing Homebrew installer..."
+                    /bin/bash "$brew_installer"
+                    rm -f "$brew_installer"
+                    
+                    # Add Homebrew to PATH
+                    if [[ "$OS_ARCH" == "arm64" ]]; then
+                        eval "$(/opt/homebrew/bin/brew shellenv)"
+                    else
+                        eval "$(/usr/local/bin/brew shellenv)"
+                    fi
                 else
-                    eval "$(/usr/local/bin/brew shellenv)"
+                    error "Failed to download Homebrew installer"
+                    rm -f "$brew_installer"
+                    exit 1
                 fi
             fi
         fi
         
-        INSTALL_CMD="brew install"
-        UPDATE_CMD="brew update && brew upgrade"
+        INSTALL_CMD_ARRAY=("brew" "install")
+        UPDATE_CMD_ARRAY=("bash" "-c" "brew update && brew upgrade")
         
     elif [[ -f /etc/os-release ]]; then
         # Linux
@@ -50,32 +66,32 @@ detect_os() {
         if check_command apt; then
             # Debian/Ubuntu
             PACKAGE_MANAGER="apt"
-            INSTALL_CMD="sudo apt install -y"
-            UPDATE_CMD="sudo apt update && sudo apt upgrade -y"
+            INSTALL_CMD_ARRAY=("sudo" "apt" "install" "-y")
+            UPDATE_CMD_ARRAY=("bash" "-c" "sudo apt update && sudo apt upgrade -y")
             
         elif check_command dnf; then
             # Fedora
             PACKAGE_MANAGER="dnf"
-            INSTALL_CMD="sudo dnf install -y"
-            UPDATE_CMD="sudo dnf update -y"
+            INSTALL_CMD_ARRAY=("sudo" "dnf" "install" "-y")
+            UPDATE_CMD_ARRAY=("sudo" "dnf" "update" "-y")
             
         elif check_command yum; then
             # RHEL/CentOS
             PACKAGE_MANAGER="yum"
-            INSTALL_CMD="sudo yum install -y"
-            UPDATE_CMD="sudo yum update -y"
+            INSTALL_CMD_ARRAY=("sudo" "yum" "install" "-y")
+            UPDATE_CMD_ARRAY=("sudo" "yum" "update" "-y")
             
         elif check_command pacman; then
             # Arch Linux
             PACKAGE_MANAGER="pacman"
-            INSTALL_CMD="sudo pacman -S --noconfirm"
-            UPDATE_CMD="sudo pacman -Syu --noconfirm"
+            INSTALL_CMD_ARRAY=("sudo" "pacman" "-S" "--noconfirm")
+            UPDATE_CMD_ARRAY=("sudo" "pacman" "-Syu" "--noconfirm")
             
         elif check_command zypper; then
             # openSUSE
             PACKAGE_MANAGER="zypper"
-            INSTALL_CMD="sudo zypper install -y"
-            UPDATE_CMD="sudo zypper update -y"
+            INSTALL_CMD_ARRAY=("sudo" "zypper" "install" "-y")
+            UPDATE_CMD_ARRAY=("sudo" "zypper" "update" "-y")
             
         else
             error "Unsupported package manager. Please install packages manually."
@@ -170,9 +186,21 @@ install_package() {
         if ! check_package_installed "$package"; then
             substep "Installing $package..."
             if [[ "$DRY_RUN" == "false" ]]; then
-                eval "$INSTALL_CMD $package" || {
-                    warning "Failed to install $package, continuing..."
-                }
+                # Use array expansion to safely execute command
+                if ! "${INSTALL_CMD_ARRAY[@]}" "$package"; then
+                    # Check if the package is critical
+                    case "$package" in
+                        "git"|"curl"|"fish"|"tmux"|"neovim")
+                            error "Failed to install critical package: $package"
+                            error "Cannot continue without this package. Please install manually and retry."
+                            exit 1
+                            ;;
+                        *)
+                            warning "Failed to install optional package: $package"
+                            warning "Some features may not work correctly."
+                            ;;
+                    esac
+                fi
             else
                 substep "[DRY RUN] Would install: $package"
             fi
@@ -211,10 +239,13 @@ check_package_installed() {
 update_system() {
     substep "Updating system packages..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        eval "$UPDATE_CMD" || {
-            warning "System update failed, continuing..."
-        }
+        if ! "${UPDATE_CMD_ARRAY[@]}"; then
+            warning "System update failed. This is often non-critical."
+            warning "You may want to run system updates manually later."
+        else
+            substep "System packages updated successfully"
+        fi
     else
-        substep "[DRY RUN] Would run: $UPDATE_CMD"
+        substep "[DRY RUN] Would run: ${UPDATE_CMD_ARRAY[*]}"
     fi
 }

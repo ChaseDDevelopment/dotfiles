@@ -19,14 +19,6 @@ if status is-interactive
     # Load custom functions and configurations
     # (These are automatically loaded from conf.d/ directory)
     
-    # Welcome message (optional)
-    if test "$TERM_PROGRAM" != "WarpTerminal"
-        # Only show welcome in non-Warp terminals
-        if not set -q FISH_WELCOME_SHOWN
-            echo -e "\033[0;34m🐟 Fish shell loaded with custom configuration\033[0m"
-            set -g FISH_WELCOME_SHOWN 1
-        end
-    end
 end
 
 # Export environment variables that other programs might need
@@ -138,8 +130,18 @@ end
 # Cleanup and Finalization
 # =============================================================================
 
-# Remove duplicate PATH entries
-set -gx PATH (printf "%s\n" $PATH | awk '!seen[$0]++')
+# Remove duplicate PATH entries (Fish handles this better natively)
+# Note: fish_add_path automatically handles duplicates, so this is mostly for cleanup
+if set -q PATH[1]
+    # Use Fish's built-in path deduplication which is more reliable
+    set -l cleaned_path
+    for path_entry in $PATH
+        if not contains "$path_entry" $cleaned_path
+            set -a cleaned_path "$path_entry"
+        end
+    end
+    set -gx PATH $cleaned_path
+end
 
 # Set umask for secure file creation
 umask 022
