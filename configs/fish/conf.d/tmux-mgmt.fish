@@ -39,8 +39,8 @@ if status is-interactive
         end
         
         # Main tmux management logic
-        # Only run if tmux is available and we're not already in tmux/screen
-        if command -q tmux; and not string match -rq "screen" $TERM; and not string match -rq "tmux" $TERM
+        # Only run if tmux is available and we're not already in tmux
+        if command -q tmux; and not set -q TMUX
             
             # Clean up orphaned sessions first
             cleanup_sessions

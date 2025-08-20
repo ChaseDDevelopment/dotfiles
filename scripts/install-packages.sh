@@ -27,6 +27,8 @@ install_packages() {
     substep "Installing shell and terminal tools..."
     install_package "fish"
     install_package "tmux"
+    
+    
     install_package "fzf"
     
     # Text editor
@@ -57,6 +59,7 @@ install_packages() {
     
     success "Package installation completed"
 }
+
 
 install_eza() {
     if check_command eza; then

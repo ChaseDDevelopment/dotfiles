@@ -28,6 +28,8 @@ setup_tmux() {
     # Install Tmux plugins
     install_tmux_plugins
     
+    # Theme will be applied automatically by TPM
+    
     success "Tmux setup completed"
 }
 
@@ -46,7 +48,7 @@ copy_tmux_config() {
             if fish_path=$(command -v fish); then
                 substep "Configuring tmux to use fish at: $fish_path"
                 # Use portable sed syntax that works on both GNU and BSD sed
-                sed -i.bak "s|set -g default-shell /usr/bin/fish|set -g default-shell $fish_path|" "$dest_file"
+                sed -i.bak "s|set -g default-shell fish|set -g default-shell $fish_path|" "$dest_file"
                 rm -f "$dest_file.bak"
             else
                 warning "Fish shell not found. Tmux will use system default shell."
@@ -102,6 +104,12 @@ install_tmux_plugins() {
             # Run the install script
             "$tpm_script"
             substep "Tmux plugins installed"
+            
+            # Force reload configuration to apply theme
+            if pgrep -x "tmux" > /dev/null; then
+                tmux source-file "$HOME/.tmux.conf" 2>/dev/null || true
+                substep "Tmux configuration reloaded"
+            fi
         else
             warning "TPM install script not found. Plugins will be installed on next tmux session."
         fi
@@ -109,6 +117,7 @@ install_tmux_plugins() {
         substep "[DRY RUN] Would install Tmux plugins"
     fi
 }
+
 
 # Function to validate Tmux setup
 validate_tmux_setup() {
@@ -153,6 +162,7 @@ validate_tmux_setup() {
     fi
 }
 
+
 # Function to start tmux with plugin installation
 start_tmux_with_plugins() {
     substep "Starting Tmux session to complete plugin installation..."
@@ -191,7 +201,7 @@ show_tmux_info() {
     info "Installed plugins:"
     echo -e "  ${CYAN}•${NC} tmux-sensible (better defaults)"
     echo -e "  ${CYAN}•${NC} vim-tmux-navigator (seamless vim/tmux navigation)"
-    echo -e "  ${CYAN}•${NC} catppuccin-tmux (beautiful theme)"
+    echo -e "  ${CYAN}•${NC} tokyo-night-tmux (beautiful Tokyo Night theme)"
     echo -e "  ${CYAN}•${NC} tmux-yank (copy to system clipboard)"
     echo
 }

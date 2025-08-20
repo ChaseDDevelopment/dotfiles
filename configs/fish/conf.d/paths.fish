@@ -8,6 +8,35 @@
 if status is-interactive
     
     # =============================================================================
+    # Priority Path Overrides (must come first)
+    # =============================================================================
+    
+    # Force Homebrew paths to front of PATH for modern tool versions
+    if test (uname) = "Darwin"
+        if test -d "/opt/homebrew/bin"
+            # Completely rebuild PATH with Homebrew first
+            set -l new_path "/opt/homebrew/bin" "/opt/homebrew/sbin"
+            # Add remaining paths, avoiding duplicates
+            for path_entry in $PATH
+                if not contains "$path_entry" $new_path
+                    set -a new_path "$path_entry"
+                end
+            end
+            set -gx PATH $new_path
+        else if test -d "/usr/local/bin"
+            # Intel Mac equivalent
+            set -l new_path "/usr/local/bin" "/usr/local/sbin"
+            # Add remaining paths, avoiding duplicates
+            for path_entry in $PATH
+                if not contains "$path_entry" $new_path
+                    set -a new_path "$path_entry"
+                end
+            end
+            set -gx PATH $new_path
+        end
+    end
+    
+    # =============================================================================
     # Core Path Management
     # =============================================================================
     
@@ -115,15 +144,15 @@ if status is-interactive
     
     # macOS specific paths
     if test (uname) = "Darwin"
-        # Homebrew paths
+        # Homebrew paths - prioritize over system paths for modern tools
         if test -d "/opt/homebrew/bin"
-            # Apple Silicon Macs
-            fish_add_path "/opt/homebrew/bin"
-            fish_add_path "/opt/homebrew/sbin"
+            # Apple Silicon Macs - use --prepend to ensure Homebrew takes precedence
+            fish_add_path --prepend "/opt/homebrew/bin"
+            fish_add_path --prepend "/opt/homebrew/sbin"
         else if test -d "/usr/local/bin"
-            # Intel Macs
-            fish_add_path "/usr/local/bin"
-            fish_add_path "/usr/local/sbin"
+            # Intel Macs - use --prepend to ensure Homebrew takes precedence
+            fish_add_path --prepend "/usr/local/bin"
+            fish_add_path --prepend "/usr/local/sbin"
         end
         
         # macOS system paths

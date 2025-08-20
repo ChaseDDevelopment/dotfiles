@@ -40,7 +40,7 @@ check_neovim_version() {
     substep "Checking Neovim version..."
     
     local nvim_version
-    nvim_version=$(nvim --version | head -n1 | grep -oP 'v\K[0-9.]+')
+    nvim_version=$(nvim --version | head -n1 | sed -n 's/.*v\([0-9.]*\).*/\1/p')
     
     # LazyVim requires Neovim >= 0.9.0
     local required_version="0.9.0"
@@ -90,12 +90,30 @@ clone_neovim_config() {
                 current_remote=$(git remote get-url origin 2>/dev/null || echo "")
                 
                 if [[ "$current_remote" == "$NEOVIM_REPO" ]]; then
-                    # Same repo, just pull updates
-                    substep "Pulling latest updates..."
-                    git pull --ff-only || {
-                        warning "Failed to pull updates. There may be local changes."
-                        warning "Consider manually resolving conflicts in $NEOVIM_CONFIG_DIR"
-                    }
+                    # Same repo, check if updates are needed
+                    substep "Checking for updates..."
+                    
+                    # Fetch updates with timeout
+                    if timeout 30 git fetch origin 2>/dev/null; then
+                        # Check if we're behind
+                        local behind_count
+                        behind_count=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
+                        
+                        if [[ "$behind_count" -gt 0 ]]; then
+                            substep "Pulling $behind_count updates..."
+                            # Use non-interactive pull with timeout
+                            if timeout 60 git pull --ff-only --no-rebase --no-edit 2>/dev/null; then
+                                substep "Successfully updated Neovim configuration"
+                            else
+                                warning "Failed to pull updates. Using existing configuration."
+                                warning "You may need to manually update $NEOVIM_CONFIG_DIR"
+                            fi
+                        else
+                            substep "Neovim configuration is already up to date"
+                        fi
+                    else
+                        warning "Could not fetch updates (network timeout). Using existing configuration."
+                    fi
                 else
                     # Different repo, backup and clone new
                     warning "Existing config is from different repository ($current_remote)"
@@ -103,7 +121,13 @@ clone_neovim_config() {
                     local backup_name="nvim-config-backup-$(date +%Y%m%d-%H%M%S)"
                     mv "$NEOVIM_CONFIG_DIR" "$HOME/$backup_name"
                     substep "Backed up existing config to ~/$backup_name"
-                    git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR"
+                    # Clone with timeout
+                    if timeout 120 git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR" 2>/dev/null; then
+                        substep "Successfully cloned new Neovim configuration"
+                    else
+                        error "Failed to clone Neovim repository (network timeout)"
+                        return 1
+                    fi
                 fi
                 cd - > /dev/null
             else
@@ -112,11 +136,23 @@ clone_neovim_config() {
                 local backup_name="nvim-config-backup-$(date +%Y%m%d-%H%M%S)"
                 mv "$NEOVIM_CONFIG_DIR" "$HOME/$backup_name"
                 substep "Backed up existing config to ~/$backup_name"
-                git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR"
+                # Clone with timeout
+                if timeout 120 git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR" 2>/dev/null; then
+                    substep "Successfully cloned Neovim configuration"
+                else
+                    error "Failed to clone Neovim repository (network timeout)"
+                    return 1
+                fi
             fi
         else
             # No existing config, just clone
-            git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR"
+            substep "Cloning Neovim configuration..."
+            if timeout 120 git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR" 2>/dev/null; then
+                substep "Successfully cloned Neovim configuration"
+            else
+                error "Failed to clone Neovim repository (network timeout)"
+                return 1
+            fi
         fi
         
         substep "Neovim configuration setup completed"
