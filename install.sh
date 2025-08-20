@@ -214,6 +214,53 @@ check_requirements() {
 }
 
 # =============================================================================
+# Configuration Reload Functions
+# =============================================================================
+
+reload_configurations() {
+    step "Reloading configurations"
+    
+    if [[ "$DRY_RUN" == "false" ]]; then
+        # Reload Fish configuration if Fish is available
+        if check_command fish; then
+            substep "Reloading Fish configuration"
+            # Source Fish config and reload universal variables
+            fish -c "source ~/.config/fish/config.fish" 2>/dev/null || true
+            substep "Fish configuration reloaded"
+        fi
+        
+        # Install and reload Tmux plugins if Tmux is running
+        if check_command tmux; then
+            substep "Installing/updating Tmux plugins"
+            # Source tmux config
+            if tmux list-sessions &>/dev/null; then
+                tmux source-file ~/.tmux.conf 2>/dev/null || true
+                substep "Tmux configuration reloaded"
+            fi
+            
+            # Install TPM plugins if TPM is available
+            if [[ -f ~/.tmux/plugins/tpm/scripts/install_plugins.sh ]]; then
+                ~/.tmux/plugins/tpm/scripts/install_plugins.sh &>/dev/null || true
+                substep "Tmux plugins installed"
+            fi
+        fi
+        
+        # Clear Starship cache
+        if check_command starship; then
+            substep "Clearing Starship cache"
+            rm -rf ~/.cache/starship 2>/dev/null || true
+            substep "Starship cache cleared"
+        fi
+        
+        success "All configurations reloaded"
+    else
+        substep "[DRY RUN] Would reload Fish configuration"
+        substep "[DRY RUN] Would install/update Tmux plugins"
+        substep "[DRY RUN] Would clear Starship cache"
+    fi
+}
+
+# =============================================================================
 # Main Installation Flow
 # =============================================================================
 
@@ -294,6 +341,9 @@ main() {
     else
         substep "[DRY RUN] Would set Fish as default shell"
     fi
+    
+    # Reload configurations
+    reload_configurations
     
     echo
     echo -e "${GREEN}╔══════════════════════════════════════════════════════╗${NC}"

@@ -36,8 +36,11 @@ install_packages() {
     # Modern CLI tools
     substep "Installing modern CLI tools..."
     
-    # Install eza (modern ls replacement)
-    install_eza
+    # Essential modern replacements
+    install_eza      # Modern ls replacement
+    install_bat      # Better cat with syntax highlighting
+    install_ripgrep  # Fast grep replacement
+    install_fd       # Fast find replacement
     
     # Install Starship prompt
     install_starship
@@ -47,6 +50,10 @@ install_packages() {
     
     # Install Bun
     install_bun
+    
+    # Python tools
+    install_uv
+    install_ruff
     
     success "Package installation completed"
 }
@@ -144,6 +151,122 @@ install_bun() {
         export PATH="$BUN_INSTALL/bin:$PATH"
     else
         substep "[DRY RUN] Would install Bun via official installer"
+    fi
+}
+
+install_bat() {
+    if check_command bat; then
+        substep "bat is already installed"
+        return
+    fi
+    
+    substep "Installing bat..."
+    
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            install_package "bat"
+            ;;
+        "apt")
+            # Ubuntu/Debian need special handling for bat
+            if [[ "$DRY_RUN" == "false" ]]; then
+                # Try to install batcat (Ubuntu names it differently)
+                if apt list bat 2>/dev/null | grep -q bat; then
+                    sudo apt install -y bat
+                else
+                    sudo apt install -y batcat
+                    # Create symlink if installed as batcat
+                    sudo ln -sf /usr/bin/batcat /usr/local/bin/bat 2>/dev/null || true
+                fi
+            else
+                substep "[DRY RUN] Would install bat"
+            fi
+            ;;
+        "dnf"|"yum")
+            install_package "bat"
+            ;;
+        "pacman")
+            install_package "bat"
+            ;;
+        *)
+            warning "Please install bat manually"
+            ;;
+    esac
+}
+
+install_ripgrep() {
+    if check_command rg; then
+        substep "ripgrep is already installed"
+        return
+    fi
+    
+    substep "Installing ripgrep..."
+    install_package "ripgrep"
+}
+
+install_fd() {
+    if check_command fd; then
+        substep "fd is already installed"
+        return
+    fi
+    
+    substep "Installing fd..."
+    
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            install_package "fd"
+            ;;
+        "apt")
+            # Ubuntu/Debian package is fd-find
+            if [[ "$DRY_RUN" == "false" ]]; then
+                sudo apt install -y fd-find
+                # Create symlink
+                sudo ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
+            else
+                substep "[DRY RUN] Would install fd-find"
+            fi
+            ;;
+        "dnf"|"yum")
+            install_package "fd-find"
+            ;;
+        "pacman")
+            install_package "fd"
+            ;;
+        *)
+            warning "Please install fd manually"
+            ;;
+    esac
+}
+
+install_uv() {
+    if check_command uv; then
+        substep "UV is already installed"
+        return
+    fi
+    
+    substep "Installing UV..."
+    if [[ "$DRY_RUN" == "false" ]]; then
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:$PATH"
+    else
+        substep "[DRY RUN] Would install UV via official installer"
+    fi
+}
+
+install_ruff() {
+    if check_command ruff; then
+        substep "Ruff is already installed"
+        return
+    fi
+    
+    substep "Installing Ruff via UV..."
+    if [[ "$DRY_RUN" == "false" ]]; then
+        # Ensure UV is installed first
+        if ! check_command uv; then
+            install_uv
+        fi
+        uv tool install ruff
+    else
+        substep "[DRY RUN] Would install Ruff via UV"
     fi
 }
 

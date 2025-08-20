@@ -52,6 +52,7 @@ copy_fish_configs() {
         "conf.d/abbr.fish"
         "conf.d/paths.fish"
         "conf.d/tmux-mgmt.fish"
+        "conf.d/functions.fish"
         "fish_plugins"
     )
     
@@ -108,28 +109,28 @@ setup_fish_variables() {
     substep "Setting up Fish universal variables..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        # Set Fish colors (based on your current theme)
-        fish -c "set -U fish_color_autosuggestion brblack"
-        fish -c "set -U fish_color_cancel -r"
-        fish -c "set -U fish_color_command normal"
-        fish -c "set -U fish_color_comment red"
-        fish -c "set -U fish_color_cwd green"
-        fish -c "set -U fish_color_cwd_root red"
-        fish -c "set -U fish_color_end green"
-        fish -c "set -U fish_color_error brred"
-        fish -c "set -U fish_color_escape brcyan"
+        # Set Fish colors (TokyoNight Night theme)
+        fish -c "set -U fish_color_autosuggestion 565f89"
+        fish -c "set -U fish_color_cancel f7768e"
+        fish -c "set -U fish_color_command 7dcfff"
+        fish -c "set -U fish_color_comment 565f89"
+        fish -c "set -U fish_color_cwd 9ece6a"
+        fish -c "set -U fish_color_cwd_root f7768e"
+        fish -c "set -U fish_color_end ff9e64"
+        fish -c "set -U fish_color_error f7768e"
+        fish -c "set -U fish_color_escape bb9af7"
         fish -c "set -U fish_color_history_current --bold"
-        fish -c "set -U fish_color_host normal"
-        fish -c "set -U fish_color_host_remote yellow"
-        fish -c "set -U fish_color_normal normal"
-        fish -c "set -U fish_color_operator brcyan"
-        fish -c "set -U fish_color_param cyan"
-        fish -c "set -U fish_color_quote yellow"
-        fish -c "set -U fish_color_redirection 'cyan --bold'"
-        fish -c "set -U fish_color_search_match 'white --background=brblack'"
-        fish -c "set -U fish_color_selection 'white --bold --background=brblack'"
-        fish -c "set -U fish_color_status red"
-        fish -c "set -U fish_color_user brgreen"
+        fish -c "set -U fish_color_host c0caf5"
+        fish -c "set -U fish_color_host_remote e0af68"
+        fish -c "set -U fish_color_normal c0caf5"
+        fish -c "set -U fish_color_operator 7dcfff"
+        fish -c "set -U fish_color_param bb9af7"
+        fish -c "set -U fish_color_quote e0af68"
+        fish -c "set -U fish_color_redirection '7aa2f7 --bold'"
+        fish -c "set -U fish_color_search_match 'white --background=33467C'"
+        fish -c "set -U fish_color_selection 'white --bold --background=33467C'"
+        fish -c "set -U fish_color_status f7768e"
+        fish -c "set -U fish_color_user 9ece6a"
         fish -c "set -U fish_color_valid_path --underline"
         
         # Disable greeting
@@ -138,16 +139,16 @@ setup_fish_variables() {
         # Set key bindings
         fish -c "set -U fish_key_bindings fish_default_key_bindings"
         
-        # Set pager colors
-        fish -c "set -U fish_pager_color_completion normal"
-        fish -c "set -U fish_pager_color_description 'yellow -i'"
-        fish -c "set -U fish_pager_color_prefix 'normal --bold --underline'"
-        fish -c "set -U fish_pager_color_progress 'brwhite --background=cyan'"
-        fish -c "set -U fish_pager_color_selected_background -r"
+        # Set pager colors (TokyoNight)
+        fish -c "set -U fish_pager_color_completion c0caf5"
+        fish -c "set -U fish_pager_color_description '565f89 -i'"
+        fish -c "set -U fish_pager_color_prefix '7aa2f7 --bold --underline'"
+        fish -c "set -U fish_pager_color_progress 'c0caf5 --background=7aa2f7'"
+        fish -c "set -U fish_pager_color_selected_background --background=33467C"
         
-        substep "Fish universal variables configured"
+        substep "Fish universal variables configured with TokyoNight colors"
     else
-        substep "[DRY RUN] Would configure Fish universal variables"
+        substep "[DRY RUN] Would configure Fish universal variables with TokyoNight colors"
     fi
 }
 

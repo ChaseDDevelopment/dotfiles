@@ -113,44 +113,25 @@ set -gx LESSOPEN "|pygmentize -g %s 2>/dev/null || cat %s"
 
 # Bat configuration (if available)
 if command -q bat
-    set -gx BAT_THEME "Catppuccin-mocha"
-    set -gx BAT_STYLE "numbers,changes,header"
+    set -gx BAT_THEME "TwoDark"
+    set -gx BAT_STYLE "numbers,changes,header,grid"
+    set -gx BAT_PAGER "less -RF"
 end
 
 # =============================================================================
-# Aliases and Functions
+# Additional Configuration
 # =============================================================================
 
-# Modern replacements (only if commands are available)
-if command -q eza
-    alias ls "eza -lag --header --icons=always"
-    alias ll "eza -la --header --icons=always"
-    alias tree "eza --tree"
-end
+# Note: Functions and aliases are now handled by functions.fish and abbr.fish
+# This provides better organization and Fish-native approaches
 
-if command -q bat
-    alias cat "bat"
+# Additional environment variables for modern tools
+if command -q rg
+    set -gx RIPGREP_CONFIG_PATH "$HOME/.ripgreprc"
 end
 
 if command -q fd
-    alias find "fd"
-end
-
-if command -q rg
-    alias grep "rg"
-end
-
-# Git shortcuts
-if command -q git
-    alias g "git"
-    alias gs "git status"
-    alias ga "git add"
-    alias gc "git commit"
-    alias gp "git push"
-    alias gl "git pull"
-    alias gd "git diff"
-    alias gb "git branch"
-    alias gco "git checkout"
+    set -gx FD_OPTIONS "--hidden --follow --exclude .git"
 end
 
 # =============================================================================

@@ -44,8 +44,8 @@ detect_os() {
     elif [[ -f /etc/os-release ]]; then
         # Linux
         source /etc/os-release
-        OS_NAME="$NAME"
-        OS_VERSION="$VERSION_ID"
+        OS_NAME="${NAME:-Linux}"
+        OS_VERSION="${VERSION_ID:-unknown}"
         
         if check_command apt; then
             # Debian/Ubuntu

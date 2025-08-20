@@ -12,37 +12,15 @@ if status is-interactive
     # Safety Abbreviations (Interactive Mode)
     # =============================================================================
     
-    # Add interactive flags to potentially destructive commands
-    abbr rm "rm -i"      # Ask before removing files
-    abbr cp "cp -i"      # Ask before overwriting files
-    abbr mv "mv -i"      # Ask before overwriting files
+    # NOTE: rm, cp, mv, mkdir, which, ls commands are now handled by functions.fish
+    # This provides better safety and consistent behavior
     
     # =============================================================================
-    # Enhanced Commands
+    # Quick Shortcuts
     # =============================================================================
-    
-    # Make directories with parent directories
-    abbr mkdir "mkdir -p"
     
     # Better history command
     abbr h "history"
-    
-    # Better which command (shows all matches and types)
-    abbr which "type -a"
-    
-    # Modern ls replacement with eza (if available)
-    if command -q eza
-        abbr ls "eza -lag --header --icons=always"
-        abbr ll "eza -la --header --icons=always --group"
-        abbr la "eza -la --header --icons=always"
-        abbr lt "eza --tree"
-        abbr l "eza -1"
-    else
-        # Fallback to regular ls with good defaults
-        abbr ls "ls -la --color=auto"
-        abbr ll "ls -la --color=auto"
-        abbr la "ls -la --color=auto"
-    end
     
     # =============================================================================
     # Git Abbreviations
@@ -177,6 +155,26 @@ if status is-interactive
     end
     
     # =============================================================================
+    # Python/UV Abbreviations
+    # =============================================================================
+    
+    if command -q uv
+        abbr uvx "uv tool run"
+        abbr uvs "uv sync"
+        abbr uva "uv add"
+        abbr uvi "uv pip install"
+        abbr uvt "uv tool"
+        abbr uvl "uv tool list"
+    end
+    
+    if command -q ruff
+        abbr ruffmt "ruff format"
+        abbr rufflint "ruff check"
+        abbr rufffix "ruff check --fix"
+        abbr ruffwatch "ruff check --watch"
+    end
+    
+    # =============================================================================
     # Docker Abbreviations (if available)
     # =============================================================================
     
@@ -195,6 +193,27 @@ if status is-interactive
         abbr dbuild "docker build"
         abbr dpull "docker pull"
         abbr dpush "docker push"
+    end
+    
+    # =============================================================================
+    # Modern CLI Tool Abbreviations
+    # =============================================================================
+    
+    # Note: cat, find, grep are now functions but add some convenience abbreviations
+    if command -q bat
+        abbr batl "bat --list-themes"
+        abbr batp "bat --plain"
+    end
+    
+    if command -q fd
+        abbr fdt "fd --type f"
+        abbr fdd "fd --type d"
+    end
+    
+    if command -q rg
+        abbr rgt "rg --type"
+        abbr rgf "rg --files"
+        abbr rgi "rg --ignore-case"
     end
     
     # =============================================================================

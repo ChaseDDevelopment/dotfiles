@@ -1,11 +1,12 @@
-# 🐟 Shell Environment Setup - "One Stop Shop"
+# 🌃 Shell Environment Setup - "One Stop Shop"
 
-> Complete shell environment setup for Fish, Tmux, Neovim, and Starship with a single command
+> Complete shell environment setup with TokyoNight theme and modern CLI tools
 
-![Fish Shell](https://img.shields.io/badge/Fish-Shell-blue?style=for-the-badge&logo=gnu-bash)
-![Tmux](https://img.shields.io/badge/Tmux-Terminal-green?style=for-the-badge)
-![Neovim](https://img.shields.io/badge/Neovim-LazyVim-purple?style=for-the-badge&logo=neovim)
-![Starship](https://img.shields.io/badge/Starship-Prompt-orange?style=for-the-badge)
+![Fish Shell](https://img.shields.io/badge/Fish-Shell-7aa2f7?style=for-the-badge&logo=gnu-bash)
+![Tmux](https://img.shields.io/badge/Tmux-Terminal-9ece6a?style=for-the-badge)
+![Neovim](https://img.shields.io/badge/Neovim-LazyVim-bb9af7?style=for-the-badge&logo=neovim)
+![Starship](https://img.shields.io/badge/Starship-Prompt-ff9e64?style=for-the-badge)
+![TokyoNight](https://img.shields.io/badge/Theme-TokyoNight-1a1b26?style=for-the-badge)
 
 ## ✨ Features
 
@@ -15,8 +16,10 @@ This setup provides a complete, modern shell environment with:
 - **🔧 Tmux** - Terminal multiplexer with session management and beautiful themes
 - **⚡ Neovim** - Modern Vim-based editor with LazyVim configuration
 - **🚀 Starship** - Fast, customizable prompt with Git integration
-- **📦 Modern Tools** - eza, fzf, bun, nvm, and more
-- **🎨 Catppuccin Theme** - Beautiful, consistent theming across all tools
+- **📦 Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, and more
+- **🐍 Python Tooling** - UV package manager and Ruff linter/formatter
+- **📦 JavaScript Tools** - Bun as default package manager (replaces npm)
+- **🌃 TokyoNight Theme** - Beautiful, consistent dark theming across all tools
 
 ## 🚀 Quick Installation
 
@@ -47,7 +50,7 @@ chmod +x install.sh
 
 ### 🔧 Tmux Configuration
 - **TPM (Tmux Plugin Manager)** - Plugin management
-- **Catppuccin Theme** - Beautiful Mocha color scheme
+- **TokyoNight Theme** - Beautiful night color scheme with widgets
 - **Vim-Tmux Navigator** - Seamless navigation between Vim and Tmux
 - **Tmux Sensible** - Better default settings
 - **Tmux Yank** - System clipboard integration
@@ -60,17 +63,23 @@ chmod +x install.sh
 - **Modern UI** - Beautiful interface with file explorer and status line
 
 ### 🚀 Starship Prompt
-- **Catppuccin Powerline Theme** - Beautiful, informative prompt
+- **TokyoNight Powerline Theme** - Beautiful, informative prompt with night colors
 - **Git Integration** - Branch, status, and commit information
 - **Language Detection** - Automatic programming language indicators
 - **Performance Optimized** - Fast prompt rendering
 
-### 📦 Additional Tools
-- **eza** - Modern replacement for ls with icons and colors
+### 📦 Modern CLI Tools
+- **bat** - Better cat with syntax highlighting and Git integration
+- **ripgrep (rg)** - Lightning-fast grep replacement
+- **fd** - User-friendly find replacement
+- **eza** - Modern ls replacement with icons and colors
 - **fzf** - Command-line fuzzy finder
-- **bun** - Fast JavaScript runtime and package manager
-- **nvm** - Node.js version manager
-- **Starship** - Cross-shell prompt
+
+### 🛠️ Development Tools
+- **bun** - Fast JavaScript runtime (replaces npm/npx)
+- **uv** - Fast Python package installer and environment manager
+- **ruff** - Extremely fast Python linter and formatter
+- **nvm** - Node.js version manager (via Fish plugin)
 
 ## 🖥️ System Requirements
 
@@ -158,11 +167,11 @@ chmod +x install.sh
 
 ### Changing Starship Theme
 ```bash
-# List available presets
-starship preset
-
-# Apply a different preset
+# Current theme is TokyoNight with powerline layout
+# You can switch to other presets:
 starship preset minimal -o ~/.config/starship.toml
+
+# Or edit ~/.config/starship.toml directly to customize colors
 ```
 
 ### Adding Fish Abbreviations
@@ -177,6 +186,20 @@ Edit `~/.tmux.conf` and add:
 set -g @plugin 'plugin-name'
 ```
 Then press `Prefix + I` to install.
+
+### Using Modern CLI Tools
+The setup replaces traditional commands with modern alternatives:
+```bash
+# These commands now use modern tools automatically:
+ls      # → eza (with icons and colors)
+cat     # → bat (with syntax highlighting)
+find    # → fd (faster and user-friendly)
+grep    # → ripgrep (much faster)
+
+# Original commands are still available as:
+command ls    # Use original ls
+command cat   # Use original cat
+```
 
 ## 🔧 Troubleshooting
 
