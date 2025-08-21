@@ -93,6 +93,7 @@ chmod +x install.sh
 ### Prerequisites
 - **Git** (version 2.0+)
 - **curl** or **wget**
+- **Bash 4.2+** (installed automatically on macOS via Homebrew)
 - **Internet connection** for downloading packages and configurations
 
 ### Optional but Recommended
