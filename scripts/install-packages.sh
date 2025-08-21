@@ -33,7 +33,7 @@ install_packages() {
     
     # Text editor
     substep "Installing Neovim..."
-    install_package "neovim"
+    install_neovim
     
     # Modern CLI tools
     substep "Installing modern CLI tools..."
@@ -313,6 +313,70 @@ install_ruff() {
     else
         substep "[DRY RUN] Would install Ruff via UV"
     fi
+}
+
+install_neovim() {
+    if check_command nvim; then
+        substep "Neovim is already installed"
+        return
+    fi
+    
+    substep "Installing Neovim with latest version..."
+    
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            # macOS: Install HEAD version to get latest features
+            if [[ "$DRY_RUN" == "false" ]]; then
+                brew install --HEAD neovim
+            else
+                substep "[DRY RUN] Would install Neovim HEAD via brew"
+            fi
+            ;;
+        "pacman")
+            # Arch Linux: Try to install neovim-git from AUR, fallback to official package
+            if [[ "$DRY_RUN" == "false" ]]; then
+                # Check if yay or paru AUR helper is available
+                if check_command yay; then
+                    substep "Installing Neovim development version via yay..."
+                    yay -S --noconfirm neovim-git
+                elif check_command paru; then
+                    substep "Installing Neovim development version via paru..."
+                    paru -S --noconfirm neovim-git
+                else
+                    warning "No AUR helper found. Installing official Neovim package..."
+                    sudo pacman -S --noconfirm neovim
+                    warning "For Neovim 0.12+, consider installing an AUR helper (yay/paru) and running: yay -S neovim-git"
+                fi
+            else
+                substep "[DRY RUN] Would install Neovim development version via AUR or official package"
+            fi
+            ;;
+        "apt")
+            # Ubuntu/Debian: Use official package, recommend AppImage for latest
+            if [[ "$DRY_RUN" == "false" ]]; then
+                sudo apt install -y neovim
+                warning "Ubuntu/Debian packages may be outdated. For Neovim 0.12+, consider using the AppImage:"
+                warning "curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage"
+                warning "chmod u+x nvim.appimage && sudo mv nvim.appimage /usr/local/bin/nvim"
+            else
+                substep "[DRY RUN] Would install Neovim via apt with AppImage recommendation"
+            fi
+            ;;
+        "dnf"|"yum")
+            # RHEL/Fedora: Use official package, recommend Flatpak for latest
+            if [[ "$DRY_RUN" == "false" ]]; then
+                "${INSTALL_CMD_ARRAY[@]}" neovim
+                warning "RHEL/Fedora packages may be outdated. For Neovim 0.12+, consider using Flatpak:"
+                warning "flatpak install flathub io.neovim.nvim"
+            else
+                substep "[DRY RUN] Would install Neovim via $PACKAGE_MANAGER with Flatpak recommendation"
+            fi
+            ;;
+        *)
+            warning "Unknown package manager. Please install Neovim manually."
+            warning "For latest version, see: https://github.com/neovim/neovim/releases"
+            ;;
+    esac
 }
 
 # Install Rust and Cargo if needed (for some tools)

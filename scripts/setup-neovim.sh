@@ -40,22 +40,31 @@ check_neovim_version() {
     substep "Checking Neovim version..."
     
     local nvim_version
-    nvim_version=$(nvim --version | head -n1 | sed -n 's/.*v\([0-9.]*\).*/\1/p')
+    nvim_version=$(nvim --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
     
     # LazyVim requires Neovim >= 0.9.0
     local required_version="0.9.0"
     
+    # Check if version was extracted successfully
+    if [[ -z "$nvim_version" ]]; then
+        warning "Could not determine Neovim version. Please ensure Neovim >= $required_version is installed."
+        substep "Continuing with setup (version check skipped)..."
+        return 0
+    fi
+    
     if command -v python3 &>/dev/null; then
         # Use Python for version comparison if available
-        if python3 -c "import sys; sys.exit(0 if tuple(map(int, '$nvim_version'.split('.'))) >= tuple(map(int, '$required_version'.split('.'))) else 1)" 2>/dev/null; then
+        if python3 -c "import sys; v='$nvim_version'.split('.'); r='$required_version'.split('.'); sys.exit(0 if [int(x) for x in v] >= [int(x) for x in r] else 1)" 2>/dev/null; then
             substep "Neovim version $nvim_version is compatible"
         else
             error "Neovim version $nvim_version is too old. LazyVim requires >= $required_version"
+            error "Please update Neovim to a newer version"
             return 1
         fi
     else
-        # Basic version check
+        # Basic version check - just warn and continue
         substep "Neovim version: $nvim_version (ensure it's >= $required_version)"
+        warning "Python not available for precise version comparison"
     fi
 }
 

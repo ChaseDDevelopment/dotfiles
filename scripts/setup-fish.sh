@@ -52,7 +52,6 @@ copy_fish_configs() {
         "conf.d/abbr.fish"
         "conf.d/paths.fish"
         "conf.d/tmux-mgmt.fish"
-        "conf.d/tmux-nested.fish"
         "conf.d/functions.fish"
         "fish_plugins"
     )

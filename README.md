@@ -58,6 +58,10 @@ chmod +x install.sh
 
 ### ⚡ Neovim Setup
 - **LazyVim Configuration** - Modern Neovim setup from [ChaseDDevelopment/neovim](https://github.com/ChaseDDevelopment/neovim)
+- **Latest Version Installation**: 
+  - **macOS**: Uses `brew install --HEAD neovim` for latest development features
+  - **Arch Linux**: Installs `neovim-git` from AUR (requires yay/paru) for version 0.12+
+  - **Other platforms**: Uses system package manager with upgrade recommendations
 - **Plugin Management** - Automatic plugin installation on first startup
 - **LSP Integration** - Language server support for multiple languages
 - **Modern UI** - Beautiful interface with file explorer and status line
