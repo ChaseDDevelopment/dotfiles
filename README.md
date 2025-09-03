@@ -185,6 +185,12 @@ Edit `~/.config/fish/conf.d/abbr.fish`:
 abbr myabbr "my command"
 ```
 
+#### Codex CLI completions (Fish)
+Completions for `codex` auto-install on shell start (see `configs/fish/conf.d/codex_completions.fish`). Force-refresh anytime with:
+```fish
+__update_codex_completions
+```
+
 ### Installing Additional Tmux Plugins
 Edit `~/.tmux.conf` and add:
 ```bash

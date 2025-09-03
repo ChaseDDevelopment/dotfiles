@@ -53,6 +53,7 @@ copy_fish_configs() {
         "conf.d/paths.fish"
         "conf.d/tmux-mgmt.fish"
         "conf.d/functions.fish"
+        "conf.d/codex_completions.fish"
         "fish_plugins"
     )
     
