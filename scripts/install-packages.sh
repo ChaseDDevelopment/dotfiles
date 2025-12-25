@@ -33,8 +33,13 @@ install_packages() {
     substep "Installing shell and terminal tools..."
     install_package "zsh"
     install_package "tmux"
-    
-    
+
+    # Install powerline fonts (for Ubuntu/Debian)
+    if [[ "$PACKAGE_MANAGER" == "apt" ]]; then
+        install_package "powerline"
+        install_package "fonts-powerline"
+    fi
+
     install_package "fzf"
     
     # Text editor
@@ -94,7 +99,7 @@ install_eza() {
             if [[ "$DRY_RUN" == "false" ]]; then
                 # Check if eza is available in repos (Ubuntu 22.04+)
                 if apt list eza 2>/dev/null | grep -q eza; then
-                    sudo apt install -y eza
+                    "${INSTALL_CMD_ARRAY[@]}" eza
                 else
                     # Install via cargo or download binary
                     if check_command cargo; then
@@ -214,9 +219,9 @@ install_bat() {
             if [[ "$DRY_RUN" == "false" ]]; then
                 # Try to install batcat (Ubuntu names it differently)
                 if apt list bat 2>/dev/null | grep -q bat; then
-                    sudo apt install -y bat
+                    "${INSTALL_CMD_ARRAY[@]}" bat
                 else
-                    sudo apt install -y batcat
+                    "${INSTALL_CMD_ARRAY[@]}" batcat
                     # Create symlink if installed as batcat
                     sudo ln -sf /usr/bin/batcat /usr/local/bin/bat 2>/dev/null || true
                 fi
@@ -261,7 +266,7 @@ install_fd() {
         "apt")
             # Ubuntu/Debian package is fd-find
             if [[ "$DRY_RUN" == "false" ]]; then
-                sudo apt install -y fd-find
+                "${INSTALL_CMD_ARRAY[@]}" fd-find
                 # Create symlink
                 sudo ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
             else
@@ -296,7 +301,7 @@ install_zoxide() {
             # Check if available in repos, otherwise use installer
             if [[ "$DRY_RUN" == "false" ]]; then
                 if apt list zoxide 2>/dev/null | grep -q zoxide; then
-                    sudo apt install -y zoxide
+                    "${INSTALL_CMD_ARRAY[@]}" zoxide
                 else
                     # Use official installer
                     curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
@@ -335,7 +340,7 @@ install_clipboard_utils() {
         "apt")
             if [[ "$DRY_RUN" == "false" ]]; then
                 # Install xclip for X11 and wl-clipboard for Wayland
-                sudo apt install -y xclip wl-clipboard 2>/dev/null || sudo apt install -y xclip || true
+                "${INSTALL_CMD_ARRAY[@]}" xclip wl-clipboard 2>/dev/null || "${INSTALL_CMD_ARRAY[@]}" xclip || true
             else
                 substep "[DRY RUN] Would install xclip and wl-clipboard"
             fi
@@ -462,7 +467,7 @@ install_neovim() {
                     nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-arm64.tar.gz"
                 else
                     warning "Unknown architecture: $arch. Falling back to apt install."
-                    sudo apt install -y neovim
+                    "${INSTALL_CMD_ARRAY[@]}" neovim
                     return
                 fi
 

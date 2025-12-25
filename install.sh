@@ -374,8 +374,7 @@ main() {
     info "Configurations backed up to: $BACKUP_DIR"
     info "Installation log: $LOG_FILE"
     echo
-    info "To start using your new environment:"
-    echo -e "  ${CYAN}exec zsh${NC}   # Restart shell (or open new terminal)"
+    info "Quick start:"
     echo -e "  ${CYAN}tmux${NC}       # Start Tmux"
     echo -e "  ${CYAN}nvim${NC}       # Start Neovim"
     echo
@@ -385,6 +384,13 @@ main() {
         echo
         warning "This was a dry run - no actual changes were made"
         info "Run without --dry-run to perform the actual installation"
+    else
+        # Auto-reload into zsh environment
+        if check_command zsh; then
+            echo
+            info "Switching to zsh..."
+            exec zsh -l
+        fi
     fi
 }
 
