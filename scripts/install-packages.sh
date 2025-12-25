@@ -6,6 +6,11 @@
 # Installs all required packages for the shell environment setup
 # =============================================================================
 
+# Compare versions: returns 0 (true) if $1 >= $2
+version_gte() {
+    [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
+}
+
 install_packages() {
     substep "Starting package installation"
     
@@ -400,12 +405,20 @@ install_ruff() {
 }
 
 install_neovim() {
+    local min_version="0.11.0"
+
     if check_command nvim; then
-        substep "Neovim is already installed"
-        return
+        local current_version
+        current_version=$(nvim --version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        if version_gte "$current_version" "$min_version"; then
+            substep "Neovim $current_version is already installed (meets minimum $min_version)"
+            return
+        else
+            substep "Neovim $current_version is outdated (need $min_version+), upgrading..."
+        fi
+    else
+        substep "Installing Neovim..."
     fi
-    
-    substep "Installing Neovim with latest version..."
     
     case "$PACKAGE_MANAGER" in
         "brew")
@@ -436,14 +449,36 @@ install_neovim() {
             fi
             ;;
         "apt")
-            # Ubuntu/Debian: Use official package, recommend AppImage for latest
+            # Ubuntu/Debian: Install from GitHub releases for latest version
             if [[ "$DRY_RUN" == "false" ]]; then
-                sudo apt install -y neovim
-                warning "Ubuntu/Debian packages may be outdated. For Neovim 0.12+, consider using the AppImage:"
-                warning "curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage"
-                warning "chmod u+x nvim.appimage && sudo mv nvim.appimage /usr/local/bin/nvim"
+                substep "Installing latest Neovim from GitHub releases..."
+
+                # Detect architecture
+                local arch nvim_url
+                arch=$(uname -m)
+                if [[ "$arch" == "x86_64" ]]; then
+                    nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz"
+                elif [[ "$arch" == "aarch64" ]] || [[ "$arch" == "arm64" ]]; then
+                    nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-arm64.tar.gz"
+                else
+                    warning "Unknown architecture: $arch. Falling back to apt install."
+                    sudo apt install -y neovim
+                    return
+                fi
+
+                # Download and extract
+                curl -LO "$nvim_url"
+                sudo rm -rf /opt/nvim /opt/nvim-linux-x86_64 /opt/nvim-linux-arm64
+                sudo tar -C /opt -xzf nvim-linux-*.tar.gz
+                rm -f nvim-linux-*.tar.gz
+
+                # Create symlink (remove old one first)
+                sudo rm -f /usr/local/bin/nvim
+                sudo ln -s /opt/nvim-linux-*/bin/nvim /usr/local/bin/nvim
+
+                substep "Neovim installed from GitHub releases"
             else
-                substep "[DRY RUN] Would install Neovim via apt with AppImage recommendation"
+                substep "[DRY RUN] Would install latest Neovim from GitHub releases"
             fi
             ;;
         "dnf"|"yum")
