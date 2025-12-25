@@ -289,6 +289,9 @@ main() {
     # Initialize log file
     echo "Installation started at $(date)" > "$LOG_FILE"
 
+    # Redirect all output to both terminal and log file
+    exec > >(tee -a "$LOG_FILE") 2>&1
+
     if [[ "$DRY_RUN" == "true" ]]; then
         warning "DRY RUN MODE - No changes will be made"
     fi
