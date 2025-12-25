@@ -26,7 +26,7 @@ This setup provides a complete, modern shell environment with:
 ### One-Liner Installation
 
 ```bash
-git clone https://github.com/chaseddevelopment/dotfiles ~/.config && ~/.config/install.sh
+git clone https://github.com/chaseddevelopment/dotfiles ~/dotfiles && ~/dotfiles/install.sh
 ```
 
 ### Manual Installation
