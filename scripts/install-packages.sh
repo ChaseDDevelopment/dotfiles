@@ -25,7 +25,7 @@ install_packages() {
     
     # Shell and terminal tools
     substep "Installing shell and terminal tools..."
-    install_package "fish"
+    install_package "zsh"
     install_package "tmux"
     
     
@@ -43,7 +43,13 @@ install_packages() {
     install_bat      # Better cat with syntax highlighting
     install_ripgrep  # Fast grep replacement
     install_fd       # Fast find replacement
-    
+    install_zoxide   # Smart cd replacement
+
+    # Install clipboard utilities (Linux only)
+    if [[ "$PACKAGE_MANAGER" != "brew" ]]; then
+        install_clipboard_utils
+    fi
+
     # Install Starship prompt
     install_starship
     
@@ -239,9 +245,9 @@ install_fd() {
         substep "fd is already installed"
         return
     fi
-    
+
     substep "Installing fd..."
-    
+
     case "$PACKAGE_MANAGER" in
         "brew")
             install_package "fd"
@@ -264,6 +270,83 @@ install_fd() {
             ;;
         *)
             warning "Please install fd manually"
+            ;;
+    esac
+}
+
+install_zoxide() {
+    if check_command zoxide; then
+        substep "zoxide is already installed"
+        return
+    fi
+
+    substep "Installing zoxide..."
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            install_package "zoxide"
+            ;;
+        "apt")
+            # Check if available in repos, otherwise use installer
+            if [[ "$DRY_RUN" == "false" ]]; then
+                if apt list zoxide 2>/dev/null | grep -q zoxide; then
+                    sudo apt install -y zoxide
+                else
+                    # Use official installer
+                    curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+                fi
+            else
+                substep "[DRY RUN] Would install zoxide"
+            fi
+            ;;
+        "dnf"|"yum")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                if ! eval "$INSTALL_CMD zoxide" 2>/dev/null; then
+                    curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+                fi
+            else
+                substep "[DRY RUN] Would install zoxide"
+            fi
+            ;;
+        "pacman")
+            install_package "zoxide"
+            ;;
+        *)
+            # Fallback to official installer
+            if [[ "$DRY_RUN" == "false" ]]; then
+                curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+            else
+                substep "[DRY RUN] Would install zoxide via official installer"
+            fi
+            ;;
+    esac
+}
+
+install_clipboard_utils() {
+    substep "Installing clipboard utilities..."
+
+    case "$PACKAGE_MANAGER" in
+        "apt")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                # Install xclip for X11 and wl-clipboard for Wayland
+                sudo apt install -y xclip wl-clipboard 2>/dev/null || sudo apt install -y xclip || true
+            else
+                substep "[DRY RUN] Would install xclip and wl-clipboard"
+            fi
+            ;;
+        "dnf"|"yum")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                eval "$INSTALL_CMD xclip wl-clipboard" 2>/dev/null || eval "$INSTALL_CMD xclip" || true
+            else
+                substep "[DRY RUN] Would install xclip and wl-clipboard"
+            fi
+            ;;
+        "pacman")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                sudo pacman -S --noconfirm xclip wl-clipboard 2>/dev/null || sudo pacman -S --noconfirm xclip || true
+            else
+                substep "[DRY RUN] Would install xclip and wl-clipboard"
+            fi
             ;;
     esac
 }

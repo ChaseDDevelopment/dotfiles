@@ -20,9 +20,12 @@ restore_from_backup() {
     
     # List of files/directories that this installer manages
     local managed_paths=(
-        "$HOME/.config/fish"
+        "$HOME/.config/zsh"
         "$HOME/.config/nvim"
         "$HOME/.config/starship.toml"
+        "$HOME/.config/atuin"
+        "$HOME/.config/ghostty"
+        "$HOME/.zshenv"
         "$HOME/.tmux.conf"
         "$HOME/.tmux"
         "$HOME/.local/share/nvim"
@@ -66,7 +69,7 @@ restore_from_backup() {
     info "Backup restored successfully!"
     info "You may need to restart your shell or reload configurations"
     echo
-    echo -e "  ${CYAN}exec fish${NC}  # Restart Fish shell"
+    echo -e "  ${CYAN}exec zsh${NC}   # Restart shell"
     echo -e "  ${CYAN}tmux source-file ~/.tmux.conf${NC}  # Reload Tmux config"
     echo
 }

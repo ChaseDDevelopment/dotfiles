@@ -74,26 +74,10 @@ generate_catppuccin_config() {
 
 setup_shell_integration() {
     substep "Setting up shell integration..."
-    
-    # Fish shell integration should already be in our Fish config
-    # But let's verify it's there
-    local fish_config="$HOME/.config/fish/config.fish"
-    
-    if [[ -f "$fish_config" ]]; then
-        if grep -q "starship init fish" "$fish_config"; then
-            substep "Fish shell integration already configured"
-        else
-            warning "Fish shell integration not found in config.fish"
-            if [[ "$DRY_RUN" == "false" ]]; then
-                echo "starship init fish | source" >> "$fish_config"
-                substep "Added Fish shell integration"
-            else
-                substep "[DRY RUN] Would add Fish shell integration"
-            fi
-        fi
-    fi
-    
-    # Also provide integration info for other shells
+
+    # Zsh shell integration is handled in our zsh config (.zshrc)
+    # The config includes: eval "$(starship init zsh)"
+    # Just show integration info for reference
     show_shell_integration_info
 }
 
@@ -101,14 +85,11 @@ show_shell_integration_info() {
     echo
     info "Shell integration instructions:"
     echo
-    echo -e "${CYAN}Fish (already configured):${NC}"
-    echo -e "  ${WHITE}starship init fish | source${NC}"
+    echo -e "${CYAN}Zsh (already configured):${NC}"
+    echo -e "  ${WHITE}eval \"\$(starship init zsh)\"${NC}"
     echo
     echo -e "${CYAN}Bash:${NC}"
     echo -e "  Add to ${WHITE}~/.bashrc${NC}: ${WHITE}eval \"\$(starship init bash)\"${NC}"
-    echo
-    echo -e "${CYAN}Zsh:${NC}"
-    echo -e "  Add to ${WHITE}~/.zshrc${NC}: ${WHITE}eval \"\$(starship init zsh)\"${NC}"
     echo
 }
 

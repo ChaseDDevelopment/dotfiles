@@ -3,55 +3,54 @@
 # =============================================================================
 # Neovim Setup Script
 # =============================================================================
-# Sets up Neovim with LazyVim configuration from GitHub repository
+# Sets up Neovim with LazyVim configuration from local configs directory
 # =============================================================================
 
-readonly NEOVIM_REPO="https://github.com/ChaseDDevelopment/neovim.git"
 readonly NEOVIM_CONFIG_DIR="$HOME/.config/nvim"
 
 setup_neovim() {
     substep "Starting Neovim setup"
-    
+
     # Check if Neovim is installed
     if ! check_command nvim; then
         error "Neovim is not installed. Run package installation first."
         return 1
     fi
-    
+
     # Check Neovim version
     check_neovim_version
-    
+
     # Backup existing Neovim configuration
     backup_neovim_config
-    
-    # Clone Neovim configuration
-    clone_neovim_config
-    
+
+    # Copy Neovim configuration
+    copy_neovim_config
+
     # Set up Neovim prerequisites
     setup_neovim_prerequisites
-    
+
     # Initialize LazyVim (plugins will be installed on first run)
     initialize_lazyvim
-    
+
     success "Neovim setup completed"
 }
 
 check_neovim_version() {
     substep "Checking Neovim version..."
-    
+
     local nvim_version
     nvim_version=$(nvim --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
-    
-    # LazyVim requires Neovim >= 0.9.0
-    local required_version="0.9.0"
-    
+
+    # LazyVim requires Neovim >= 0.10.0
+    local required_version="0.10.0"
+
     # Check if version was extracted successfully
     if [[ -z "$nvim_version" ]]; then
         warning "Could not determine Neovim version. Please ensure Neovim >= $required_version is installed."
         substep "Continuing with setup (version check skipped)..."
         return 0
     fi
-    
+
     if command -v python3 &>/dev/null; then
         # Use Python for version comparison if available
         if python3 -c "import sys; v='$nvim_version'.split('.'); r='$required_version'.split('.'); sys.exit(0 if [int(x) for x in v] >= [int(x) for x in r] else 1)" 2>/dev/null; then
@@ -70,159 +69,64 @@ check_neovim_version() {
 
 backup_neovim_config() {
     substep "Backing up existing Neovim configuration..."
-    
+
     # Backup configuration directory
     backup_file "$NEOVIM_CONFIG_DIR"
-    
+
     # Backup data directory
     backup_file "$HOME/.local/share/nvim"
-    
+
     # Backup state directory
     backup_file "$HOME/.local/state/nvim"
-    
+
     # Backup cache directory
     backup_file "$HOME/.cache/nvim"
 }
 
-clone_neovim_config() {
-    substep "Setting up Neovim configuration..."
-    
+copy_neovim_config() {
+    substep "Copying Neovim configuration..."
+
+    local source_dir="$SCRIPT_DIR/configs/nvim"
+
     if [[ "$DRY_RUN" == "false" ]]; then
-        if [[ -d "$NEOVIM_CONFIG_DIR" ]]; then
-            # Check if existing directory is a git repository
-            if [[ -d "$NEOVIM_CONFIG_DIR/.git" ]]; then
-                substep "Existing Neovim config found, updating..."
-                cd "$NEOVIM_CONFIG_DIR"
-                
-                # Check if it's the same repository
-                local current_remote
-                current_remote=$(git remote get-url origin 2>/dev/null || echo "")
-                
-                if [[ "$current_remote" == "$NEOVIM_REPO" ]]; then
-                    # Same repo, check if updates are needed
-                    substep "Checking for updates..."
-                    
-                    # Fetch updates with timeout
-                    if timeout 30 git fetch origin 2>/dev/null; then
-                        # Check if we're behind
-                        local behind_count
-                        behind_count=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
-                        
-                        if [[ "$behind_count" -gt 0 ]]; then
-                            substep "Pulling $behind_count updates..."
-                            # Use non-interactive pull with timeout
-                            if timeout 60 git pull --ff-only --no-rebase --no-edit 2>/dev/null; then
-                                substep "Successfully updated Neovim configuration"
-                            else
-                                warning "Failed to pull updates. Using existing configuration."
-                                warning "You may need to manually update $NEOVIM_CONFIG_DIR"
-                            fi
-                        else
-                            substep "Neovim configuration is already up to date"
-                        fi
-                    else
-                        warning "Could not fetch updates (network timeout). Using existing configuration."
-                    fi
-                else
-                    # Different repo, backup and clone new
-                    warning "Existing config is from different repository ($current_remote)"
-                    warning "Backing up existing config and installing new one"
-                    local backup_name="nvim-config-backup-$(date +%Y%m%d-%H%M%S)"
-                    mv "$NEOVIM_CONFIG_DIR" "$HOME/$backup_name"
-                    substep "Backed up existing config to ~/$backup_name"
-                    # Clone with timeout
-                    if timeout 120 git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR" 2>/dev/null; then
-                        substep "Successfully cloned new Neovim configuration"
-                    else
-                        error "Failed to clone Neovim repository (network timeout)"
-                        return 1
-                    fi
-                fi
-                cd - > /dev/null
-            else
-                # Directory exists but not a git repo, back it up
-                warning "Existing non-git Neovim config found, backing up..."
-                local backup_name="nvim-config-backup-$(date +%Y%m%d-%H%M%S)"
-                mv "$NEOVIM_CONFIG_DIR" "$HOME/$backup_name"
-                substep "Backed up existing config to ~/$backup_name"
-                # Clone with timeout
-                if timeout 120 git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR" 2>/dev/null; then
-                    substep "Successfully cloned Neovim configuration"
-                else
-                    error "Failed to clone Neovim repository (network timeout)"
-                    return 1
-                fi
-            fi
-        else
-            # No existing config, just clone
-            substep "Cloning Neovim configuration..."
-            if timeout 120 git clone "$NEOVIM_REPO" "$NEOVIM_CONFIG_DIR" 2>/dev/null; then
-                substep "Successfully cloned Neovim configuration"
-            else
-                error "Failed to clone Neovim repository (network timeout)"
-                return 1
-            fi
+        # Check if source exists
+        if [[ ! -d "$source_dir" ]]; then
+            error "Neovim config source not found: $source_dir"
+            return 1
         fi
-        
-        substep "Neovim configuration setup completed"
+
+        # Remove existing config if present (already backed up)
+        if [[ -d "$NEOVIM_CONFIG_DIR" ]]; then
+            rm -rf "$NEOVIM_CONFIG_DIR"
+        fi
+
+        # Copy configuration
+        cp -r "$source_dir" "$NEOVIM_CONFIG_DIR"
+
+        substep "Neovim configuration copied to $NEOVIM_CONFIG_DIR"
     else
-        substep "[DRY RUN] Would setup $NEOVIM_REPO at $NEOVIM_CONFIG_DIR"
+        substep "[DRY RUN] Would copy $source_dir to $NEOVIM_CONFIG_DIR"
     fi
 }
 
 setup_neovim_prerequisites() {
     substep "Setting up Neovim prerequisites..."
-    
-    # Install required tools for LazyVim
-    local required_tools=()
-    
+
     # Check for required external tools
     if ! check_command git; then
-        required_tools+=("git")
+        warning "Git not found. Some plugins may not install correctly."
     fi
-    
+
     if ! check_command node; then
         warning "Node.js not found. Some language servers may not work."
     fi
-    
+
     if ! check_command python3; then
         warning "Python3 not found. Some features may not work."
     fi
-    
-    # Install clipboard support
-    case "$PACKAGE_MANAGER" in
-        "apt")
-            if ! check_command xclip && ! check_command xsel; then
-                substep "Installing clipboard support..."
-                if [[ "$DRY_RUN" == "false" ]]; then
-                    sudo apt install -y xclip
-                else
-                    substep "[DRY RUN] Would install xclip"
-                fi
-            fi
-            ;;
-        "dnf"|"yum")
-            if ! check_command xclip && ! check_command xsel; then
-                substep "Installing clipboard support..."
-                if [[ "$DRY_RUN" == "false" ]]; then
-                    sudo dnf install -y xclip || sudo yum install -y xclip
-                else
-                    substep "[DRY RUN] Would install xclip"
-                fi
-            fi
-            ;;
-        "pacman")
-            if ! check_command xclip && ! check_command xsel; then
-                substep "Installing clipboard support..."
-                if [[ "$DRY_RUN" == "false" ]]; then
-                    sudo pacman -S --noconfirm xclip
-                else
-                    substep "[DRY RUN] Would install xclip"
-                fi
-            fi
-            ;;
-    esac
-    
+
+    # Clipboard support is handled by install-packages.sh (install_clipboard_utils)
+
     # Create necessary directories
     if [[ "$DRY_RUN" == "false" ]]; then
         mkdir -p "$HOME/.local/share/nvim"
@@ -233,13 +137,13 @@ setup_neovim_prerequisites() {
 
 initialize_lazyvim() {
     substep "Initializing LazyVim..."
-    
+
     if [[ "$DRY_RUN" == "false" ]]; then
         # Check if the configuration is valid
         if [[ -f "$NEOVIM_CONFIG_DIR/init.lua" ]]; then
             substep "LazyVim configuration is ready"
             substep "Plugins will be automatically installed on first Neovim startup"
-            
+
             # Optionally, we can pre-install plugins in headless mode
             # This might take a while, so we'll make it optional
             if [[ "${PREINSTALL_PLUGINS:-false}" == "true" ]]; then
@@ -261,34 +165,34 @@ initialize_lazyvim() {
 # Function to validate Neovim setup
 validate_neovim_setup() {
     substep "Validating Neovim setup..."
-    
+
     local validation_passed=true
-    
+
     # Check if Neovim is available
     if ! check_command nvim; then
         error "Neovim is not available"
         validation_passed=false
     fi
-    
+
     # Check if config directory exists
     if [[ ! -d "$NEOVIM_CONFIG_DIR" ]]; then
         error "Neovim configuration directory missing: $NEOVIM_CONFIG_DIR"
         validation_passed=false
     fi
-    
+
     # Check if init.lua exists
     if [[ ! -f "$NEOVIM_CONFIG_DIR/init.lua" ]]; then
         error "Neovim init.lua missing: $NEOVIM_CONFIG_DIR/init.lua"
         validation_passed=false
     fi
-    
+
     # Test Neovim configuration syntax
     if [[ "$DRY_RUN" == "false" ]]; then
         if ! nvim --headless -c "checkhealth" -c "qa" 2>/dev/null; then
             warning "Neovim configuration may have issues (run :checkhealth in Neovim)"
         fi
     fi
-    
+
     if [[ "$validation_passed" == "true" ]]; then
         success "Neovim setup validation passed"
     else
@@ -302,7 +206,6 @@ show_neovim_info() {
     echo
     info "Neovim is configured with LazyVim:"
     echo -e "  ${CYAN}Configuration:${NC} $NEOVIM_CONFIG_DIR"
-    echo -e "  ${CYAN}Repository:${NC} $NEOVIM_REPO"
     echo
     info "First startup instructions:"
     echo -e "  ${CYAN}1.${NC} Run 'nvim' to start Neovim"

@@ -1,91 +1,94 @@
-# 🌃 Shell Environment Setup - "One Stop Shop"
+# Shell Environment Setup - "One Stop Shop"
 
-> Complete shell environment setup with TokyoNight theme and modern CLI tools
+> Cross-platform shell environment with Catppuccin Mocha theme and modern CLI tools
 
-![Fish Shell](https://img.shields.io/badge/Fish-Shell-7aa2f7?style=for-the-badge&logo=gnu-bash)
-![Tmux](https://img.shields.io/badge/Tmux-Terminal-9ece6a?style=for-the-badge)
-![Neovim](https://img.shields.io/badge/Neovim-LazyVim-bb9af7?style=for-the-badge&logo=neovim)
-![Starship](https://img.shields.io/badge/Starship-Prompt-ff9e64?style=for-the-badge)
-![TokyoNight](https://img.shields.io/badge/Theme-TokyoNight-1a1b26?style=for-the-badge)
+![Zsh](https://img.shields.io/badge/Zsh-Shell-89b4fa?style=for-the-badge&logo=gnu-bash)
+![Tmux](https://img.shields.io/badge/Tmux-Terminal-a6e3a1?style=for-the-badge)
+![Neovim](https://img.shields.io/badge/Neovim-LazyVim-cba6f7?style=for-the-badge&logo=neovim)
+![Starship](https://img.shields.io/badge/Starship-Prompt-fab387?style=for-the-badge)
+![Catppuccin](https://img.shields.io/badge/Theme-Catppuccin-1e1e2e?style=for-the-badge)
 
-## ✨ Features
+## Features
 
 This setup provides a complete, modern shell environment with:
 
-- **🐟 Fish Shell** - Modern shell with intelligent autocompletion and syntax highlighting
-- **🔧 Tmux** - Terminal multiplexer with session management and beautiful themes
-- **⚡ Neovim** - Modern Vim-based editor with LazyVim configuration
-- **🚀 Starship** - Fast, customizable prompt with Git integration
-- **📦 Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, and more
-- **🐍 Python Tooling** - UV package manager and Ruff linter/formatter
-- **📦 JavaScript Tools** - Bun as default package manager (replaces npm)
-- **🌃 TokyoNight Theme** - Beautiful, consistent dark theming across all tools
+- **Zsh Shell** - Feature-rich shell with Antidote plugin manager
+- **Tmux** - Terminal multiplexer with session management and Catppuccin theme
+- **Neovim** - Modern Vim-based editor with LazyVim configuration
+- **Starship** - Fast, customizable prompt with Git integration
+- **Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, zoxide, and more
+- **Development Tools** - nvm + Node.js, uv (Python), Bun
+- **Shell Enhancements** - Atuin for shell history, fzf-tab for completions
+- **Catppuccin Mocha** - Beautiful, consistent theming across all tools
 
-## 🚀 Quick Installation
+## Quick Installation
 
 ### One-Liner Installation
 
 ```bash
-curl -sL https://raw.githubusercontent.com/[your-username]/dotfiles/main/install.sh | bash
+git clone https://github.com/chaseddevelopment/dotfiles ~/.config && ~/.config/install.sh
 ```
 
 ### Manual Installation
 
 ```bash
-git clone https://github.com/[your-username]/dotfiles.git ~/dotfiles
+git clone https://github.com/chaseddevelopment/dotfiles ~/dotfiles
 cd ~/dotfiles
 chmod +x install.sh
 ./install.sh
 ```
 
-## 📋 What Gets Installed
+## What Gets Installed
 
-### 🐟 Fish Shell Configuration
-- **Fisher Plugin Manager** - Plugin management system
-- **NVM for Fish** - Node.js version management
-- **FZF Integration** - Fuzzy finding for files, history, and directories
-- **Custom Abbreviations** - 50+ useful command shortcuts
-- **Tmux Session Management** - Automatic session creation and cleanup
-- **Path Management** - Intelligent PATH configuration for all tools
+### Zsh Shell Configuration
+- **Antidote Plugin Manager** - Fast, lightweight plugin management
+- **zsh-autosuggestions** - Fish-like autosuggestions
+- **zsh-syntax-highlighting** - Command syntax highlighting
+- **fzf-tab** - Tab completions with fzf
+- **zoxide Integration** - Smart directory navigation
+- **Custom Aliases** - Modern tool replacements (eza, bat, rg, fd)
+- **Modular Configuration** - Organized in `~/.config/zsh/`
 
-### 🔧 Tmux Configuration
+### Tmux Configuration
 - **TPM (Tmux Plugin Manager)** - Plugin management
-- **TokyoNight Theme** - Beautiful night color scheme with widgets
+- **Catppuccin Mocha Theme** - Beautiful color scheme
 - **Vim-Tmux Navigator** - Seamless navigation between Vim and Tmux
 - **Tmux Sensible** - Better default settings
-- **Tmux Yank** - System clipboard integration
 - **Custom Key Bindings** - Ctrl+Space prefix and intuitive shortcuts
 
-### ⚡ Neovim Setup
-- **LazyVim Configuration** - Modern Neovim setup from [ChaseDDevelopment/neovim](https://github.com/ChaseDDevelopment/neovim)
-- **Latest Version Installation**: 
-  - **macOS**: Uses `brew install --HEAD neovim` for latest development features
-  - **Arch Linux**: Installs `neovim-git` from AUR (requires yay/paru) for version 0.12+
+### Neovim Setup
+- **LazyVim Configuration** - Modern Neovim setup
+- **Latest Version Installation**:
+  - **macOS**: Uses `brew install --HEAD neovim` for latest features
+  - **Arch Linux**: Installs `neovim-git` from AUR for version 0.12+
   - **Other platforms**: Uses system package manager with upgrade recommendations
 - **Plugin Management** - Automatic plugin installation on first startup
 - **LSP Integration** - Language server support for multiple languages
-- **Modern UI** - Beautiful interface with file explorer and status line
 
-### 🚀 Starship Prompt
-- **TokyoNight Powerline Theme** - Beautiful, informative prompt with night colors
+### Starship Prompt
+- **Catppuccin Theme** - Beautiful, informative prompt
 - **Git Integration** - Branch, status, and commit information
 - **Language Detection** - Automatic programming language indicators
 - **Performance Optimized** - Fast prompt rendering
 
-### 📦 Modern CLI Tools
+### Modern CLI Tools
 - **bat** - Better cat with syntax highlighting and Git integration
 - **ripgrep (rg)** - Lightning-fast grep replacement
 - **fd** - User-friendly find replacement
 - **eza** - Modern ls replacement with icons and colors
 - **fzf** - Command-line fuzzy finder
+- **zoxide** - Smart cd that learns your habits
 
-### 🛠️ Development Tools
-- **bun** - Fast JavaScript runtime (replaces npm/npx)
+### Development Tools
+- **nvm** - Node.js version manager (with LTS installed)
 - **uv** - Fast Python package installer and environment manager
-- **ruff** - Extremely fast Python linter and formatter
-- **nvm** - Node.js version manager (via Fish plugin)
+- **Bun** - Fast JavaScript runtime
 
-## 🖥️ System Requirements
+### Shell Enhancements
+- **Atuin** - Magical shell history with sync and search
+- **Ghostty Config** - Terminal emulator configuration (desktop only)
+
+## System Requirements
 
 ### Supported Operating Systems
 - **macOS** (Intel and Apple Silicon)
@@ -96,7 +99,7 @@ chmod +x install.sh
 
 ### Prerequisites
 - **Git** (version 2.0+)
-- **curl** or **wget**
+- **curl**
 - **Bash 4.2+** (installed automatically on macOS via Homebrew)
 - **Internet connection** for downloading packages and configurations
 
@@ -104,7 +107,7 @@ chmod +x install.sh
 - **A Nerd Font** for proper icon display ([Download here](https://www.nerdfonts.com/))
 - **Terminal with true color support** (most modern terminals)
 
-## 🛠️ Installation Options
+## Installation Options
 
 ### Standard Installation
 ```bash
@@ -136,27 +139,28 @@ chmod +x install.sh
 ./install.sh --verbose
 ```
 
-## ⌨️ Key Bindings
+## Key Bindings
 
-### Fish Shell
+### Zsh Shell
 | Key Combination | Action |
 |-----------------|--------|
 | `Ctrl+T` | File search with FZF |
-| `Ctrl+R` | History search with FZF |
+| `Ctrl+R` | History search with Atuin |
 | `Alt+C` | Directory search with FZF |
-| `Tab` | Autocompletion |
-| `→` | Accept autosuggestion |
+| `Tab` | Autocompletion with fzf-tab |
+| `->` | Accept autosuggestion |
 
 ### Tmux
 | Key Combination | Action |
 |-----------------|--------|
 | `Ctrl+Space` | Prefix key |
-| `Prefix + "` | Split horizontally |
-| `Prefix + %` | Split vertically |
+| `Prefix + \|` | Split horizontally |
+| `Prefix + -` | Split vertically |
 | `Prefix + c` | New window |
 | `Alt+H` | Previous window |
 | `Alt+L` | Next window |
 | `Ctrl+H/J/K/L` | Navigate panes (with vim-tmux-navigator) |
+| `Prefix + r` | Reload configuration |
 
 ### Neovim (LazyVim)
 | Key Combination | Action |
@@ -168,27 +172,20 @@ chmod +x install.sh
 | `<Leader>gg` | LazyGit |
 | `:Lazy` | Plugin manager |
 
-## 🎨 Customization
+## Customization
 
-### Changing Starship Theme
-```bash
-# Current theme is TokyoNight with powerline layout
-# You can switch to other presets:
-starship preset minimal -o ~/.config/starship.toml
-
-# Or edit ~/.config/starship.toml directly to customize colors
+### Adding Zsh Aliases
+Edit `~/.config/zsh/aliases/general.zsh`:
+```zsh
+alias myalias="my command"
 ```
 
-### Adding Fish Abbreviations
-Edit `~/.config/fish/conf.d/abbr.fish`:
-```fish
-abbr myabbr "my command"
-```
-
-#### Codex CLI completions (Fish)
-Completions for `codex` auto-install on shell start (see `configs/fish/conf.d/codex_completions.fish`). Force-refresh anytime with:
-```fish
-__update_codex_completions
+### Adding Zsh Functions
+Create a file in `~/.config/zsh/functions/`:
+```zsh
+my_function() {
+    # Your function code here
+}
 ```
 
 ### Installing Additional Tmux Plugins
@@ -202,30 +199,31 @@ Then press `Prefix + I` to install.
 The setup replaces traditional commands with modern alternatives:
 ```bash
 # These commands now use modern tools automatically:
-ls      # → eza (with icons and colors)
-cat     # → bat (with syntax highlighting)
-find    # → fd (faster and user-friendly)
-grep    # → ripgrep (much faster)
+ls      # -> eza (with icons and colors)
+cat     # -> bat (with syntax highlighting)
+find    # -> fd (faster and user-friendly)
+grep    # -> ripgrep (much faster)
+cd      # -> zoxide (learns your habits)
 
 # Original commands are still available as:
 command ls    # Use original ls
 command cat   # Use original cat
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
-#### Fish Shell Not Set as Default
+#### Zsh Shell Not Set as Default
 ```bash
 # Check available shells
 cat /etc/shells
 
-# Add Fish to shells if missing
-echo $(which fish) | sudo tee -a /etc/shells
+# Add Zsh to shells if missing
+echo $(which zsh) | sudo tee -a /etc/shells
 
 # Set as default shell
-chsh -s $(which fish)
+chsh -s $(which zsh)
 ```
 
 #### Tmux Plugins Not Working
@@ -253,8 +251,8 @@ nvim
 # Check if Starship is in PATH
 which starship
 
-# Manually add to Fish config
-echo "starship init fish | source" >> ~/.config/fish/config.fish
+# Verify it's in .zshrc (should be automatic)
+grep starship ~/.config/zsh/.zshrc
 ```
 
 #### Icons Not Displaying
@@ -276,7 +274,7 @@ echo "starship init fish | source" >> ~/.config/fish/config.fish
    - Full error message
    - Installation log contents
 
-## 🔄 Updating
+## Updating
 
 ### Update All Configurations
 ```bash
@@ -285,9 +283,10 @@ git pull
 ./install.sh --config-only
 ```
 
-### Update Fish Plugins
+### Update Zsh Plugins
+Plugins are managed by Antidote and update automatically, or run:
 ```bash
-fisher update
+antidote update
 ```
 
 ### Update Tmux Plugins
@@ -301,35 +300,45 @@ fisher update
 :Lazy update
 ```
 
-## 📂 File Structure
+## File Structure
 
 ```
-~/dotfiles/
+dotfiles/
 ├── README.md                    # This file
 ├── install.sh                   # Main installer script
 ├── scripts/
 │   ├── detect-os.sh            # OS detection utilities
 │   ├── install-packages.sh     # Package installation
-│   ├── setup-fish.sh           # Fish shell setup
+│   ├── install-tools.sh        # Official source tool installers
+│   ├── setup-zsh.sh            # Zsh shell setup
 │   ├── setup-tmux.sh           # Tmux setup
 │   ├── setup-neovim.sh         # Neovim setup
-│   └── setup-starship.sh       # Starship setup
+│   ├── setup-starship.sh       # Starship setup
+│   ├── setup-atuin.sh          # Atuin setup
+│   └── setup-ghostty.sh        # Ghostty setup (desktop only)
 ├── configs/
-│   ├── fish/
-│   │   ├── config.fish          # Main Fish configuration
-│   │   ├── conf.d/
-│   │   │   ├── abbr.fish        # Abbreviations
-│   │   │   ├── paths.fish       # PATH management
-│   │   │   └── tmux-mgmt.fish   # Tmux session management
-│   │   └── fish_plugins         # Fisher plugins
+│   ├── zsh/
+│   │   ├── .zshenv             # Environment variables
+│   │   ├── .zshrc              # Main Zsh configuration
+│   │   ├── aliases/            # Alias definitions
+│   │   ├── functions/          # Custom functions
+│   │   ├── plugins/            # Antidote plugin manifest
+│   │   └── tools/              # Tool-specific configs (nvm, bun)
+│   ├── nvim/
+│   │   ├── init.lua            # Neovim entry point
+│   │   └── lua/                # LazyVim configuration
 │   ├── tmux/
-│   │   └── .tmux.conf           # Tmux configuration
-│   └── starship/
-│       └── starship.toml        # Starship configuration
+│   │   └── .tmux.conf          # Tmux configuration
+│   ├── starship/
+│   │   └── starship.toml       # Starship configuration
+│   ├── atuin/
+│   │   └── config.toml         # Atuin configuration
+│   └── ghostty/
+│       └── config              # Ghostty terminal configuration
 └── backups/                     # Backup directory
 ```
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork this repository
 2. Create a feature branch: `git checkout -b feature-name`
@@ -338,21 +347,22 @@ fisher update
 5. Push to the branch: `git push origin feature-name`
 6. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- [Fish Shell](https://fishshell.com/) - Amazing modern shell
+- [Zsh](https://www.zsh.org/) - Powerful shell
+- [Antidote](https://github.com/mattmc3/antidote) - Fast Zsh plugin manager
 - [Tmux](https://github.com/tmux/tmux) - Terminal multiplexer
 - [Neovim](https://neovim.io/) - Hyperextensible Vim-based text editor
 - [LazyVim](https://www.lazyvim.org/) - Neovim configuration framework
 - [Starship](https://starship.rs/) - Cross-shell prompt
 - [Catppuccin](https://github.com/catppuccin/catppuccin) - Beautiful color schemes
-- [Fisher](https://github.com/jorgebucaran/fisher) - Fish plugin manager
+- [Atuin](https://github.com/atuinsh/atuin) - Magical shell history
 - [TPM](https://github.com/tmux-plugins/tpm) - Tmux plugin manager
 
 ---
 
-**Made with ❤️ for developers who love beautiful, functional terminals**
+**Made with care for developers who love beautiful, functional terminals**

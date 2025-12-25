@@ -41,25 +41,24 @@ copy_tmux_config() {
     
     if [[ -f "$source_file" ]]; then
         if [[ "$DRY_RUN" == "false" ]]; then
+            # Remove existing file/symlink before copying (sed -i fails on symlinks)
+            rm -f "$dest_file"
             cp "$source_file" "$dest_file"
             
-            # Dynamically set the correct fish path
-            local fish_path
-            if fish_path=$(command -v fish); then
-                substep "Configuring tmux to use fish at: $fish_path"
+            # Dynamically set the correct zsh path
+            local zsh_path
+            if zsh_path=$(command -v zsh); then
+                substep "Configuring tmux to use zsh at: $zsh_path"
                 # Use portable sed syntax that works on both GNU and BSD sed
-                sed -i.bak "s|set -g default-shell fish|set -g default-shell $fish_path|" "$dest_file"
+                sed -i.bak "s|set -g default-shell.*|set -g default-shell $zsh_path|" "$dest_file"
                 rm -f "$dest_file.bak"
             else
-                warning "Fish shell not found. Tmux will use system default shell."
-                # Remove the default-shell line if fish is not found
-                sed -i.bak '/set -g default-shell.*fish/d' "$dest_file"
-                rm -f "$dest_file.bak"
+                substep "Zsh not found, tmux will use system default shell"
             fi
-            
-            substep "Copied .tmux.conf with dynamic fish path"
+
+            substep "Copied .tmux.conf with zsh configuration"
         else
-            substep "[DRY RUN] Would copy .tmux.conf and configure fish path"
+            substep "[DRY RUN] Would copy .tmux.conf and configure zsh path"
         fi
     else
         error "Tmux configuration file not found: $source_file"

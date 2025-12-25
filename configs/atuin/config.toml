@@ -1,0 +1,34 @@
+## Atuin Configuration
+## Docs: https://docs.atuin.sh/configuration/config/
+
+# Where to store the database
+db_path = "~/.local/share/atuin/history.db"
+
+# How often to sync (if logged in)
+sync_frequency = "1h"
+
+# Search mode: prefix, fulltext, fuzzy, skim
+search_mode = "fuzzy"
+
+# Filter modes
+filter_mode = "global"
+filter_mode_shell_up_key_binding = "session"
+
+# Style
+style = "compact"
+inline_height = 20
+
+# Show preview of full command
+show_preview = true
+
+# Exit on ESC
+exit_mode = "return-original"
+
+# History format
+history_format = "{time} {command}"
+
+# Sync settings
+sync_address = "https://api.atuin.sh"
+
+# Local history only (no sync)
+sync = { enabled = false }
