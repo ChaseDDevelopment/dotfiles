@@ -17,6 +17,7 @@ install_packages() {
     install_package "git"
     install_package "curl"
     install_package "wget"
+    install_package "unzip"
     
     # Build tools (needed for some installations)
     if [[ "$PACKAGE_MANAGER" != "brew" ]]; then
