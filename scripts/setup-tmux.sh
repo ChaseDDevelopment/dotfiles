@@ -100,8 +100,8 @@ install_tmux_plugins() {
             # Make sure the script is executable
             chmod +x "$tpm_script"
             
-            # Run the install script
-            "$tpm_script"
+            # Run the install script (set TMUX_PLUGIN_MANAGER_PATH for running outside tmux)
+            TMUX_PLUGIN_MANAGER_PATH="$HOME/.tmux/plugins" "$tpm_script"
             substep "Tmux plugins installed"
             
             # Force reload configuration to apply theme
