@@ -162,7 +162,7 @@ show_milliseconds = true
 format = " in $duration "
 style = "bg:lavender"
 disabled = false
-show_notifications = true
+show_notifications = false   # Disabled - causes prompt hang on macOS (issue #7128)
 min_time_to_notify = 45000
 
 [palettes.catppuccin_mocha]

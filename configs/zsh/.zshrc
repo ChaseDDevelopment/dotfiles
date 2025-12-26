@@ -174,6 +174,22 @@ done
 (( $+commands[starship] )) && eval "$(starship init zsh)"
 
 # ----------------------------------------------------------------------------
+# Terminal State Reset (fixes prompt hang after interactive programs)
+# ----------------------------------------------------------------------------
+# Force terminal reset on precmd to handle dirty state from nvim/ssh/tmux
+function _reset_terminal_state() {
+    # Ensure cursor is visible (some programs leave it hidden)
+    echoti cnorm 2>/dev/null || echo -ne '\033[?25h'
+}
+precmd_functions+=(_reset_terminal_state)
+
+# Fix prompt not appearing after Ctrl+C
+TRAPINT() {
+    zle && zle .reset-prompt
+    return $(( 128 + $1 ))
+}
+
+# ----------------------------------------------------------------------------
 # Profiling output (uncomment if debugging)
 # ----------------------------------------------------------------------------
 # zprof
