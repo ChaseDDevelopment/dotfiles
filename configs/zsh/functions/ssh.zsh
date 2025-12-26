@@ -23,6 +23,7 @@ function ssht() {
     # Reset terminal state after SSH exits
     # Fixes terminal corruption when connection drops unexpectedly
     stty sane 2>/dev/null
+    echo
 }
 
 # Completion: reuse ssh completions for ssht
