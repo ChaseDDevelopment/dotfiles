@@ -121,9 +121,6 @@ zstyle ':fzf-tab:*' fzf-command fzf
 # Tool Integrations (conditional loading)
 # ----------------------------------------------------------------------------
 
-# Starship prompt
-(( $+commands[starship] )) && eval "$(starship init zsh)"
-
 # Zoxide (smart cd)
 (( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
 
@@ -170,6 +167,11 @@ done
 
 # Local machine-specific config (not in git)
 [[ -f "${ZDOTDIR}/local.zsh" ]] && source "${ZDOTDIR}/local.zsh"
+
+# ----------------------------------------------------------------------------
+# Starship Prompt (MUST be last to properly hook into prompt)
+# ----------------------------------------------------------------------------
+(( $+commands[starship] )) && eval "$(starship init zsh)"
 
 # ----------------------------------------------------------------------------
 # Profiling output (uncomment if debugging)
