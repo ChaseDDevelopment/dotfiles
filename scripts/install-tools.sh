@@ -116,6 +116,8 @@ install_atuin_tool() {
             *)
                 # Use official installer
                 curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh
+                # Add Atuin to PATH for current session
+                export PATH="$HOME/.atuin/bin:$PATH"
                 ;;
         esac
         substep "Atuin installed"

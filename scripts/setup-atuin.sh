@@ -12,7 +12,7 @@ setup_atuin() {
     # Check if atuin is installed
     if ! check_command atuin; then
         warning "Atuin is not installed. It should be installed via install-tools.sh"
-        return 1
+        return 0  # Don't fail the entire install for optional tool
     fi
 
     # Backup existing config
