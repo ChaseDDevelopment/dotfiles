@@ -441,25 +441,6 @@ install_dotnet_sdk() {
                 substep "[DRY RUN] Would install dotnet-sdk via Homebrew"
             fi
             ;;
-        "apt")
-            if [[ "$DRY_RUN" == "false" ]]; then
-                # Install Microsoft package signing key and repo
-                "${INSTALL_CMD_ARRAY[@]}" apt-transport-https
-                curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
-                echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/microsoft.list > /dev/null
-                sudo apt update
-                "${INSTALL_CMD_ARRAY[@]}" dotnet-sdk-8.0
-            else
-                substep "[DRY RUN] Would install dotnet-sdk via apt"
-            fi
-            ;;
-        "dnf"|"yum")
-            if [[ "$DRY_RUN" == "false" ]]; then
-                "${INSTALL_CMD_ARRAY[@]}" dotnet-sdk-8.0
-            else
-                substep "[DRY RUN] Would install dotnet-sdk via ${PACKAGE_MANAGER}"
-            fi
-            ;;
         "pacman")
             if [[ "$DRY_RUN" == "false" ]]; then
                 "${INSTALL_CMD_ARRAY[@]}" dotnet-sdk
@@ -468,7 +449,25 @@ install_dotnet_sdk() {
             fi
             ;;
         *)
-            warning "Unknown package manager for dotnet-sdk installation"
+            # For apt, dnf, yum, and others: use Microsoft's official install script
+            # This works on any Linux distro without needing package repos
+            if [[ "$DRY_RUN" == "false" ]]; then
+                substep "Using Microsoft's dotnet-install.sh script..."
+                local install_script="/tmp/dotnet-install.sh"
+                curl -sSL https://dot.net/v1/dotnet-install.sh -o "$install_script"
+                chmod +x "$install_script"
+                # Install to ~/.dotnet (user-local, no sudo needed)
+                "$install_script" --channel LTS --install-dir "$HOME/.dotnet"
+                rm -f "$install_script"
+
+                # Add to PATH for current session
+                export PATH="$HOME/.dotnet:$PATH"
+                export DOTNET_ROOT="$HOME/.dotnet"
+
+                substep "dotnet-sdk installed to ~/.dotnet"
+            else
+                substep "[DRY RUN] Would install dotnet-sdk via dotnet-install.sh"
+            fi
             ;;
     esac
 }

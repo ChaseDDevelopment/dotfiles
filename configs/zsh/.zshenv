@@ -38,6 +38,12 @@ path=(
 )
 export PATH
 
+# .NET SDK (installed via dotnet-install.sh to ~/.dotnet)
+if [[ -d "${HOME}/.dotnet" ]]; then
+    export DOTNET_ROOT="${HOME}/.dotnet"
+    export PATH="${DOTNET_ROOT}:${PATH}"
+fi
+
 # Cross-platform clipboard detection for fzf
 if [[ "$OSTYPE" == "darwin"* ]]; then
     FZF_CLIP_CMD="pbcopy"
