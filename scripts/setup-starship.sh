@@ -48,12 +48,15 @@ setup_starship_config() {
     local custom_config="$SCRIPT_DIR/configs/starship/starship.toml"
     
     if [[ -f "$custom_config" ]]; then
-        # Use custom configuration
-        substep "Using custom Starship configuration..."
+        # Use custom configuration (symlink for auto-sync to repo)
+        substep "Symlinking custom Starship configuration..."
         if [[ "$DRY_RUN" == "false" ]]; then
-            cp "$custom_config" "$STARSHIP_CONFIG_FILE"
+            # Remove existing file/symlink
+            rm -f "$STARSHIP_CONFIG_FILE"
+            ln -s "$custom_config" "$STARSHIP_CONFIG_FILE"
+            substep "Starship config symlinked: $STARSHIP_CONFIG_FILE -> $custom_config"
         else
-            substep "[DRY RUN] Would copy custom starship.toml"
+            substep "[DRY RUN] Would symlink custom starship.toml"
         fi
     else
         # Generate Catppuccin preset configuration

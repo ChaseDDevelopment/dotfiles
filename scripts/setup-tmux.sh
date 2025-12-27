@@ -34,31 +34,23 @@ setup_tmux() {
 }
 
 copy_tmux_config() {
-    substep "Copying Tmux configuration..."
-    
+    substep "Symlinking Tmux configuration..."
+
     local source_file="$SCRIPT_DIR/configs/tmux/.tmux.conf"
     local dest_file="$HOME/.tmux.conf"
-    
+
     if [[ -f "$source_file" ]]; then
         if [[ "$DRY_RUN" == "false" ]]; then
-            # Remove existing file/symlink before copying (sed -i fails on symlinks)
+            # Remove existing file/symlink
             rm -f "$dest_file"
-            cp "$source_file" "$dest_file"
-            
-            # Dynamically set the correct zsh path
-            local zsh_path
-            if zsh_path=$(command -v zsh); then
-                substep "Configuring tmux to use zsh at: $zsh_path"
-                # Use portable sed syntax that works on both GNU and BSD sed
-                sed -i.bak "s|set -g default-shell.*|set -g default-shell $zsh_path|" "$dest_file"
-                rm -f "$dest_file.bak"
-            else
-                substep "Zsh not found, tmux will use system default shell"
-            fi
 
-            substep "Copied .tmux.conf with zsh configuration"
+            # Symlink configuration (changes sync automatically to repo)
+            ln -s "$source_file" "$dest_file"
+
+            # Tmux uses $SHELL by default, which is set to zsh by the installer
+            substep "Tmux config symlinked: $dest_file -> $source_file"
         else
-            substep "[DRY RUN] Would copy .tmux.conf and configure zsh path"
+            substep "[DRY RUN] Would symlink .tmux.conf"
         fi
     else
         error "Tmux configuration file not found: $source_file"

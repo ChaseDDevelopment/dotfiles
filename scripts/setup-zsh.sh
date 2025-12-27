@@ -63,50 +63,36 @@ create_xdg_directories() {
 }
 
 create_zsh_directories() {
-    substep "Creating Zsh config directory structure..."
-
-    if [[ "$DRY_RUN" == "false" ]]; then
-        mkdir -p "$HOME/.config/zsh/aliases"
-        mkdir -p "$HOME/.config/zsh/functions"
-        mkdir -p "$HOME/.config/zsh/plugins"
-        mkdir -p "$HOME/.config/zsh/tools"
-        substep "Zsh config directories created"
-    else
-        substep "[DRY RUN] Would create Zsh config directories"
-    fi
+    # No longer needed - symlink provides directory structure
+    # Kept for backwards compatibility, does nothing
+    :
 }
 
 copy_zsh_configs() {
-    substep "Copying Zsh configurations..."
+    substep "Symlinking Zsh configurations..."
 
-    # Files that go to ~/.config/zsh
-    local zsh_config_files=(
-        ".zshenv"
-        ".zshrc"
-        "aliases/general.zsh"
-        "functions/utils.zsh"
-        "functions/ssh.zsh"
-        "plugins/.zsh_plugins.txt"
-        "tools/nvm.zsh"
-        "tools/bun.zsh"
-    )
+    local source_dir="$SCRIPT_DIR/configs/zsh"
+    local dest_dir="$HOME/.config/zsh"
 
-    for config_file in "${zsh_config_files[@]}"; do
-        local source_file="$SCRIPT_DIR/configs/zsh/$config_file"
-        local dest_file="$HOME/.config/zsh/$config_file"
-
-        if [[ -f "$source_file" ]]; then
-            if [[ "$DRY_RUN" == "false" ]]; then
-                mkdir -p "$(dirname "$dest_file")"
-                cp "$source_file" "$dest_file"
-                substep "Copied $config_file"
-            else
-                substep "[DRY RUN] Would copy $config_file"
-            fi
-        else
-            warning "Configuration file not found: $source_file"
+    if [[ "$DRY_RUN" == "false" ]]; then
+        # Check if source exists
+        if [[ ! -d "$source_dir" ]]; then
+            error "Zsh config source not found: $source_dir"
+            return 1
         fi
-    done
+
+        # Remove existing config if present (already backed up)
+        if [[ -e "$dest_dir" ]] || [[ -L "$dest_dir" ]]; then
+            rm -rf "$dest_dir"
+        fi
+
+        # Symlink configuration (changes sync automatically to repo)
+        ln -s "$source_dir" "$dest_dir"
+
+        substep "Zsh configuration symlinked: $dest_dir -> $source_dir"
+    else
+        substep "[DRY RUN] Would symlink $source_dir to $dest_dir"
+    fi
 }
 
 setup_root_zshenv() {

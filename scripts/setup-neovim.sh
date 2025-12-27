@@ -96,16 +96,16 @@ copy_neovim_config() {
         fi
 
         # Remove existing config if present (already backed up)
-        if [[ -d "$NEOVIM_CONFIG_DIR" ]]; then
+        if [[ -e "$NEOVIM_CONFIG_DIR" ]] || [[ -L "$NEOVIM_CONFIG_DIR" ]]; then
             rm -rf "$NEOVIM_CONFIG_DIR"
         fi
 
-        # Copy configuration
-        cp -r "$source_dir" "$NEOVIM_CONFIG_DIR"
+        # Symlink configuration (changes sync automatically to repo)
+        ln -s "$source_dir" "$NEOVIM_CONFIG_DIR"
 
-        substep "Neovim configuration copied to $NEOVIM_CONFIG_DIR"
+        substep "Neovim configuration symlinked: $NEOVIM_CONFIG_DIR -> $source_dir"
     else
-        substep "[DRY RUN] Would copy $source_dir to $NEOVIM_CONFIG_DIR"
+        substep "[DRY RUN] Would symlink $source_dir to $NEOVIM_CONFIG_DIR"
     fi
 }
 

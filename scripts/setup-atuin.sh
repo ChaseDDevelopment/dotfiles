@@ -25,22 +25,23 @@ setup_atuin() {
 }
 
 copy_atuin_config() {
-    substep "Copying Atuin configuration..."
+    substep "Symlinking Atuin configuration..."
 
-    local source="$SCRIPT_DIR/configs/atuin/config.toml"
+    local source_dir="$SCRIPT_DIR/configs/atuin"
     local dest_dir="$HOME/.config/atuin"
-    local dest="$dest_dir/config.toml"
 
     if [[ "$DRY_RUN" == "false" ]]; then
-        mkdir -p "$dest_dir"
-
-        if [[ -f "$source" ]]; then
-            cp "$source" "$dest"
-            substep "Atuin config copied to $dest"
+        if [[ -d "$source_dir" ]]; then
+            # Remove existing config directory/symlink
+            if [[ -e "$dest_dir" ]] || [[ -L "$dest_dir" ]]; then
+                rm -rf "$dest_dir"
+            fi
+            ln -s "$source_dir" "$dest_dir"
+            substep "Atuin config symlinked: $dest_dir -> $source_dir"
         else
-            warning "Atuin config not found: $source"
+            warning "Atuin config not found: $source_dir"
         fi
     else
-        substep "[DRY RUN] Would copy Atuin config"
+        substep "[DRY RUN] Would symlink Atuin config"
     fi
 }

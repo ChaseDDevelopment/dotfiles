@@ -31,22 +31,23 @@ is_desktop_environment() {
 }
 
 copy_ghostty_config() {
-    substep "Copying Ghostty configuration..."
+    substep "Symlinking Ghostty configuration..."
 
-    local source="$SCRIPT_DIR/configs/ghostty/config"
+    local source_dir="$SCRIPT_DIR/configs/ghostty"
     local dest_dir="$HOME/.config/ghostty"
-    local dest="$dest_dir/config"
 
     if [[ "$DRY_RUN" == "false" ]]; then
-        mkdir -p "$dest_dir"
-
-        if [[ -f "$source" ]]; then
-            cp "$source" "$dest"
-            substep "Ghostty config copied to $dest"
+        if [[ -d "$source_dir" ]]; then
+            # Remove existing config directory/symlink
+            if [[ -e "$dest_dir" ]] || [[ -L "$dest_dir" ]]; then
+                rm -rf "$dest_dir"
+            fi
+            ln -s "$source_dir" "$dest_dir"
+            substep "Ghostty config symlinked: $dest_dir -> $source_dir"
         else
-            warning "Ghostty config not found: $source"
+            warning "Ghostty config not found: $source_dir"
         fi
     else
-        substep "[DRY RUN] Would copy Ghostty config"
+        substep "[DRY RUN] Would symlink Ghostty config"
     fi
 }
