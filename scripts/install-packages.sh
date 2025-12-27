@@ -71,9 +71,12 @@ install_packages() {
     install_bun
     
     # Python tools
-    install_uv
+    install_uv      # Also installs Python via `uv python install --default`
     install_ruff
-    
+
+    # .NET SDK (for F#/C# LSP and Mason tools like fsautocomplete)
+    install_dotnet_sdk
+
     success "Package installation completed"
 }
 
@@ -363,31 +366,45 @@ install_clipboard_utils() {
 }
 
 install_uv() {
+    # Install UV if not present
     if check_command uv; then
         substep "UV is already installed"
-        return
-    fi
-    
-    substep "Installing UV..."
-    if [[ "$DRY_RUN" == "false" ]]; then
-        # Download UV installer to temporary file for safer execution
-        local uv_installer="/tmp/uv-install.sh"
-        substep "Downloading UV installer..."
-        curl -LsSf https://astral.sh/uv/install.sh -o "$uv_installer"
-        
-        # Basic validation - check if file exists and has reasonable size
-        if [[ -f "$uv_installer" && -s "$uv_installer" ]]; then
-            substep "Executing UV installer..."
-            sh "$uv_installer"
-            rm -f "$uv_installer"
-            export PATH="$HOME/.local/bin:$PATH"
-        else
-            error "Failed to download UV installer"
-            rm -f "$uv_installer"
-            return 1
-        fi
     else
-        substep "[DRY RUN] Would install UV via official installer"
+        substep "Installing UV..."
+        if [[ "$DRY_RUN" == "false" ]]; then
+            # Download UV installer to temporary file for safer execution
+            local uv_installer="/tmp/uv-install.sh"
+            substep "Downloading UV installer..."
+            curl -LsSf https://astral.sh/uv/install.sh -o "$uv_installer"
+
+            # Basic validation - check if file exists and has reasonable size
+            if [[ -f "$uv_installer" && -s "$uv_installer" ]]; then
+                substep "Executing UV installer..."
+                sh "$uv_installer"
+                rm -f "$uv_installer"
+                export PATH="$HOME/.local/bin:$PATH"
+            else
+                error "Failed to download UV installer"
+                rm -f "$uv_installer"
+                return 1
+            fi
+        else
+            substep "[DRY RUN] Would install UV via official installer"
+        fi
+    fi
+
+    # Install Python via UV (provides complete Python with venv for Mason/neovim)
+    # This is needed because system Python on Ubuntu often lacks venv module
+    if [[ -x "$HOME/.local/bin/python3" ]]; then
+        substep "Python already installed via UV"
+    else
+        substep "Installing Python via UV..."
+        if [[ "$DRY_RUN" == "false" ]]; then
+            uv python install --default
+            substep "Python installed to ~/.local/bin (includes venv module for Mason)"
+        else
+            substep "[DRY RUN] Would install Python via UV"
+        fi
     fi
 }
 
@@ -407,6 +424,53 @@ install_ruff() {
     else
         substep "[DRY RUN] Would install Ruff via UV"
     fi
+}
+
+install_dotnet_sdk() {
+    if check_command dotnet; then
+        substep "dotnet-sdk is already installed"
+        return
+    fi
+
+    substep "Installing dotnet-sdk..."
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                brew install dotnet-sdk
+            else
+                substep "[DRY RUN] Would install dotnet-sdk via Homebrew"
+            fi
+            ;;
+        "apt")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                # Install Microsoft package signing key and repo
+                "${INSTALL_CMD_ARRAY[@]}" apt-transport-https
+                curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+                echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/microsoft.list > /dev/null
+                sudo apt update
+                "${INSTALL_CMD_ARRAY[@]}" dotnet-sdk-8.0
+            else
+                substep "[DRY RUN] Would install dotnet-sdk via apt"
+            fi
+            ;;
+        "dnf"|"yum")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                "${INSTALL_CMD_ARRAY[@]}" dotnet-sdk-8.0
+            else
+                substep "[DRY RUN] Would install dotnet-sdk via ${PACKAGE_MANAGER}"
+            fi
+            ;;
+        "pacman")
+            if [[ "$DRY_RUN" == "false" ]]; then
+                "${INSTALL_CMD_ARRAY[@]}" dotnet-sdk
+            else
+                substep "[DRY RUN] Would install dotnet-sdk via pacman"
+            fi
+            ;;
+        *)
+            warning "Unknown package manager for dotnet-sdk installation"
+            ;;
+    esac
 }
 
 install_neovim() {
