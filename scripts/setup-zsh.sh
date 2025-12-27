@@ -116,6 +116,9 @@ setup_root_zshenv() {
         # Remove existing .zshenv (file or symlink)
         rm -f "$HOME/.zshenv"
 
+        # Remove stale .zshrc (ZDOTDIR points to ~/.config/zsh for .zshrc)
+        rm -f "$HOME/.zshrc"
+
         # Create symlink to XDG-compliant location
         ln -s "$HOME/.config/zsh/.zshenv" "$HOME/.zshenv"
         substep "Created symlink: ~/.zshenv -> ~/.config/zsh/.zshenv"
