@@ -24,7 +24,14 @@ if (( $+commands[fd] )); then
 fi
 
 # Safety
-alias rm='rm -i'
+# rm -I: prompts once for >3 files or recursive (not per-file like -i)
+if [[ "$OSTYPE" == darwin* ]]; then
+    # macOS: use GNU rm from coreutils
+    alias rm='grm -I'
+else
+    # Linux: GNU rm is default
+    alias rm='rm -I'
+fi
 alias cp='cp -i'
 alias mv='mv -i'
 

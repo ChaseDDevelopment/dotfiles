@@ -55,6 +55,7 @@ install_packages() {
     install_ripgrep  # Fast grep replacement
     install_fd       # Fast find replacement
     install_zoxide   # Smart cd replacement
+    install_coreutils # GNU coreutils for macOS (provides grm -I)
 
     # Install clipboard utilities (Linux only)
     if [[ "$PACKAGE_MANAGER" != "brew" ]]; then
@@ -80,6 +81,26 @@ install_packages() {
     success "Package installation completed"
 }
 
+
+install_coreutils() {
+    # GNU coreutils provides grm, gls, etc. - only needed on macOS
+    # Linux already has GNU coreutils as default
+    if [[ "$PACKAGE_MANAGER" != "brew" ]]; then
+        return
+    fi
+
+    if command -v grm &>/dev/null; then
+        substep "coreutils (GNU rm) is already installed"
+        return
+    fi
+
+    substep "Installing coreutils (GNU rm, ls, etc.)..."
+    if [[ "$DRY_RUN" == "false" ]]; then
+        brew install coreutils
+    else
+        substep "[DRY RUN] Would install coreutils via Homebrew"
+    fi
+}
 
 install_eza() {
     if check_command eza; then
