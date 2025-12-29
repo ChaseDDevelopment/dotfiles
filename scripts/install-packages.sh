@@ -55,6 +55,7 @@ install_packages() {
     install_ripgrep  # Fast grep replacement
     install_fd       # Fast find replacement
     install_zoxide   # Smart cd replacement
+    install_tailspin # Pretty log viewer with streaming
     install_coreutils # GNU coreutils for macOS (provides grm -I)
 
     # Install clipboard utilities (Linux only)
@@ -623,6 +624,114 @@ install_rust() {
     else
         substep "[DRY RUN] Would install Rust via rustup"
     fi
+}
+
+install_tailspin() {
+    if check_command tspin; then
+        substep "tailspin is already installed"
+        return
+    fi
+
+    substep "Installing tailspin..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install tailspin via $PACKAGE_MANAGER (with GitHub fallback)"
+        return
+    fi
+
+    # Try package manager first
+    local pkg_install_failed=false
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install tailspin || pkg_install_failed=true
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm tailspin || pkg_install_failed=true
+            ;;
+        "apt")
+            # tailspin not in apt repos yet, go straight to GitHub
+            pkg_install_failed=true
+            ;;
+        "dnf"|"yum")
+            # tailspin not in dnf/yum repos yet, go straight to GitHub
+            pkg_install_failed=true
+            ;;
+        *)
+            pkg_install_failed=true
+            ;;
+    esac
+
+    # Fall back to GitHub releases if package manager failed
+    if [[ "$pkg_install_failed" == "true" ]]; then
+        substep "Package manager install unavailable, downloading from GitHub..."
+        install_tailspin_from_github
+    fi
+}
+
+# Helper: Download tailspin from GitHub releases
+install_tailspin_from_github() {
+    local arch os_type target
+    arch=$(uname -m)
+    os_type=$(uname -s)
+
+    case "$os_type" in
+        Linux)
+            case "$arch" in
+                x86_64)  target="x86_64-unknown-linux-musl" ;;
+                aarch64) target="aarch64-unknown-linux-musl" ;;
+                arm64)   target="aarch64-unknown-linux-musl" ;;
+                *)
+                    warning "Unsupported architecture for tailspin: $arch"
+                    return 1
+                    ;;
+            esac
+            ;;
+        Darwin)
+            case "$arch" in
+                x86_64)  target="x86_64-apple-darwin" ;;
+                arm64)   target="aarch64-apple-darwin" ;;
+                *)
+                    warning "Unsupported architecture for tailspin: $arch"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            warning "Unsupported OS for tailspin GitHub install: $os_type"
+            return 1
+            ;;
+    esac
+
+    local url="https://github.com/bensadeh/tailspin/releases/latest/download/tailspin-${target}.tar.gz"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+
+    substep "Downloading tailspin from GitHub..."
+    if ! curl -sL "$url" | tar -xz -C "$tmp_dir"; then
+        warning "Failed to download tailspin"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    # Find the tspin binary (might be in a subdirectory)
+    local tspin_bin
+    tspin_bin=$(find "$tmp_dir" -name "tspin" -type f -executable 2>/dev/null | head -1)
+
+    if [[ -z "$tspin_bin" ]]; then
+        # Try without executable check (permissions might not be set)
+        tspin_bin=$(find "$tmp_dir" -name "tspin" -type f 2>/dev/null | head -1)
+    fi
+
+    if [[ -n "$tspin_bin" ]]; then
+        sudo install -m 755 "$tspin_bin" /usr/local/bin/tspin
+        substep "Installed tailspin to /usr/local/bin/tspin"
+    else
+        warning "Failed to find tailspin binary in archive"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
 }
 
 # Special handling for specific distros

@@ -12,10 +12,11 @@ else
 fi
 
 # bat / batcat (Ubuntu/Debian names it batcat due to package conflict)
+# -pp = plain (no line numbers) + no paging (copy-paste friendly)
 if (( $+commands[bat] )); then
-    alias cat='bat --paging=never'
+    alias cat='bat -pp'
 elif (( $+commands[batcat] )); then
-    alias cat='batcat --paging=never'
+    alias cat='batcat -pp'
     alias bat='batcat'
 fi
 
@@ -29,6 +30,12 @@ if (( $+commands[fd] )); then
 elif (( $+commands[fdfind] )); then
     alias find='fdfind'
     alias fd='fdfind'
+fi
+
+# tailspin for pretty log viewing (tspin is the binary)
+if (( $+commands[tspin] )); then
+    alias tails='tspin -f'      # Follow mode (like tail -f but pretty)
+    alias tailspin='tspin'      # Full name alias
 fi
 
 # Safety

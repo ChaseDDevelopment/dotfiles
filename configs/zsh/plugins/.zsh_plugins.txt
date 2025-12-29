@@ -7,7 +7,8 @@ ohmyzsh/ohmyzsh path:lib/history.zsh
 ohmyzsh/ohmyzsh path:lib/key-bindings.zsh
 
 # Useful OMZ plugins (lightweight ones only)
-ohmyzsh/ohmyzsh path:plugins/git
+# NOTE: git plugin removed - conflicts with coreutils (grm='git rm' vs GNU rm)
+# Custom git aliases in aliases/git.zsh instead
 ohmyzsh/ohmyzsh path:plugins/docker
 ohmyzsh/ohmyzsh path:plugins/kubectl
 
