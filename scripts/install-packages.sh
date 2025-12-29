@@ -239,9 +239,9 @@ install_bat() {
             install_package "bat"
             ;;
         "apt")
-            # Ubuntu/Debian: package is always 'batcat' (naming conflict with another 'bat' package)
+            # Ubuntu/Debian: package is 'bat', but binary installs as '/usr/bin/batcat'
             if [[ "$DRY_RUN" == "false" ]]; then
-                "${INSTALL_CMD_ARRAY[@]}" batcat
+                "${INSTALL_CMD_ARRAY[@]}" bat
 
                 # Verify installation succeeded before creating symlink
                 if [[ -x "/usr/bin/batcat" ]]; then
@@ -251,7 +251,7 @@ install_bat() {
                     warning "batcat binary not found after install attempt"
                 fi
             else
-                substep "[DRY RUN] Would install batcat and create bat symlink"
+                substep "[DRY RUN] Would install bat and create symlink"
             fi
             ;;
         "dnf"|"yum")
