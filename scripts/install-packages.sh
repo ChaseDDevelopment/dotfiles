@@ -424,13 +424,25 @@ install_uv() {
 
     # Install Python via UV (provides complete Python with venv for Mason/neovim)
     # This is needed because system Python on Ubuntu often lacks venv module
+    # Note: --default flag requires --preview and doesn't add to PATH anyway
     if [[ -x "$HOME/.local/bin/python3" ]]; then
         substep "Python already installed via UV"
     else
         substep "Installing Python via UV..."
         if [[ "$DRY_RUN" == "false" ]]; then
-            uv python install --default
-            substep "Python installed to ~/.local/bin (includes venv module for Mason)"
+            uv python install 3.12
+
+            # Create symlink so python3 is in PATH for Mason/Neovim
+            local uv_python_bin
+            uv_python_bin=$(uv python find 3.12 2>/dev/null)
+            if [[ -n "$uv_python_bin" && -x "$uv_python_bin" ]]; then
+                mkdir -p "$HOME/.local/bin"
+                ln -sf "$uv_python_bin" "$HOME/.local/bin/python3"
+                ln -sf "$uv_python_bin" "$HOME/.local/bin/python"
+                substep "Python 3.12 installed and symlinked to ~/.local/bin/"
+            else
+                warning "Could not find UV-installed Python binary"
+            fi
         else
             substep "[DRY RUN] Would install Python via UV"
         fi
