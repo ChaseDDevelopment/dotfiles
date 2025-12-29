@@ -239,18 +239,19 @@ install_bat() {
             install_package "bat"
             ;;
         "apt")
-            # Ubuntu/Debian need special handling for bat
+            # Ubuntu/Debian: package is always 'batcat' (naming conflict with another 'bat' package)
             if [[ "$DRY_RUN" == "false" ]]; then
-                # Try to install batcat (Ubuntu names it differently)
-                if apt list bat 2>/dev/null | grep -q bat; then
-                    "${INSTALL_CMD_ARRAY[@]}" bat
+                "${INSTALL_CMD_ARRAY[@]}" batcat
+
+                # Verify installation succeeded before creating symlink
+                if [[ -x "/usr/bin/batcat" ]]; then
+                    sudo ln -sf /usr/bin/batcat /usr/local/bin/bat || warning "Could not create system symlink for bat"
+                    substep "Created symlink: /usr/local/bin/bat -> /usr/bin/batcat"
                 else
-                    "${INSTALL_CMD_ARRAY[@]}" batcat
-                    # Create symlink if installed as batcat
-                    sudo ln -sf /usr/bin/batcat /usr/local/bin/bat 2>/dev/null || true
+                    warning "batcat binary not found after install attempt"
                 fi
             else
-                substep "[DRY RUN] Would install bat"
+                substep "[DRY RUN] Would install batcat and create bat symlink"
             fi
             ;;
         "dnf"|"yum")
@@ -288,13 +289,19 @@ install_fd() {
             install_package "fd"
             ;;
         "apt")
-            # Ubuntu/Debian package is fd-find
+            # Ubuntu/Debian: package is 'fd-find', binary is 'fdfind' (naming conflict with another 'fd' package)
             if [[ "$DRY_RUN" == "false" ]]; then
                 "${INSTALL_CMD_ARRAY[@]}" fd-find
-                # Create symlink
-                sudo ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
+
+                # Verify installation succeeded before creating symlink
+                if [[ -x "/usr/bin/fdfind" ]]; then
+                    sudo ln -sf /usr/bin/fdfind /usr/local/bin/fd || warning "Could not create system symlink for fd"
+                    substep "Created symlink: /usr/local/bin/fd -> /usr/bin/fdfind"
+                else
+                    warning "fdfind binary not found after install attempt"
+                fi
             else
-                substep "[DRY RUN] Would install fd-find"
+                substep "[DRY RUN] Would install fd-find and create fd symlink"
             fi
             ;;
         "dnf"|"yum")

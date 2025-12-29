@@ -11,16 +11,24 @@ else
     alias la='ls -a'
 fi
 
+# bat / batcat (Ubuntu/Debian names it batcat due to package conflict)
 if (( $+commands[bat] )); then
     alias cat='bat --paging=never'
+elif (( $+commands[batcat] )); then
+    alias cat='batcat --paging=never'
+    alias bat='batcat'
 fi
 
 if (( $+commands[rg] )); then
     alias grep='rg'
 fi
 
+# fd / fdfind (Ubuntu/Debian names it fdfind due to package conflict)
 if (( $+commands[fd] )); then
     alias find='fd'
+elif (( $+commands[fdfind] )); then
+    alias find='fdfind'
+    alias fd='fdfind'
 fi
 
 # Safety
