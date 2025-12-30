@@ -127,8 +127,17 @@ zstyle ':fzf-tab:*' fzf-command fzf
 # Atuin (better history)
 (( $+commands[atuin] )) && eval "$(atuin init zsh --disable-up-arrow)"
 
-# fzf
-(( $+commands[fzf] )) && eval "$(fzf --zsh)"
+# fzf - handle both old (<0.48) and new (>=0.48) versions
+if (( $+commands[fzf] )); then
+    if fzf --zsh &>/dev/null; then
+        eval "$(fzf --zsh)"
+    elif [[ -f ~/.fzf.zsh ]]; then
+        source ~/.fzf.zsh
+    elif [[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]]; then
+        source /usr/share/doc/fzf/examples/key-bindings.zsh
+        [[ -f /usr/share/doc/fzf/examples/completion.zsh ]] && source /usr/share/doc/fzf/examples/completion.zsh
+    fi
+fi
 
 # ----------------------------------------------------------------------------
 # Autosuggestions Configuration
