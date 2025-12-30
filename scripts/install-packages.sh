@@ -103,64 +103,114 @@ install_coreutils() {
     fi
 }
 
+# Helper: Download eza from GitHub releases (for Debian/ARM64 where apt doesn't have it)
+install_eza_from_github() {
+    local arch os_type target
+    arch=$(uname -m)
+    os_type=$(uname -s)
+
+    case "$os_type" in
+        Linux)
+            case "$arch" in
+                x86_64)  target="x86_64-unknown-linux-gnu" ;;
+                aarch64) target="aarch64-unknown-linux-gnu" ;;
+                arm64)   target="aarch64-unknown-linux-gnu" ;;
+                *)
+                    warning "Unsupported architecture for eza: $arch"
+                    return 1
+                    ;;
+            esac
+            ;;
+        Darwin)
+            # macOS should use brew, but fallback just in case
+            case "$arch" in
+                x86_64)  target="x86_64-apple-darwin" ;;
+                arm64)   target="aarch64-apple-darwin" ;;
+                *)
+                    warning "Unsupported architecture for eza: $arch"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            warning "Unsupported OS for eza GitHub install: $os_type"
+            return 1
+            ;;
+    esac
+
+    # Get latest version from GitHub redirect
+    local version
+    version=$(curl -sI https://github.com/eza-community/eza/releases/latest | grep -i '^location:' | sed 's/.*tag\/v//' | tr -d '\r')
+
+    if [[ -z "$version" ]]; then
+        warning "Could not determine latest eza version"
+        return 1
+    fi
+
+    local url="https://github.com/eza-community/eza/releases/download/v${version}/eza_${target}.tar.gz"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+
+    substep "Downloading eza v${version} from GitHub..."
+    if ! curl -sL "$url" | tar -xz -C "$tmp_dir"; then
+        warning "Failed to download eza"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if [[ -f "$tmp_dir/eza" ]]; then
+        sudo install -m 755 "$tmp_dir/eza" /usr/local/bin/eza
+        substep "Installed eza to /usr/local/bin/eza"
+    else
+        warning "Failed to find eza binary in archive"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+}
+
 install_eza() {
     if check_command eza; then
         substep "eza is already installed"
         return
     fi
-    
+
     substep "Installing eza..."
-    
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install eza"
+        return
+    fi
+
     case "$PACKAGE_MANAGER" in
         "brew")
-            if [[ "$DRY_RUN" == "false" ]]; then
-                brew install eza
-            else
-                substep "[DRY RUN] Would install eza via brew"
-            fi
+            brew install eza
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm eza
             ;;
         "apt")
-            # For Ubuntu/Debian, we need to use the official method
-            if [[ "$DRY_RUN" == "false" ]]; then
-                # Check if eza is available in repos (Ubuntu 22.04+)
-                if apt list eza 2>/dev/null | grep -q eza; then
-                    "${INSTALL_CMD_ARRAY[@]}" eza
-                else
-                    # Install via cargo or download binary
-                    if check_command cargo; then
-                        cargo install eza
-                    else
-                        warning "eza not available in repos and cargo not found. Skipping eza installation."
-                        warning "You can install it manually later with: cargo install eza"
-                    fi
-                fi
+            # eza not in Debian/Ubuntu repos - try cargo, then GitHub binary
+            if check_command cargo; then
+                cargo install eza
             else
-                substep "[DRY RUN] Would install eza"
+                install_eza_from_github
             fi
             ;;
         "dnf"|"yum")
-            if [[ "$DRY_RUN" == "false" ]]; then
-                # Try package manager first, fallback to cargo
-                if ! eval "$INSTALL_CMD eza" 2>/dev/null; then
-                    if check_command cargo; then
-                        cargo install eza
-                    else
-                        warning "eza installation failed. Install cargo and run: cargo install eza"
-                    fi
+            # Try package manager first, fallback to cargo, then GitHub
+            if ! eval "$INSTALL_CMD eza" 2>/dev/null; then
+                if check_command cargo; then
+                    cargo install eza
+                else
+                    install_eza_from_github
                 fi
-            else
-                substep "[DRY RUN] Would install eza"
-            fi
-            ;;
-        "pacman")
-            if [[ "$DRY_RUN" == "false" ]]; then
-                sudo pacman -S --noconfirm eza
-            else
-                substep "[DRY RUN] Would install eza via pacman"
             fi
             ;;
         *)
-            warning "Unknown package manager. Please install eza manually."
+            # Unknown package manager - try GitHub binary
+            install_eza_from_github
             ;;
     esac
 }

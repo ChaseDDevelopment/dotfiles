@@ -1,14 +1,24 @@
-# Modern replacements (conditional - only if tools are installed)
+# Modern ls replacement with maximum beauty/info
 if (( $+commands[eza] )); then
+    # Basic listing with icons
     alias ls='eza --icons --group-directories-first'
-    alias ll='eza -la --icons --group-directories-first'
+
+    # Long format with git status, headers, and size coloring
+    alias ll='eza -la --icons --git --header --group-directories-first --color-scale'
     alias la='eza -a --icons --group-directories-first'
+
+    # Tree views
     alias lt='eza --tree --level=2 --icons'
     alias lt2='eza --tree --level=2 --icons'
     alias lt3='eza --tree --level=3 --icons'
+
+    # Git-focused tree (great for repos)
+    alias ltg='eza --tree --level=2 --icons --git'
 else
-    alias ll='ls -la'
-    alias la='ls -a'
+    # GNU ls fallback with colors
+    alias ls='ls --color=auto'
+    alias ll='ls -la --color=auto'
+    alias la='ls -a --color=auto'
 fi
 
 # bat / batcat (Ubuntu/Debian names it batcat due to package conflict)
