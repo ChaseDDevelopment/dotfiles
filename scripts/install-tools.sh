@@ -86,7 +86,7 @@ install_starship_tool() {
     fi
 
     if [[ "$DRY_RUN" == "false" ]]; then
-        curl -sS https://starship.rs/install.sh | sh -s -- --yes
+        curl -sS https://starship.rs/install.sh | sh -s -- --yes --bin-dir "$(brew --prefix)/bin"
         substep "Starship installed"
     else
         substep "[DRY RUN] Would install Starship"
