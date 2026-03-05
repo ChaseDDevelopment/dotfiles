@@ -39,23 +39,12 @@ copy_tmux_config() {
     local source_file="$SCRIPT_DIR/configs/tmux/.tmux.conf"
     local dest_file="$HOME/.tmux.conf"
 
-    if [[ -f "$source_file" ]]; then
-        if [[ "$DRY_RUN" == "false" ]]; then
-            # Remove existing file/symlink
-            rm -f "$dest_file"
-
-            # Symlink configuration (changes sync automatically to repo)
-            ln -s "$source_file" "$dest_file"
-
-            # Tmux uses $SHELL by default, which is set to zsh by the installer
-            substep "Tmux config symlinked: $dest_file -> $source_file"
-        else
-            substep "[DRY RUN] Would symlink .tmux.conf"
-        fi
-    else
+    if [[ ! -f "$source_file" ]]; then
         error "Tmux configuration file not found: $source_file"
         return 1
     fi
+
+    symlink_if_needed "$source_file" "$dest_file"
 }
 
 install_tpm() {

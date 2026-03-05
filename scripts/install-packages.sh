@@ -11,11 +11,29 @@ version_gte() {
     [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
 }
 
+all_packages_installed() {
+    local cmds=("git" "curl" "wget" "unzip" "zsh" "tmux" "fzf" "nvim"
+                "eza" "bat" "rg" "fd" "zoxide" "tspin" "starship" "bun"
+                "uv" "ruff" "dotnet")
+    for cmd in "${cmds[@]}"; do
+        if ! check_command "$cmd"; then
+            return 1
+        fi
+    done
+    return 0
+}
+
 install_packages() {
     substep "Starting package installation"
-    
-    # Update system first
-    update_system
+
+    # Update system (skip if --skip-update or all packages already present)
+    if [[ "$SKIP_UPDATE" == "true" ]]; then
+        substep "Skipping system update (--skip-update)"
+    elif all_packages_installed; then
+        substep "All packages already installed, skipping system update"
+    else
+        update_system
+    fi
     
     # Core development tools
     substep "Installing core development tools..."

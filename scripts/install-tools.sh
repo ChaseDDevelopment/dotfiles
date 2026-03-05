@@ -7,8 +7,21 @@
 # Ensures latest versions and cross-platform compatibility
 # =============================================================================
 
+all_tools_installed() {
+    [[ -d "$HOME/.config/nvm" || -d "$HOME/.nvm" ]] \
+        && check_command uv \
+        && check_command starship \
+        && check_command atuin \
+        && [[ -d "$HOME/.tmux/plugins/tpm" ]]
+}
+
 install_all_tools() {
     step "Installing tools from official sources"
+
+    if all_tools_installed; then
+        substep "All tools already installed, skipping"
+        return
+    fi
 
     install_nvm
     install_uv

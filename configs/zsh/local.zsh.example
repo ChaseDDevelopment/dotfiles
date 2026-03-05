@@ -1,0 +1,16 @@
+# local.zsh - Machine-specific configuration (not tracked in git)
+#
+# Copy this file to local.zsh and customize for your machine:
+#   cp local.zsh.example local.zsh
+#
+# This file is sourced at the end of .zshrc, so it can override
+# any setting from the main configuration.
+
+# Example: Databricks configuration
+# export DATABRICKS_HOST=https://your-workspace.azuredatabricks.net
+
+# Example: Work-specific paths
+# export PATH="$HOME/work/tools/bin:$PATH"
+
+# Example: Machine-specific aliases
+# alias proj="cd ~/Projects/my-project"

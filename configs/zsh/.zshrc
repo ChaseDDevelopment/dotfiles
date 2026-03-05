@@ -121,6 +121,11 @@ zstyle ':fzf-tab:*' fzf-command fzf
 # Tool Integrations (conditional loading)
 # ----------------------------------------------------------------------------
 
+# SSH keychain (macOS only - load saved keys from Keychain)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    ssh-add --apple-load-keychain -q 2>/dev/null
+fi
+
 # Zoxide (smart cd)
 (( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
 

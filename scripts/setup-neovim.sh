@@ -88,25 +88,12 @@ copy_neovim_config() {
 
     local source_dir="$SCRIPT_DIR/configs/nvim"
 
-    if [[ "$DRY_RUN" == "false" ]]; then
-        # Check if source exists
-        if [[ ! -d "$source_dir" ]]; then
-            error "Neovim config source not found: $source_dir"
-            return 1
-        fi
-
-        # Remove existing config if present (already backed up)
-        if [[ -e "$NEOVIM_CONFIG_DIR" ]] || [[ -L "$NEOVIM_CONFIG_DIR" ]]; then
-            rm -rf "$NEOVIM_CONFIG_DIR"
-        fi
-
-        # Symlink configuration (changes sync automatically to repo)
-        ln -s "$source_dir" "$NEOVIM_CONFIG_DIR"
-
-        substep "Neovim configuration symlinked: $NEOVIM_CONFIG_DIR -> $source_dir"
-    else
-        substep "[DRY RUN] Would symlink $source_dir to $NEOVIM_CONFIG_DIR"
+    if [[ ! -d "$source_dir" ]]; then
+        error "Neovim config source not found: $source_dir"
+        return 1
     fi
+
+    symlink_if_needed "$source_dir" "$NEOVIM_CONFIG_DIR"
 }
 
 setup_neovim_prerequisites() {

@@ -74,43 +74,23 @@ copy_zsh_configs() {
     local source_dir="$SCRIPT_DIR/configs/zsh"
     local dest_dir="$HOME/.config/zsh"
 
-    if [[ "$DRY_RUN" == "false" ]]; then
-        # Check if source exists
-        if [[ ! -d "$source_dir" ]]; then
-            error "Zsh config source not found: $source_dir"
-            return 1
-        fi
-
-        # Remove existing config if present (already backed up)
-        if [[ -e "$dest_dir" ]] || [[ -L "$dest_dir" ]]; then
-            rm -rf "$dest_dir"
-        fi
-
-        # Symlink configuration (changes sync automatically to repo)
-        ln -s "$source_dir" "$dest_dir"
-
-        substep "Zsh configuration symlinked: $dest_dir -> $source_dir"
-    else
-        substep "[DRY RUN] Would symlink $source_dir to $dest_dir"
+    if [[ ! -d "$source_dir" ]]; then
+        error "Zsh config source not found: $source_dir"
+        return 1
     fi
+
+    symlink_if_needed "$source_dir" "$dest_dir"
 }
 
 setup_root_zshenv() {
     substep "Creating root .zshenv symlink..."
 
+    # Remove stale .zshrc (ZDOTDIR points to ~/.config/zsh for .zshrc)
     if [[ "$DRY_RUN" == "false" ]]; then
-        # Remove existing .zshenv (file or symlink)
-        rm -f "$HOME/.zshenv"
-
-        # Remove stale .zshrc (ZDOTDIR points to ~/.config/zsh for .zshrc)
         rm -f "$HOME/.zshrc"
-
-        # Create symlink to XDG-compliant location
-        ln -s "$HOME/.config/zsh/.zshenv" "$HOME/.zshenv"
-        substep "Created symlink: ~/.zshenv -> ~/.config/zsh/.zshenv"
-    else
-        substep "[DRY RUN] Would create symlink: ~/.zshenv -> ~/.config/zsh/.zshenv"
     fi
+
+    symlink_if_needed "$HOME/.config/zsh/.zshenv" "$HOME/.zshenv"
 }
 
 install_antidote() {

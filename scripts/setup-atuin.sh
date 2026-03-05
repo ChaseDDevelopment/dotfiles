@@ -30,18 +30,9 @@ copy_atuin_config() {
     local source_dir="$SCRIPT_DIR/configs/atuin"
     local dest_dir="$HOME/.config/atuin"
 
-    if [[ "$DRY_RUN" == "false" ]]; then
-        if [[ -d "$source_dir" ]]; then
-            # Remove existing config directory/symlink
-            if [[ -e "$dest_dir" ]] || [[ -L "$dest_dir" ]]; then
-                rm -rf "$dest_dir"
-            fi
-            ln -s "$source_dir" "$dest_dir"
-            substep "Atuin config symlinked: $dest_dir -> $source_dir"
-        else
-            warning "Atuin config not found: $source_dir"
-        fi
+    if [[ -d "$source_dir" ]]; then
+        symlink_if_needed "$source_dir" "$dest_dir"
     else
-        substep "[DRY RUN] Would symlink Atuin config"
+        warning "Atuin config not found: $source_dir"
     fi
 }

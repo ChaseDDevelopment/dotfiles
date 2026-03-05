@@ -27,6 +27,7 @@ readonly LOG_FILE="$SCRIPT_DIR/install.log"
 # Configuration
 DRY_RUN=false
 SKIP_PACKAGES=false
+SKIP_UPDATE=false
 CONFIG_ONLY=false
 RESTORE_BACKUP=""
 VERBOSE=false
@@ -87,6 +88,27 @@ check_command() {
     command -v "$1" >/dev/null 2>&1
 }
 
+symlink_if_needed() {
+    local source="$1"
+    local dest="$2"
+
+    if [[ -L "$dest" ]] && [[ "$(readlink "$dest")" == "$source" ]]; then
+        substep "Symlink already correct: $dest -> $source"
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "false" ]]; then
+        # Remove existing file/symlink/directory
+        if [[ -e "$dest" ]] || [[ -L "$dest" ]]; then
+            rm -rf "$dest"
+        fi
+        ln -s "$source" "$dest"
+        substep "Symlinked: $dest -> $source"
+    else
+        substep "[DRY RUN] Would symlink $dest -> $source"
+    fi
+}
+
 backup_file() {
     local file="$1"
     if [[ -f "$file" || -d "$file" ]]; then
@@ -114,6 +136,7 @@ USAGE:
 OPTIONS:
     --dry-run           Show what would be installed without making changes
     --skip-packages     Skip package installation (useful if already installed)
+    --skip-update       Skip system package manager update step
     --config-only       Only install configuration files
     --restore-backup    Restore from previous backup directory
     --verbose           Enable verbose output
@@ -167,6 +190,10 @@ parse_args() {
                 ;;
             --skip-packages)
                 SKIP_PACKAGES=true
+                shift
+                ;;
+            --skip-update)
+                SKIP_UPDATE=true
                 shift
                 ;;
             --config-only)
