@@ -123,7 +123,7 @@ zstyle ':fzf-tab:*' fzf-command fzf
 
 # SSH keychain (macOS only - load saved keys from Keychain)
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    ssh-add --apple-load-keychain -q 2>/dev/null
+    ssh-add --apple-load-keychain -q 2>/dev/null || ssh-add -A 2>/dev/null
 fi
 
 # Zoxide (smart cd)
