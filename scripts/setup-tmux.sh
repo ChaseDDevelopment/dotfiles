@@ -16,6 +16,7 @@ setup_tmux() {
     fi
     
     # Backup existing Tmux configuration
+    backup_file "$HOME/.config/tmux"
     backup_file "$HOME/.tmux.conf"
     backup_file "$HOME/.tmux"
     
@@ -36,15 +37,20 @@ setup_tmux() {
 copy_tmux_config() {
     substep "Symlinking Tmux configuration..."
 
-    local source_file="$SCRIPT_DIR/configs/tmux/.tmux.conf"
-    local dest_file="$HOME/.tmux.conf"
+    local source_dir="$SCRIPT_DIR/configs/tmux"
+    local dest_dir="$HOME/.config/tmux"
+    local legacy_dest="$HOME/.tmux.conf"
 
-    if [[ ! -f "$source_file" ]]; then
-        error "Tmux configuration file not found: $source_file"
+    if [[ ! -d "$source_dir" ]]; then
+        error "Tmux configuration directory not found: $source_dir"
         return 1
     fi
 
-    symlink_if_needed "$source_file" "$dest_file"
+    # Symlink the tmux config directory to XDG path
+    symlink_if_needed "$source_dir" "$dest_dir"
+
+    # Create legacy symlink for backward compatibility
+    symlink_if_needed "$dest_dir/tmux.conf" "$legacy_dest"
 }
 
 install_tpm() {
@@ -72,7 +78,7 @@ install_tmux_plugins() {
         # Source the tmux configuration to make sure TPM is loaded
         if pgrep -x "tmux" > /dev/null; then
             # If tmux is running, reload configuration
-            tmux source-file "$HOME/.tmux.conf" 2>/dev/null || true
+            tmux source-file "$HOME/.config/tmux/tmux.conf" 2>/dev/null || true
         fi
         
         # Install plugins using TPM
@@ -83,7 +89,7 @@ install_tmux_plugins() {
 
             # Set TMUX_PLUGIN_MANAGER_PATH in tmux's environment (TPM reads it via tmux show-environment)
             # Start server, source config (which sets the env var), then the install script can read it
-            tmux start-server \; source-file "$HOME/.tmux.conf" 2>/dev/null || true
+            tmux start-server \; source-file "$HOME/.config/tmux/tmux.conf" 2>/dev/null || true
 
             # Run the install script
             "$tpm_script"
@@ -91,7 +97,7 @@ install_tmux_plugins() {
             
             # Force reload configuration to apply theme
             if pgrep -x "tmux" > /dev/null; then
-                tmux source-file "$HOME/.tmux.conf" 2>/dev/null || true
+                tmux source-file "$HOME/.config/tmux/tmux.conf" 2>/dev/null || true
                 substep "Tmux configuration reloaded"
             fi
         else
@@ -116,8 +122,8 @@ validate_tmux_setup() {
     fi
     
     # Check if config file exists
-    if [[ ! -f "$HOME/.tmux.conf" ]]; then
-        error "Tmux configuration file missing: $HOME/.tmux.conf"
+    if [[ ! -f "$HOME/.config/tmux/tmux.conf" ]]; then
+        error "Tmux configuration file missing: $HOME/.config/tmux/tmux.conf"
         validation_passed=false
     fi
     
@@ -129,9 +135,9 @@ validate_tmux_setup() {
     
     # Validate tmux configuration syntax
     if [[ "$DRY_RUN" == "false" ]]; then
-        if ! tmux -f "$HOME/.tmux.conf" list-sessions 2>/dev/null; then
+        if ! tmux -f "$HOME/.config/tmux/tmux.conf" list-sessions 2>/dev/null; then
             # This is expected to fail if no sessions exist, but will catch syntax errors
-            if ! tmux -f "$HOME/.tmux.conf" new-session -d -s validation_test \; kill-session -t validation_test 2>/dev/null; then
+            if ! tmux -f "$HOME/.config/tmux/tmux.conf" new-session -d -s validation_test \; kill-session -t validation_test 2>/dev/null; then
                 error "Tmux configuration has syntax errors"
                 validation_passed=false
             fi

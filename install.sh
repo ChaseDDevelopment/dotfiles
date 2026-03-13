@@ -270,7 +270,7 @@ reload_configurations() {
             substep "Installing/updating Tmux plugins"
             # Source tmux config
             if tmux list-sessions &>/dev/null; then
-                if tmux source-file ~/.tmux.conf 2>/dev/null; then
+                if tmux source-file ~/.config/tmux/tmux.conf 2>/dev/null; then
                     substep "Tmux configuration reloaded successfully"
                 else
                     warning "Failed to reload Tmux configuration"

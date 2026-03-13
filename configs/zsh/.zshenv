@@ -33,6 +33,7 @@ typeset -U path
 path=(
     "${HOME}/.local/bin"
     "${HOME}/.cargo/bin"
+    "${HOME}/.bun/bin"
     "${HOME}/go/bin"
     $path
 )

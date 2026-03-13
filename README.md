@@ -189,7 +189,7 @@ my_function() {
 ```
 
 ### Installing Additional Tmux Plugins
-Edit `~/.tmux.conf` and add:
+Edit `~/.config/tmux/tmux.conf` and add:
 ```bash
 set -g @plugin 'plugin-name'
 ```
@@ -328,7 +328,7 @@ dotfiles/
 │   │   ├── init.lua            # Neovim entry point
 │   │   └── lua/                # LazyVim configuration
 │   ├── tmux/
-│   │   └── .tmux.conf          # Tmux configuration
+│   │   └── tmux.conf           # Tmux configuration
 │   ├── starship/
 │   │   └── starship.toml       # Starship configuration
 │   ├── atuin/

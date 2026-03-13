@@ -26,6 +26,7 @@ restore_from_backup() {
         "$HOME/.config/atuin"
         "$HOME/.config/ghostty"
         "$HOME/.zshenv"
+        "$HOME/.config/tmux"
         "$HOME/.tmux.conf"
         "$HOME/.tmux"
         "$HOME/.local/share/nvim"
@@ -70,7 +71,7 @@ restore_from_backup() {
     info "You may need to restart your shell or reload configurations"
     echo
     echo -e "  ${CYAN}exec zsh${NC}   # Restart shell"
-    echo -e "  ${CYAN}tmux source-file ~/.tmux.conf${NC}  # Reload Tmux config"
+    echo -e "  ${CYAN}tmux source-file ~/.config/tmux/tmux.conf${NC}  # Reload Tmux config"
     echo
 }
 

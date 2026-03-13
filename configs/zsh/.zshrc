@@ -207,3 +207,6 @@ TRAPINT() {
 # Profiling output (uncomment if debugging)
 # ----------------------------------------------------------------------------
 # zprof
+
+# bun completions
+[ -s "/Users/orion/.bun/_bun" ] && source "/Users/orion/.bun/_bun"
