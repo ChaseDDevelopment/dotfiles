@@ -13,8 +13,8 @@ version_gte() {
 
 all_packages_installed() {
     local cmds=("git" "curl" "wget" "unzip" "zsh" "tmux" "fzf" "nvim"
-                "eza" "bat" "rg" "fd" "zoxide" "tspin" "starship" "bun"
-                "uv" "ruff" "dotnet")
+                "tree-sitter" "eza" "bat" "rg" "fd" "zoxide" "tspin"
+                "starship" "bun" "uv" "ruff" "dotnet")
     for cmd in "${cmds[@]}"; do
         if ! check_command "$cmd"; then
             return 1
@@ -63,7 +63,10 @@ install_packages() {
     # Text editor
     substep "Installing Neovim..."
     install_neovim
-    
+
+    # Tree-sitter CLI (needed by nvim-treesitter to compile parsers)
+    install_tree_sitter_cli
+
     # Modern CLI tools
     substep "Installing modern CLI tools..."
     
@@ -581,8 +584,55 @@ install_dotnet_sdk() {
     esac
 }
 
+install_tree_sitter_cli() {
+    substep "Installing tree-sitter library and CLI..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install tree-sitter and tree-sitter-cli"
+        return
+    fi
+
+    # Install tree-sitter library (libtree-sitter)
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install tree-sitter
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm tree-sitter
+            ;;
+        "apt")
+            "${INSTALL_CMD_ARRAY[@]}" libtree-sitter-dev
+            ;;
+        "dnf"|"yum")
+            eval "$INSTALL_CMD libtree-sitter-devel" 2>/dev/null || true
+            ;;
+    esac
+
+    # Install tree-sitter CLI (compiles parsers)
+    if check_command tree-sitter; then
+        substep "tree-sitter-cli is already installed"
+        return
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install tree-sitter-cli
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm tree-sitter-cli
+            ;;
+        *)
+            if check_command cargo; then
+                cargo install tree-sitter-cli
+            else
+                warning "tree-sitter-cli requires cargo (Rust). Install Rust first, then run: cargo install tree-sitter-cli"
+            fi
+            ;;
+    esac
+}
+
 install_neovim() {
-    local min_version="0.11.0"
+    local min_version="0.12.0"
 
     if check_command nvim; then
         local current_version
