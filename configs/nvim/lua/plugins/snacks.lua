@@ -1,6 +1,52 @@
 require("snacks").setup({
 	picker = { enabled = true },
 	toggle = { enabled = true },
+	dashboard = {
+		enabled = true,
+		preset = {
+			header = [[
+ █████╗ ███╗   ██╗██████╗ ██████╗  ██████╗ ███╗   ███╗███████╗██████╗  █████╗
+██╔══██╗████╗  ██║██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔════╝██╔══██╗██╔══██╗
+███████║██╔██╗ ██║██║  ██║██████╔╝██║   ██║██╔████╔██║█████╗  ██║  ██║███████║
+██╔══██║██║╚██╗██║██║  ██║██╔══██╗██║   ██║██║╚██╔╝██║██╔══╝  ██║  ██║██╔══██║
+██║  ██║██║ ╚████║██████╔╝██║  ██║╚██████╔╝██║ ╚═╝ ██║███████╗██████╔╝██║  ██║
+╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝╚═════╝ ╚═╝  ╚═╝
+███╗   ██╗███████╗██╗  ██╗██╗   ██╗███████╗
+████╗  ██║██╔════╝╚██╗██╔╝██║   ██║██╔════╝
+██╔██╗ ██║█████╗   ╚███╔╝ ██║   ██║███████╗
+██║╚██╗██║██╔══╝   ██╔██╗ ██║   ██║╚════██║
+██║ ╚████║███████╗██╔╝ ██╗╚██████╔╝███████║
+╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝
+
+┈┈┈┈┈┈┈┈┈┈┈ drift through the mocha nebula ┈┈┈┈┈┈┈┈┈┈┈]],
+			keys = {
+				{ icon = "\u{f15b} ", key = "f", desc = "Find File", action = ":lua Snacks.dashboard.pick('files')" },
+				{ icon = "\u{f016} ", key = "n", desc = "New File", action = ":ene | startinsert" },
+				{ icon = "\u{f002} ", key = "g", desc = "Find Text", action = ":lua Snacks.dashboard.pick('live_grep')" },
+				{ icon = "\u{f017} ", key = "r", desc = "Recent Files", action = ":lua Snacks.dashboard.pick('oldfiles')" },
+				{ icon = "\u{f013} ", key = "c", desc = "Config", action = ":lua Snacks.dashboard.pick('files', {cwd = vim.fn.stdpath('config')})" },
+				{ icon = "\u{f1b2} ", key = "m", desc = "Mason", action = ":Mason" },
+				{ icon = "\u{f011} ", key = "q", desc = "Quit", action = ":qa" },
+			},
+		},
+		sections = {
+			{ section = "header", padding = 1 },
+			{
+				title = " Projects",
+				section = "projects",
+				indent = 2,
+				gap = 0,
+				padding = 1,
+				action = function(dir)
+					vim.fn.chdir(dir)
+					vim.cmd("enew")
+					Snacks.picker.explorer({ cwd = dir })
+				end,
+			},
+			{ title = " Quick Actions", section = "keys", indent = 2, gap = 0, padding = 1 },
+			{ title = " Recent Files", section = "recent_files", indent = 2, gap = 0, padding = 1 },
+		},
+	},
 })
 -- File explorer
 vim.keymap.set("n", "<leader>e", function()

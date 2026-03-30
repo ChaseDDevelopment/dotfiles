@@ -12,6 +12,10 @@
       "rev": "44d1e90e1f66e077268191e3ee9d2ac97cc18e65",
       "src": "https://github.com/williamboman/mason.nvim"
     },
+    "mini.animate": {
+      "rev": "8814b56e282cd86635ce9a392ed56b6a85f59731",
+      "src": "https://github.com/nvim-mini/mini.animate"
+    },
     "mini.statusline": {
       "rev": "8c3829d4ef02b693f68e43fc131b433f11049b2b",
       "src": "https://github.com/nvim-mini/mini.statusline"
