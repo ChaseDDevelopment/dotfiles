@@ -12,6 +12,7 @@ all_tools_installed() {
         && check_command uv \
         && check_command starship \
         && check_command atuin \
+        && check_command rustc \
         && [[ -d "$HOME/.tmux/plugins/tpm" ]]
 }
 
@@ -25,6 +26,7 @@ install_all_tools() {
 
     install_nvm
     install_uv
+    install_rust
     install_starship_tool
     install_atuin_tool
     install_tpm
@@ -174,9 +176,10 @@ install_rust() {
     if [[ "$DRY_RUN" == "false" ]]; then
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         source "$HOME/.cargo/env"
-        substep "Rust installed"
+        rustup component add rustfmt
+        substep "Rust installed (with rustfmt)"
     else
-        substep "[DRY RUN] Would install Rust"
+        substep "[DRY RUN] Would install Rust (with rustfmt)"
     fi
 }
 

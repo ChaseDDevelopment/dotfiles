@@ -1,2 +1,24 @@
--- bootstrap lazy.nvim, LazyVim and your plugins
-require("config.lazy")
+vim.loader.enable()
+require("core/options")
+require("core/keymaps")
+require("core/autocmds")
+vim.pack.add({
+	"https://github.com/catppuccin/nvim",
+	"https://github.com/nvim-treesitter/nvim-treesitter",
+	"https://github.com/folke/snacks.nvim",
+	"https://github.com/folke/which-key.nvim",
+	"https://github.com/williamboman/mason.nvim",
+	"https://github.com/stevearc/conform.nvim",
+	"https://github.com/saghen/blink.cmp",
+	"https://github.com/MunifTanjim/nui.nvim",
+	"https://github.com/folke/noice.nvim",
+})
+require("plugins/catppuccin")
+require("plugins/treesitter")
+require("plugins/snacks")
+require("plugins/which-key")
+require("plugins/mason")
+require("plugins/lsp")
+require("plugins/conform")
+require("plugins/blink")
+require("plugins/noice")

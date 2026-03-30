@@ -158,7 +158,7 @@ WHAT GETS INSTALLED:
       - Ghostty terminal config (desktop only)
 
     Editor:
-      - Neovim with LazyVim configuration
+      - Neovim with vim.pack configuration
 
     Development Tools:
       - nvm + Node.js LTS
