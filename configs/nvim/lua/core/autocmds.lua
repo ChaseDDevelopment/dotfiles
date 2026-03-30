@@ -12,6 +12,18 @@ vim.api.nvim_create_autocmd('PackChanged', {
 	end,
 })
 
+-- Replace netrw: open snacks explorer when nvim is launched with a directory
+vim.api.nvim_create_autocmd('UIEnter', {
+	callback = function()
+		local bufname = vim.api.nvim_buf_get_name(0)
+		if bufname ~= '' and vim.fn.isdirectory(bufname) == 1 then
+			vim.fn.chdir(bufname)
+			vim.api.nvim_buf_delete(0, { force = true })
+			Snacks.picker.explorer({ cwd = bufname })
+		end
+	end,
+})
+
 -- LSP keymaps: activate when a language server attaches to a buffer
 vim.api.nvim_create_autocmd('LspAttach', {
 	callback = function(ev)
