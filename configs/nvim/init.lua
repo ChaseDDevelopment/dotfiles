@@ -1,3 +1,10 @@
+if vim.fn.has('nvim-0.11') == 0 then
+	vim.api.nvim_echo({
+		{ 'This config requires Neovim 0.11+. You have: ' .. tostring(vim.version()) .. '\n', 'ErrorMsg' },
+	}, true, {})
+	return
+end
+
 vim.loader.enable()
 require("core/options")
 require("core/keymaps")
@@ -8,6 +15,8 @@ vim.pack.add({
 	"https://github.com/folke/snacks.nvim",
 	"https://github.com/folke/which-key.nvim",
 	"https://github.com/williamboman/mason.nvim",
+	"https://github.com/mason-org/mason-lspconfig.nvim",
+	"https://github.com/WhoIsSethDaniel/mason-tool-installer.nvim",
 	"https://github.com/stevearc/conform.nvim",
 	"https://github.com/saghen/blink.cmp",
 	"https://github.com/nvim-mini/mini.statusline",

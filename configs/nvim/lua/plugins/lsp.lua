@@ -3,7 +3,7 @@ vim.lsp.config('*', {
 })
 
 vim.lsp.enable({
-	'pyright',
+	'basedpyright',
 	'lua_ls',
 	'vtsls',
 	'omnisharp',
