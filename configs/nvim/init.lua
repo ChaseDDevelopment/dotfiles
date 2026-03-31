@@ -12,6 +12,9 @@ vim.pack.add({
 	"https://github.com/saghen/blink.cmp",
 	"https://github.com/nvim-mini/mini.statusline",
 	"https://github.com/nvim-mini/mini.animate",
+	"https://github.com/stevearc/aerial.nvim",
+	"https://github.com/nvim-lua/plenary.nvim",
+	"https://github.com/ThePrimeagen/harpoon",
 	"https://github.com/MunifTanjim/nui.nvim",
 	"https://github.com/folke/noice.nvim",
 })
@@ -26,3 +29,5 @@ require("plugins/blink")
 require("plugins/noice")
 require("plugins/statusline")
 require("plugins/animate")
+require("plugins/aerial")
+require("plugins/harpoon")

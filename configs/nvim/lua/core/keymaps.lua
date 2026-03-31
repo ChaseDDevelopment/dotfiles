@@ -50,3 +50,14 @@
 
   -- New file
   vim.keymap.set('n', '<leader>fn', '<cmd>enew<cr>', { desc = 'New file' })
+
+  -- Aerial (code outline)
+  vim.keymap.set('n', '<leader>o', '<cmd>AerialToggle!<CR>', { desc = 'Code outline' })
+
+  -- Harpoon (quick file nav)
+  vim.keymap.set('n', '<leader>ha', function() require('harpoon.mark').add_file() end, { desc = 'Add file' })
+  vim.keymap.set('n', '<leader>hh', function() require('harpoon.ui').toggle_quick_menu() end, { desc = 'Harpoon menu' })
+  vim.keymap.set('n', '<leader>1', function() require('harpoon.ui').nav_file(1) end, { desc = 'Harpoon 1' })
+  vim.keymap.set('n', '<leader>2', function() require('harpoon.ui').nav_file(2) end, { desc = 'Harpoon 2' })
+  vim.keymap.set('n', '<leader>3', function() require('harpoon.ui').nav_file(3) end, { desc = 'Harpoon 3' })
+  vim.keymap.set('n', '<leader>4', function() require('harpoon.ui').nav_file(4) end, { desc = 'Harpoon 4' })
