@@ -74,3 +74,7 @@
   vim.keymap.set('n', '<leader>qs', function() require('persistence').load() end, { desc = 'Restore session' })
   vim.keymap.set('n', '<leader>qS', function() require('persistence').select() end, { desc = 'Select session' })
   vim.keymap.set('n', '<leader>qd', function() require('persistence').stop() end, { desc = "Don't save session" })
+
+  -- Toggles (learning plugins)
+  vim.keymap.set('n', '<leader>uH', '<cmd>Hardtime toggle<cr>', { desc = 'Toggle hardtime' })
+  vim.keymap.set('n', '<leader>uP', function() require('precognition').toggle() end, { desc = 'Toggle precognition' })

@@ -34,6 +34,9 @@ vim.pack.add({
 	"https://github.com/folke/persistence.nvim",
 	"https://github.com/akinsho/toggleterm.nvim",
 	"https://github.com/RRethy/vim-illuminate",
+	"https://github.com/m4xshen/hardtime.nvim",
+	"https://github.com/tris203/precognition.nvim",
+	"https://github.com/Weyaaron/nvim-training",
 })
 require("plugins/catppuccin")
 require("plugins/treesitter")
@@ -64,3 +67,6 @@ require("plugins/diffview")
 require("plugins/persistence")
 require("plugins/toggleterm")
 require("plugins/illuminate")
+require("plugins/hardtime")
+require("plugins/precognition")
+require("plugins/training")

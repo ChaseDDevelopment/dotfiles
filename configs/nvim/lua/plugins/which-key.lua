@@ -96,4 +96,8 @@ require("which-key").add({
 	{ "[d", icon = { icon = "󰒡", color = "red" }, desc = "Prev diagnostic" },
 	{ "]q", icon = { icon = "󰝮", color = "azure" }, desc = "Next quickfix" },
 	{ "[q", icon = { icon = "󰝮", color = "azure" }, desc = "Prev quickfix" },
+
+	-- Toggle actions
+	{ "<leader>uH", icon = { icon = "󰀱", color = "yellow" }, desc = "Toggle hardtime" },
+	{ "<leader>uP", icon = { icon = "󰛡", color = "yellow" }, desc = "Toggle precognition" },
 })
