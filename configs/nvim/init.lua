@@ -17,6 +17,23 @@ vim.pack.add({
 	"https://github.com/ThePrimeagen/harpoon",
 	"https://github.com/MunifTanjim/nui.nvim",
 	"https://github.com/folke/noice.nvim",
+	"https://github.com/nvim-tree/nvim-web-devicons",
+	"https://github.com/lewis6991/gitsigns.nvim",
+	"https://github.com/echasnovski/mini.surround",
+	"https://github.com/echasnovski/mini.ai",
+	"https://github.com/echasnovski/mini.pairs",
+	"https://github.com/folke/trouble.nvim",
+	"https://github.com/folke/flash.nvim",
+	"https://github.com/lukas-reineke/indent-blankline.nvim",
+	"https://github.com/nvim-treesitter/nvim-treesitter-context",
+	"https://github.com/folke/todo-comments.nvim",
+	"https://github.com/folke/lazydev.nvim",
+	"https://github.com/MeanderingProgrammer/render-markdown.nvim",
+	"https://github.com/mfussenegger/nvim-lint",
+	"https://github.com/sindrets/diffview.nvim",
+	"https://github.com/folke/persistence.nvim",
+	"https://github.com/akinsho/toggleterm.nvim",
+	"https://github.com/RRethy/vim-illuminate",
 })
 require("plugins/catppuccin")
 require("plugins/treesitter")
@@ -31,3 +48,19 @@ require("plugins/statusline")
 require("plugins/animate")
 require("plugins/aerial")
 require("plugins/harpoon")
+require("plugins/gitsigns")
+require("plugins/surround")
+require("plugins/ai")
+require("plugins/pairs")
+require("plugins/trouble")
+require("plugins/flash")
+require("plugins/indent")
+require("plugins/treesitter-context")
+require("plugins/todo-comments")
+require("plugins/lazydev")
+require("plugins/render-markdown")
+require("plugins/lint")
+require("plugins/diffview")
+require("plugins/persistence")
+require("plugins/toggleterm")
+require("plugins/illuminate")

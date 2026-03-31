@@ -42,9 +42,12 @@
   vim.keymap.set('n', ']d', vim.diagnostic.goto_next, { desc = 'Next diagnostic' })
   vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, { desc = 'Prev diagnostic' })
 
-  -- Quickfix
-  vim.keymap.set('n', '<leader>xl', '<cmd>lopen<cr>', { desc = 'Location list' })
-  vim.keymap.set('n', '<leader>xq', '<cmd>copen<cr>', { desc = 'Quickfix list' })
+  -- Diagnostics (trouble.nvim)
+  vim.keymap.set('n', '<leader>xx', '<cmd>Trouble diagnostics toggle<cr>', { desc = 'Diagnostics' })
+  vim.keymap.set('n', '<leader>xX', '<cmd>Trouble diagnostics toggle filter.buf=0<cr>', { desc = 'Buffer diagnostics' })
+  vim.keymap.set('n', '<leader>xq', '<cmd>Trouble qflist toggle<cr>', { desc = 'Quickfix list' })
+  vim.keymap.set('n', '<leader>xl', '<cmd>Trouble loclist toggle<cr>', { desc = 'Location list' })
+  vim.keymap.set('n', '<leader>xt', '<cmd>Trouble todo toggle<cr>', { desc = 'Todo list' })
   vim.keymap.set('n', '[q', '<cmd>cprev<cr>', { desc = 'Prev quickfix' })
   vim.keymap.set('n', ']q', '<cmd>cnext<cr>', { desc = 'Next quickfix' })
 
@@ -61,3 +64,13 @@
   vim.keymap.set('n', '<leader>2', function() require('harpoon.ui').nav_file(2) end, { desc = 'Harpoon 2' })
   vim.keymap.set('n', '<leader>3', function() require('harpoon.ui').nav_file(3) end, { desc = 'Harpoon 3' })
   vim.keymap.set('n', '<leader>4', function() require('harpoon.ui').nav_file(4) end, { desc = 'Harpoon 4' })
+
+  -- Diffview
+  vim.keymap.set('n', '<leader>gd', '<cmd>DiffviewOpen<cr>', { desc = 'Diff view' })
+  vim.keymap.set('n', '<leader>gD', '<cmd>DiffviewFileHistory %<cr>', { desc = 'File history' })
+  vim.keymap.set('n', '<leader>gq', '<cmd>DiffviewClose<cr>', { desc = 'Close diff view' })
+
+  -- Persistence (sessions)
+  vim.keymap.set('n', '<leader>qs', function() require('persistence').load() end, { desc = 'Restore session' })
+  vim.keymap.set('n', '<leader>qS', function() require('persistence').select() end, { desc = 'Select session' })
+  vim.keymap.set('n', '<leader>qd', function() require('persistence').stop() end, { desc = "Don't save session" })
