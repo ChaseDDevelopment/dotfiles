@@ -27,6 +27,8 @@ vim.api.nvim_create_autocmd('UIEnter', {
 -- LSP keymaps: activate when a language server attaches to a buffer
 vim.api.nvim_create_autocmd('LspAttach', {
 	callback = function(ev)
+		vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = ev.buf, desc = 'Go to definition' })
+		vim.keymap.set('n', 'gr', vim.lsp.buf.references, { buffer = ev.buf, desc = 'References' })
 		vim.keymap.set('n', '<leader>cr', vim.lsp.buf.rename, { buffer = ev.buf, desc = 'Rename symbol' })
 		vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = ev.buf, desc = 'Code action' })
 		vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = ev.buf, desc = 'Hover docs' })

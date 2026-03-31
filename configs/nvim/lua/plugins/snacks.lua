@@ -70,10 +70,3 @@ vim.keymap.set("n", "<leader>fs", function()
 	Snacks.picker.smart()
 end, { desc = "Smart find" })
 
--- LSP navigation through picker
-vim.keymap.set("n", "gd", function()
-	Snacks.picker.lsp_definitions()
-end, { desc = "Go to definition" })
-vim.keymap.set("n", "gr", function()
-	Snacks.picker.lsp_references()
-end, { desc = "References" })

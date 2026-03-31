@@ -7,6 +7,11 @@ require("noice").setup({
 	},
 	routes = {
 		{
+			filter = { error = true },
+			view = "notify",
+			opts = { timeout = 5000 },
+		},
+		{
 			filter = {
 				event = "msg_show",
 				any = {
