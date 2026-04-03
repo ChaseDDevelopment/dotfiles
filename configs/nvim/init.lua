@@ -46,6 +46,7 @@ vim.pack.add({
 	"https://github.com/m4xshen/hardtime.nvim",
 	"https://github.com/tris203/precognition.nvim",
 	"https://github.com/Weyaaron/nvim-training",
+	"https://github.com/coder/claudecode.nvim",
 })
 require("plugins/catppuccin")
 require("plugins/treesitter")
@@ -78,4 +79,6 @@ require("plugins/toggleterm")
 require("plugins/illuminate")
 require("plugins/hardtime")
 require("plugins/precognition")
-require("plugins/training")
+require("plugins/claudecode")
+local ok, err = pcall(require, "plugins/training")
+if not ok then vim.notify("nvim-training failed to load: " .. err, vim.log.levels.WARN) end

@@ -1,1 +1,1 @@
-require('nvim-training').setup()
+require('nvim-training').setup({})
