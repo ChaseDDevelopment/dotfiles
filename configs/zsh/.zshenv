@@ -16,6 +16,9 @@ export VISUAL="nvim"
 export LANG="en_US.UTF-8"
 export LC_ALL="en_US.UTF-8"
 
+# Claude Code
+export CLAUDE_CODE_NO_FLICKER=1
+
 # Homebrew (cross-platform detection)
 if [[ -f "/opt/homebrew/bin/brew" ]]; then
     # macOS Apple Silicon
