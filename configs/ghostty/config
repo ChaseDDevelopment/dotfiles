@@ -24,10 +24,10 @@ shell-integration = zsh
 
 # Copy/paste behavior
 copy-on-select = clipboard
-clipboard-paste-protection = true
+clipboard-paste-protection = false
 
 # Scrollback
-scrollback-limit = 50000
+scrollback-limit = 500000
 
 # Mouse
 mouse-hide-while-typing = true
@@ -44,3 +44,10 @@ shell-integration-features = ssh-terminfo,ssh-env
 # Jump between command prompts (Warp-like navigation)
 keybind = cmd+up=jump_to_prompt:-1
 keybind = cmd+down=jump_to_prompt:1
+
+background-opacity = 0.95
+background-image-opacity = 0.1
+maximize = true
+clipboard-trim-trailing-spaces = true
+background-image = ./mikael-gustafsson-wallpaper-mikael-gustafsson.jpg
+confirm-close-surface = false
