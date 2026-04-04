@@ -27,7 +27,7 @@ copy-on-select = clipboard
 clipboard-paste-protection = false
 
 # Scrollback
-scrollback-limit = 500000
+scrollback-limit = 150000
 
 # Mouse
 mouse-hide-while-typing = true

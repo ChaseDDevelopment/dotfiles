@@ -48,6 +48,9 @@ if [[ -d "${HOME}/.dotnet" ]]; then
     export PATH="${DOTNET_ROOT}:${PATH}"
 fi
 
+# Cargo/Rust environment
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
 # Cross-platform clipboard detection for fzf
 if [[ "$OSTYPE" == "darwin"* ]]; then
     FZF_CLIP_CMD="pbcopy"
