@@ -31,6 +31,8 @@ SKIP_UPDATE=false
 CONFIG_ONLY=false
 RESTORE_BACKUP=""
 VERBOSE=false
+UPDATE_MODE=false
+CLEAN_BACKUP=false
 
 # =============================================================================
 # Utility Functions
@@ -139,13 +141,18 @@ OPTIONS:
     --skip-update       Skip system package manager update step
     --config-only       Only install configuration files
     --restore-backup    Restore from previous backup directory
+    --update            Update all installed packages and tools
+    --clean-backup      Auto-remove backup directory if install succeeds
     --verbose           Enable verbose output
     -h, --help          Show this help message
 
 EXAMPLES:
-    $0                  # Full installation
-    $0 --dry-run        # Preview what would be installed
-    $0 --config-only    # Only setup configurations
+    $0                          # Full installation
+    $0 --dry-run                # Preview what would be installed
+    $0 --config-only            # Only setup configurations
+    $0 --clean-backup           # Install and clean up backup on success
+    $0 --update                 # Update all installed tools
+    $0 --update --dry-run       # Preview what would be updated
     $0 --restore-backup ~/.dotfiles-backup-20240101-120000
 
 WHAT GETS INSTALLED:
@@ -204,6 +211,14 @@ parse_args() {
             --restore-backup)
                 RESTORE_BACKUP="$2"
                 shift 2
+                ;;
+            --update)
+                UPDATE_MODE=true
+                shift
+                ;;
+            --clean-backup)
+                CLEAN_BACKUP=true
+                shift
                 ;;
             --verbose)
                 VERBOSE=true
@@ -335,11 +350,26 @@ main() {
 
     # Source helper scripts
     source "$SCRIPT_DIR/scripts/detect-os.sh"
+    source "$SCRIPT_DIR/scripts/package-helpers.sh"
 
     # Detect operating system
     step "Detecting operating system"
     detect_os
     success "Detected OS: $OS_NAME $OS_VERSION"
+
+    # Handle update mode -- update all tools and exit
+    if [[ "$UPDATE_MODE" == "true" ]]; then
+        source "$SCRIPT_DIR/scripts/update-packages.sh"
+        update_all_packages
+
+        echo
+        echo -e "${GREEN}+----------------------------------------------------------+${NC}"
+        echo -e "${GREEN}|${NC} ${WHITE}          All packages updated successfully!          ${NC}   ${GREEN}|${NC}"
+        echo -e "${GREEN}+----------------------------------------------------------+${NC}"
+        echo
+        info "Update log: $LOG_FILE"
+        exit 0
+    fi
 
     # Install packages if not skipped
     if [[ "$SKIP_PACKAGES" == "false" ]]; then
@@ -408,7 +438,13 @@ main() {
     echo
 
     info "Your complete shell environment is now set up!"
-    info "Configurations backed up to: $BACKUP_DIR"
+    if [[ "$CLEAN_BACKUP" == "true" && -d "$BACKUP_DIR" ]]; then
+        info "Removing backup (--clean-backup): $BACKUP_DIR"
+        rm -rf "$BACKUP_DIR"
+        info "Backup cleaned up successfully"
+    elif [[ -d "$BACKUP_DIR" ]]; then
+        info "Configurations backed up to: $BACKUP_DIR"
+    fi
     info "Installation log: $LOG_FILE"
     echo
     info "Quick start:"

@@ -172,6 +172,21 @@ chmod +x install.sh
 ./install.sh --restore-backup ~/.dotfiles-backup-20240101-120000
 ```
 
+### Update All Installed Tools
+```bash
+./install.sh --update
+```
+
+### Update (Preview Only)
+```bash
+./install.sh --update --dry-run
+```
+
+### Auto-Remove Backup on Success
+```bash
+./install.sh --clean-backup
+```
+
 ### Verbose Output
 ```bash
 ./install.sh --verbose
@@ -347,7 +362,18 @@ grep starship ~/.config/zsh/.zshrc
 
 ## Updating
 
-### Update All Configurations
+### Update Everything (Packages + Tools)
+```bash
+cd ~/dotfiles
+git pull
+./install.sh --update
+```
+
+This updates all installed tools across every package manager: system packages,
+Rust toolchain, cargo binaries, uv, ruff, Bun, Node.js (via nvm), Starship,
+Atuin, Neovim, .NET SDK, Yazi plugins, and Tmux plugins.
+
+### Update Configurations Only
 ```bash
 cd ~/dotfiles
 git pull
@@ -378,8 +404,15 @@ dotfiles/
 ├── install.sh                   # Main installer script
 ├── scripts/
 │   ├── detect-os.sh            # OS detection utilities
-│   ├── install-packages.sh     # Package installation
-│   ├── install-tools.sh        # Official source tool installers
+│   ├── package-helpers.sh      # Package install/check/update helpers
+│   ├── install-packages.sh     # Package installation orchestrator
+│   ├── install-tools.sh        # Official source tool installers (nvm, atuin, tpm)
+│   ├── update-packages.sh      # Update all installed packages and tools
+│   ├── restore-backup.sh       # Restore from a previous backup
+│   ├── installers/
+│   │   ├── github-helpers.sh   # GitHub release download helpers
+│   │   ├── cli-tools.sh        # CLI tool installers (eza, bat, rg, fd, etc.)
+│   │   └── dev-tools.sh        # Dev tool installers (rust, neovim, uv, etc.)
 │   ├── setup-zsh.sh            # Zsh shell setup
 │   ├── setup-tmux.sh           # Tmux setup
 │   ├── setup-neovim.sh         # Neovim setup
