@@ -64,8 +64,7 @@ format = '[ $user]($style)'
 [directory]
 style = "bg:peach fg:crust"
 format = "[ $path ]($style)"
-truncation_length = 3
-truncation_symbol = "…/"
+truncation_length = 0
 
 [directory.substitutions]
 "Documents" = "󰈙 "
