@@ -132,6 +132,9 @@ fi
 # Atuin (better history)
 (( $+commands[atuin] )) && eval "$(atuin init zsh --disable-up-arrow)"
 
+# direnv (per-project env vars)
+(( $+commands[direnv] )) && eval "$(direnv hook zsh)"
+
 # fzf - handle both old (<0.48) and new (>=0.48) versions
 if (( $+commands[fzf] )); then
     if fzf --zsh &>/dev/null; then

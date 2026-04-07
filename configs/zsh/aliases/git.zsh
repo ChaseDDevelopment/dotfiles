@@ -62,6 +62,9 @@ alias gstp='git stash pop'
 alias gstl='git stash list'
 alias gstd='git stash drop'
 
+# Lazygit
+alias lg='lazygit'
+
 # Misc
 alias gcp='git cherry-pick'
 alias gm='git merge'

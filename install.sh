@@ -390,6 +390,11 @@ main() {
     source "$SCRIPT_DIR/scripts/setup-yazi.sh"
     setup_yazi
 
+    # Setup Git config (delta, lazygit)
+    step "Setting up Git and lazygit configuration"
+    source "$SCRIPT_DIR/scripts/setup-git.sh"
+    setup_git
+
     # Final steps
     step "Finalizing installation"
 
