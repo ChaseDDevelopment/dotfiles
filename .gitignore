@@ -45,6 +45,9 @@ fish_variables
 # Zsh completion dump (auto-generated cache)
 .zcompdump*
 
+# Zsh compiled word code files
+*.zwc
+
 # =============================================================================
 # Tmux Files
 # =============================================================================
@@ -120,6 +123,10 @@ pnpm-lock.yaml
 *.dylib
 *.dll
 *.exe
+
+# Python bytecode
+__pycache__/
+*.pyc
 
 # =============================================================================
 # Operating System Files
