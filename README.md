@@ -4,21 +4,32 @@
 
 ![Zsh](https://img.shields.io/badge/Zsh-Shell-89b4fa?style=for-the-badge&logo=gnu-bash)
 ![Tmux](https://img.shields.io/badge/Tmux-Terminal-a6e3a1?style=for-the-badge)
-![Neovim](https://img.shields.io/badge/Neovim-LazyVim-cba6f7?style=for-the-badge&logo=neovim)
+![Neovim](https://img.shields.io/badge/Neovim-vim.pack-cba6f7?style=for-the-badge&logo=neovim)
 ![Starship](https://img.shields.io/badge/Starship-Prompt-fab387?style=for-the-badge)
+![Yazi](https://img.shields.io/badge/Yazi-File_Manager-f5c2e7?style=for-the-badge)
+![Ghostty](https://img.shields.io/badge/Ghostty-Terminal-94e2d5?style=for-the-badge)
 ![Catppuccin](https://img.shields.io/badge/Theme-Catppuccin-1e1e2e?style=for-the-badge)
+
+## Philosophy
+
+- **Learn by configuring** - Every config is hand-written, not generated
+- **Catppuccin Mocha everywhere** - Consistent theming across all tools
+- **Modern replacements** - eza > ls, bat > cat, ripgrep > grep, fd > find, zoxide > cd
+- **Cross-platform** - macOS (Intel + Apple Silicon) and Linux (Ubuntu, Arch, RHEL, Fedora)
+- **Modular installer** - Dry-run, backup/restore, skip/config-only modes
 
 ## Features
 
 This setup provides a complete, modern shell environment with:
 
-- **Zsh Shell** - Feature-rich shell with Antidote plugin manager
-- **Tmux** - Terminal multiplexer with session management and Catppuccin theme
-- **Neovim** - Modern Vim-based editor with LazyVim configuration
+- **Zsh Shell** - Feature-rich shell with Antidote plugin manager (16 plugins)
+- **Tmux** - Terminal multiplexer with session persistence and Catppuccin theme (11 plugins)
+- **Neovim** - Modern editor with vim.pack built-in package manager (33 plugins, 14 LSP servers)
 - **Starship** - Fast, customizable prompt with Git integration
-- **Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, zoxide, and more
-- **Development Tools** - nvm + Node.js, uv (Python), Bun
-- **Shell Enhancements** - Atuin for shell history, fzf-tab for completions
+- **Yazi** - Terminal file manager with image preview and Catppuccin theme (8 plugins)
+- **Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, zoxide, delta, lazygit, and more
+- **Development Tools** - nvm + Node.js, uv (Python), Bun, Rust, .NET SDK
+- **Shell Enhancements** - Atuin for shell history, fzf-tab for completions, direnv for per-project env
 - **Catppuccin Mocha** - Beautiful, consistent theming across all tools
 
 ## Quick Installation
@@ -57,13 +68,15 @@ chmod +x install.sh
 - **Custom Key Bindings** - Ctrl+Space prefix and intuitive shortcuts
 
 ### Neovim Setup
-- **LazyVim Configuration** - Modern Neovim setup
+- **vim.pack** - Neovim's built-in plugin manager (0.12+)
+- **30+ plugins** - Catppuccin, Snacks (picker/dashboard), blink.cmp, treesitter, LSP, Mason, and more
 - **Latest Version Installation**:
   - **macOS**: Uses `brew install --HEAD neovim` for latest features
   - **Arch Linux**: Installs `neovim-git` from AUR for version 0.12+
+  - **Ubuntu/Debian**: Installs from GitHub releases for latest version
   - **Other platforms**: Uses system package manager with upgrade recommendations
-- **Plugin Management** - Automatic plugin installation on first startup
-- **LSP Integration** - Language server support for multiple languages
+- **LSP Integration** - Language servers for Python, TypeScript, Rust, Lua, C#, Bash, Docker, and more
+- **Tree-sitter** - Syntax highlighting and code navigation for 30+ languages
 
 ### Starship Prompt
 - **Catppuccin Theme** - Beautiful, informative prompt
@@ -71,22 +84,47 @@ chmod +x install.sh
 - **Language Detection** - Automatic programming language indicators
 - **Performance Optimized** - Fast prompt rendering
 
+### Yazi File Manager
+- **Terminal file manager** with image preview support
+- **Catppuccin Mocha theme** - Consistent look
+- **Plugins** - lazygit integration, git status, starship header, smart-enter, jump-to-char
+- **Tmux passthrough** - Image previews work inside tmux
+
 ### Modern CLI Tools
-- **bat** - Better cat with syntax highlighting and Git integration
-- **ripgrep (rg)** - Lightning-fast grep replacement
-- **fd** - User-friendly find replacement
-- **eza** - Modern ls replacement with icons and colors
-- **fzf** - Command-line fuzzy finder
-- **zoxide** - Smart cd that learns your habits
+
+| Modern Tool | Replaces | What It Does |
+|-------------|----------|--------------|
+| `eza` | `ls` | File listing with icons, colors, git status |
+| `bat` | `cat` | Syntax highlighting, line numbers, git diff |
+| `ripgrep` (`rg`) | `grep` | Lightning-fast recursive search |
+| `fd` | `find` | User-friendly file finder |
+| `zoxide` | `cd` | Smart directory navigation (learns your habits) |
+| `fzf` | - | Fuzzy finder for files, history, everything |
+| `delta` | `diff` | Syntax-highlighted git diffs with side-by-side view |
+| `lazygit` | - | TUI git client for staging, branching, conflicts |
+| `xh` | `curl` | Modern HTTP client with JSON highlighting |
+| `tailspin` (`tspin`) | `tail` | Pretty log viewer with auto-highlighting |
+| `jq` / `yq` | - | JSON and YAML processing on the command line |
 
 ### Development Tools
 - **nvm** - Node.js version manager (with LTS installed)
 - **uv** - Fast Python package installer and environment manager
 - **Bun** - Fast JavaScript runtime
+- **Rust** - Systems programming language and cargo package manager
+- **ruff** - Fast Python linter and formatter
+- **.NET SDK** - For F#/C# LSP support
+- **tree-sitter CLI** - Parser generator for syntax highlighting
+
+### Ghostty Terminal (Desktop Only)
+- **Catppuccin Mocha Theme** - Consistent with all other tools
+- **JetBrainsMono Nerd Font** - Ligatures and icons
+- **Semi-transparent Background** - With wallpaper support
+- **SSH Integration** - Warp-like prompt navigation
 
 ### Shell Enhancements
 - **Atuin** - Magical shell history with sync and search
-- **Ghostty Config** - Terminal emulator configuration (desktop only)
+- **direnv** - Auto-load environment variables per project directory
+- **Git Config** - Delta pager, Catppuccin-themed diffs
 
 ## System Requirements
 
@@ -149,6 +187,7 @@ chmod +x install.sh
 | `Alt+C` | Directory search with FZF |
 | `Tab` | Autocompletion with fzf-tab |
 | `->` | Accept autosuggestion |
+| `Ctrl+X Ctrl+E` | Edit command in $EDITOR |
 
 ### Tmux
 | Key Combination | Action |
@@ -160,17 +199,33 @@ chmod +x install.sh
 | `Alt+H` | Previous window |
 | `Alt+L` | Next window |
 | `Ctrl+H/J/K/L` | Navigate panes (with vim-tmux-navigator) |
+| `Prefix + I` | Install TPM plugins |
+| `Prefix + U` | Update TPM plugins |
 | `Prefix + r` | Reload configuration |
 
-### Neovim (LazyVim)
+### Neovim
 | Key Combination | Action |
 |-----------------|--------|
 | `<Space>` | Leader key |
-| `<Leader>e` | File explorer |
+| `<Leader>e` | File explorer (Snacks) |
 | `<Leader>ff` | Find files |
 | `<Leader>fg` | Live grep |
-| `<Leader>gg` | LazyGit |
-| `:Lazy` | Plugin manager |
+| `<Leader>fb` | Buffers |
+| `<Leader>fr` | Recent files |
+| `<Leader>o` | Code outline (Aerial) |
+| `<Leader>ha` | Harpoon add file |
+| `<Leader>hh` | Harpoon menu |
+| `<Leader>gd` | Diff view |
+| `<Leader>ac` | Toggle Claude Code |
+| `<Leader>xx` | Diagnostics (Trouble) |
+| `:lua vim.pack.update()` | Update all plugins |
+
+### Yazi
+| Key Combination | Action |
+|-----------------|--------|
+| `g i` | Open lazygit |
+| `Enter` | Smart enter (open file or dir) |
+| `f` | Jump to char |
 
 ## Customization
 
@@ -187,6 +242,15 @@ my_function() {
     # Your function code here
 }
 ```
+
+### Adding Per-Project Environment Variables (direnv)
+Create a `.envrc` file in any project directory:
+```bash
+# direnv will auto-load this when you cd into the directory
+export MY_VAR="value"
+layout python    # auto-activate Python venv
+```
+Then run `direnv allow` to trust the file.
 
 ### Installing Additional Tmux Plugins
 Edit `~/.config/tmux/tmux.conf` and add:
@@ -208,6 +272,13 @@ cd      # -> zoxide (learns your habits)
 # Original commands are still available as:
 command ls    # Use original ls
 command cat   # Use original cat
+```
+
+### Privileged Editing
+Use `snvim` to edit files that require root access. It uses `sudoedit` which runs
+Neovim as your user (with full config and plugins) and writes back as root:
+```bash
+snvim /etc/hosts
 ```
 
 ## Troubleshooting
@@ -295,9 +366,8 @@ antidote update
 ```
 
 ### Update Neovim Plugins
-```bash
-# In Neovim
-:Lazy update
+```vim
+:lua vim.pack.update()
 ```
 
 ## File Structure
@@ -315,27 +385,42 @@ dotfiles/
 │   ├── setup-neovim.sh         # Neovim setup
 │   ├── setup-starship.sh       # Starship setup
 │   ├── setup-atuin.sh          # Atuin setup
-│   └── setup-ghostty.sh        # Ghostty setup (desktop only)
+│   ├── setup-ghostty.sh        # Ghostty setup (desktop only)
+│   ├── setup-yazi.sh           # Yazi file manager setup
+│   └── setup-git.sh            # Git + lazygit config setup
 ├── configs/
 │   ├── zsh/
 │   │   ├── .zshenv             # Environment variables
 │   │   ├── .zshrc              # Main Zsh configuration
-│   │   ├── aliases/            # Alias definitions
-│   │   ├── functions/          # Custom functions
+│   │   ├── aliases/            # Alias definitions (general, git)
+│   │   ├── functions/          # Custom functions (ansible, apt, ssh, utils)
 │   │   ├── plugins/            # Antidote plugin manifest
-│   │   └── tools/              # Tool-specific configs (nvm, bun)
+│   │   └── tools/              # Tool-specific configs (nvm, bun, tmux-auto, yazi)
 │   ├── nvim/
-│   │   ├── init.lua            # Neovim entry point
-│   │   └── lua/                # LazyVim configuration
+│   │   ├── init.lua            # Neovim entry point (vim.pack)
+│   │   ├── lsp/                # LSP server configurations
+│   │   └── lua/                # Plugin and core configuration
 │   ├── tmux/
-│   │   └── tmux.conf           # Tmux configuration
+│   │   ├── tmux.conf           # Tmux configuration
+│   │   └── catppuccin-modules/ # Custom Catppuccin status modules
 │   ├── starship/
 │   │   └── starship.toml       # Starship configuration
 │   ├── atuin/
 │   │   └── config.toml         # Atuin configuration
-│   └── ghostty/
-│       └── config              # Ghostty terminal configuration
-└── backups/                     # Backup directory
+│   ├── ghostty/
+│   │   └── config              # Ghostty terminal configuration
+│   ├── git/
+│   │   └── config              # Git config (delta pager, merge settings)
+│   ├── lazygit/
+│   │   └── config.yml          # Lazygit Catppuccin theme
+│   └── yazi/
+│       ├── yazi.toml           # Yazi configuration
+│       ├── keymap.toml         # Yazi keybindings
+│       ├── theme.toml          # Yazi theme
+│       ├── init.lua            # Yazi init (plugin loading)
+│       ├── package.toml        # Yazi plugin manifest
+│       ├── plugins/            # Yazi plugins (lazygit, git, starship, etc.)
+│       └── flavors/            # Catppuccin Mocha flavor
 ```
 
 ## Contributing
@@ -357,10 +442,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Antidote](https://github.com/mattmc3/antidote) - Fast Zsh plugin manager
 - [Tmux](https://github.com/tmux/tmux) - Terminal multiplexer
 - [Neovim](https://neovim.io/) - Hyperextensible Vim-based text editor
-- [LazyVim](https://www.lazyvim.org/) - Neovim configuration framework
 - [Starship](https://starship.rs/) - Cross-shell prompt
+- [Yazi](https://yazi-rs.github.io/) - Terminal file manager
 - [Catppuccin](https://github.com/catppuccin/catppuccin) - Beautiful color schemes
 - [Atuin](https://github.com/atuinsh/atuin) - Magical shell history
+- [delta](https://github.com/dandavison/delta) - Syntax-highlighting pager for git
+- [lazygit](https://github.com/jesseduffield/lazygit) - TUI git client
 - [TPM](https://github.com/tmux-plugins/tpm) - Tmux plugin manager
 
 ---
