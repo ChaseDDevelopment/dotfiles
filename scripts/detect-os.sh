@@ -122,6 +122,7 @@ get_package_name() {
                 "wget") echo "wget" ;;
                 "fzf") echo "fzf" ;;
                 "eza") echo "eza" ;;
+                "yazi") echo "yazi" ;;
                 "nodejs") echo "node" ;;
                 *) echo "$generic_name" ;;
             esac
@@ -135,6 +136,7 @@ get_package_name() {
                 "curl") echo "curl" ;;
                 "wget") echo "wget" ;;
                 "fzf") echo "fzf" ;;
+                "yazi") echo "yazi" ;;
                 "eza") echo "eza" ;;  # May need snap or cargo install
                 "nodejs") echo "nodejs npm" ;;
                 "build-essential") echo "build-essential" ;;
@@ -150,6 +152,7 @@ get_package_name() {
                 "curl") echo "curl" ;;
                 "wget") echo "wget" ;;
                 "fzf") echo "fzf" ;;
+                "yazi") echo "yazi" ;;
                 "eza") echo "eza" ;;
                 "nodejs") echo "nodejs npm" ;;
                 "build-essential") echo "gcc gcc-c++ make" ;;
@@ -165,6 +168,7 @@ get_package_name() {
                 "curl") echo "curl" ;;
                 "wget") echo "wget" ;;
                 "fzf") echo "fzf" ;;
+                "yazi") echo "yazi" ;;
                 "eza") echo "eza" ;;
                 "nodejs") echo "nodejs npm" ;;
                 "build-essential") echo "base-devel" ;;

@@ -385,6 +385,11 @@ main() {
     source "$SCRIPT_DIR/scripts/setup-ghostty.sh"
     setup_ghostty
 
+    # Setup Yazi
+    step "Setting up Yazi file manager"
+    source "$SCRIPT_DIR/scripts/setup-yazi.sh"
+    setup_yazi
+
     # Final steps
     step "Finalizing installation"
 

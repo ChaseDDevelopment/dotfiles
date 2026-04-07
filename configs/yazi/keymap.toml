@@ -1,0 +1,20 @@
+# =============================================================================
+# Yazi Keybindings
+# =============================================================================
+# Docs: https://yazi-rs.github.io/docs/configuration/keymap
+# =============================================================================
+
+[mgr]
+prepend_keymap = [
+    # Smart enter: open file or enter directory
+    { on = "<Enter>", run = "plugin smart-enter", desc = "Smart enter" },
+
+    # Jump to character (vim f-key style)
+    { on = "f", run = "plugin jump-to-char", desc = "Jump to char" },
+
+    # Toggle pane maximize
+    { on = "T", run = "plugin toggle-pane", desc = "Toggle pane" },
+
+    # Lazygit integration
+    { on = ["g", "i"], run = "plugin lazygit", desc = "Open lazygit" },
+]

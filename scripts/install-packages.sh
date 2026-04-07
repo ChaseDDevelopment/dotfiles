@@ -14,7 +14,7 @@ version_gte() {
 all_packages_installed() {
     local cmds=("git" "curl" "wget" "unzip" "zsh" "tmux" "fzf" "nvim"
                 "tree-sitter" "eza" "bat" "rg" "fd" "zoxide" "tspin"
-                "starship" "bun" "uv" "ruff" "dotnet")
+                "starship" "bun" "uv" "ruff" "dotnet" "yazi")
     for cmd in "${cmds[@]}"; do
         if ! check_command "$cmd"; then
             return 1
@@ -78,6 +78,7 @@ install_packages() {
     install_zoxide   # Smart cd replacement
     install_tailspin # Pretty log viewer with streaming
     install_coreutils # GNU coreutils for macOS (provides grm -I)
+    install_yazi      # Terminal file manager
 
     # Install clipboard utilities (Linux only)
     if [[ "$PACKAGE_MANAGER" != "brew" ]]; then
@@ -431,6 +432,54 @@ install_zoxide() {
                 curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
             else
                 substep "[DRY RUN] Would install zoxide via official installer"
+            fi
+            ;;
+    esac
+}
+
+install_yazi() {
+    if check_command yazi; then
+        substep "yazi is already installed"
+        return
+    fi
+
+    substep "Installing yazi..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install yazi"
+        return
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install yazi ffmpeg sevenzip jq poppler resvg imagemagick
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm yazi ffmpeg 7zip jq poppler resvg imagemagick
+            ;;
+        "apt")
+            # yazi not in apt repos — install via cargo
+            "${INSTALL_CMD_ARRAY[@]}" ffmpeg p7zip-full jq poppler-utils resvg imagemagick 2>/dev/null || true
+            if check_command cargo; then
+                cargo install --locked yazi-fm yazi-cli
+            else
+                warning "yazi requires cargo on Debian/Ubuntu. Install Rust first, then run: cargo install --locked yazi-fm yazi-cli"
+            fi
+            ;;
+        "dnf"|"yum")
+            if ! eval "$INSTALL_CMD yazi" 2>/dev/null; then
+                if check_command cargo; then
+                    cargo install --locked yazi-fm yazi-cli
+                else
+                    warning "yazi requires cargo. Install Rust first, then run: cargo install --locked yazi-fm yazi-cli"
+                fi
+            fi
+            ;;
+        *)
+            if check_command cargo; then
+                cargo install --locked yazi-fm yazi-cli
+            else
+                warning "Please install yazi manually: https://yazi-rs.github.io/docs/installation/"
             fi
             ;;
     esac

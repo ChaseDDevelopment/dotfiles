@@ -52,6 +52,14 @@ fish_variables
 # Tmux plugin directory (these are downloaded by TPM)
 .tmux/plugins/
 
+# =============================================================================
+# Yazi Files
+# =============================================================================
+
+# Yazi plugins and flavors (downloaded by `ya pkg install`)
+configs/yazi/plugins/
+configs/yazi/flavors/
+
 # Tmux session files
 tmux-session-*
 
