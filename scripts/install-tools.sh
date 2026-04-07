@@ -4,15 +4,13 @@
 # Tool Installation Script
 # =============================================================================
 # Installs tools from official sources (not package managers)
-# Ensures latest versions and cross-platform compatibility
+# Note: Rust, UV, Starship, and Bun are installed in install-packages.sh
+# This script handles: nvm, atuin, tpm
 # =============================================================================
 
 all_tools_installed() {
     [[ -d "$HOME/.config/nvm" || -d "$HOME/.nvm" ]] \
-        && check_command uv \
-        && check_command starship \
         && check_command atuin \
-        && check_command rustc \
         && [[ -d "$HOME/.tmux/plugins/tpm" ]]
 }
 
@@ -25,9 +23,6 @@ install_all_tools() {
     fi
 
     install_nvm
-    install_uv
-    install_rust
-    install_starship_tool
     install_atuin_tool
     install_tpm
 
@@ -66,45 +61,6 @@ install_nvm() {
         fi
     else
         substep "[DRY RUN] Would install nvm and Node LTS"
-    fi
-}
-
-# -----------------------------------------------------------------------------
-# UV (Astral Python Package Manager)
-# -----------------------------------------------------------------------------
-install_uv() {
-    substep "Installing UV (Python package manager)..."
-
-    if check_command uv; then
-        substep "uv already installed"
-        return
-    fi
-
-    if [[ "$DRY_RUN" == "false" ]]; then
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        export PATH="$HOME/.local/bin:$PATH"
-        substep "uv installed"
-    else
-        substep "[DRY RUN] Would install uv"
-    fi
-}
-
-# -----------------------------------------------------------------------------
-# Starship Prompt
-# -----------------------------------------------------------------------------
-install_starship_tool() {
-    substep "Installing Starship prompt..."
-
-    if check_command starship; then
-        substep "starship already installed"
-        return
-    fi
-
-    if [[ "$DRY_RUN" == "false" ]]; then
-        curl -sS https://starship.rs/install.sh | sh -s -- --yes --bin-dir "$(brew --prefix)/bin"
-        substep "Starship installed"
-    else
-        substep "[DRY RUN] Would install Starship"
     fi
 }
 
@@ -159,45 +115,5 @@ install_tpm() {
         substep "TPM installed"
     else
         substep "[DRY RUN] Would install TPM"
-    fi
-}
-
-# -----------------------------------------------------------------------------
-# Rust (via rustup)
-# -----------------------------------------------------------------------------
-install_rust() {
-    substep "Installing Rust..."
-
-    if check_command rustc; then
-        substep "Rust already installed"
-        return
-    fi
-
-    if [[ "$DRY_RUN" == "false" ]]; then
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
-        rustup component add rustfmt
-        substep "Rust installed (with rustfmt)"
-    else
-        substep "[DRY RUN] Would install Rust (with rustfmt)"
-    fi
-}
-
-# -----------------------------------------------------------------------------
-# Bun (JavaScript Runtime)
-# -----------------------------------------------------------------------------
-install_bun() {
-    substep "Installing Bun..."
-
-    if check_command bun; then
-        substep "Bun already installed"
-        return
-    fi
-
-    if [[ "$DRY_RUN" == "false" ]]; then
-        curl -fsSL https://bun.sh/install | bash
-        substep "Bun installed"
-    else
-        substep "[DRY RUN] Would install Bun"
     fi
 }

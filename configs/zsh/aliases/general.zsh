@@ -67,6 +67,10 @@ alias j='jobs -l'
 alias path='echo -e ${PATH//:/\\n}'
 alias now='date +"%Y-%m-%d %H:%M:%S"'
 
+# Privileged editing — sudoedit runs nvim as YOUR user with full config,
+# then writes the result back as root. Avoids permission/ownership issues.
+alias snvim='sudoedit'
+
 # Quick edits
 alias zshrc='${EDITOR} ${ZDOTDIR}/.zshrc'
 alias reload='source ${ZDOTDIR}/.zshrc'

@@ -14,7 +14,8 @@ version_gte() {
 all_packages_installed() {
     local cmds=("git" "curl" "wget" "unzip" "zsh" "tmux" "fzf" "nvim"
                 "tree-sitter" "eza" "bat" "rg" "fd" "zoxide" "tspin"
-                "starship" "bun" "uv" "ruff" "dotnet" "yazi")
+                "starship" "bun" "uv" "ruff" "dotnet" "yazi"
+                "delta" "lazygit" "direnv" "yq" "xh")
     for cmd in "${cmds[@]}"; do
         if ! check_command "$cmd"; then
             return 1
@@ -46,7 +47,10 @@ install_packages() {
     if [[ "$PACKAGE_MANAGER" != "brew" ]]; then
         install_package "build-essential"
     fi
-    
+
+    # Rust/Cargo (needed early — tree-sitter-cli, yazi, eza depend on cargo on Linux)
+    install_rust
+
     # Shell and terminal tools
     substep "Installing shell and terminal tools..."
     install_package "zsh"
@@ -79,6 +83,11 @@ install_packages() {
     install_tailspin # Pretty log viewer with streaming
     install_coreutils # GNU coreutils for macOS (provides grm -I)
     install_yazi      # Terminal file manager
+    install_delta     # Syntax-highlighted git diffs
+    install_lazygit   # TUI git client
+    install_xh        # Modern HTTP client
+    install_direnv    # Per-project environment variables
+    install_yq        # YAML processor (jq for YAML)
 
     # Install clipboard utilities (Linux only)
     if [[ "$PACKAGE_MANAGER" != "brew" ]]; then
@@ -222,7 +231,7 @@ install_eza() {
             ;;
         "dnf"|"yum")
             # Try package manager first, fallback to cargo, then GitHub
-            if ! eval "$INSTALL_CMD eza" 2>/dev/null; then
+            if ! "${INSTALL_CMD_ARRAY[@]}" eza 2>/dev/null; then
                 if check_command cargo; then
                     cargo install eza
                 else
@@ -416,7 +425,7 @@ install_zoxide() {
             ;;
         "dnf"|"yum")
             if [[ "$DRY_RUN" == "false" ]]; then
-                if ! eval "$INSTALL_CMD zoxide" 2>/dev/null; then
+                if ! "${INSTALL_CMD_ARRAY[@]}" zoxide 2>/dev/null; then
                     curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
                 fi
             else
@@ -467,7 +476,7 @@ install_yazi() {
             fi
             ;;
         "dnf"|"yum")
-            if ! eval "$INSTALL_CMD yazi" 2>/dev/null; then
+            if ! "${INSTALL_CMD_ARRAY[@]}" yazi 2>/dev/null; then
                 if check_command cargo; then
                     cargo install --locked yazi-fm yazi-cli
                 else
@@ -499,7 +508,7 @@ install_clipboard_utils() {
             ;;
         "dnf"|"yum")
             if [[ "$DRY_RUN" == "false" ]]; then
-                eval "$INSTALL_CMD xclip wl-clipboard" 2>/dev/null || eval "$INSTALL_CMD xclip" || true
+                "${INSTALL_CMD_ARRAY[@]}" xclip wl-clipboard 2>/dev/null || "${INSTALL_CMD_ARRAY[@]}" xclip || true
             else
                 substep "[DRY RUN] Would install xclip and wl-clipboard"
             fi
@@ -653,14 +662,19 @@ install_tree_sitter_cli() {
             "${INSTALL_CMD_ARRAY[@]}" libtree-sitter-dev
             ;;
         "dnf"|"yum")
-            eval "$INSTALL_CMD libtree-sitter-devel" 2>/dev/null || true
+            "${INSTALL_CMD_ARRAY[@]}" libtree-sitter-devel 2>/dev/null || true
             ;;
     esac
 
     # Install tree-sitter CLI (compiles parsers)
     if check_command tree-sitter; then
-        substep "tree-sitter-cli is already installed"
-        return
+        # Verify it's a modern version (apt's package is ancient, lacks 'build' subcommand)
+        if tree-sitter build --help &>/dev/null; then
+            substep "tree-sitter-cli is already installed (modern version)"
+            return
+        else
+            substep "tree-sitter-cli is outdated (no 'build' subcommand), upgrading..."
+        fi
     fi
 
     case "$PACKAGE_MANAGER" in
@@ -906,6 +920,374 @@ install_tailspin_from_github() {
         substep "Installed tailspin to /usr/local/bin/tspin"
     else
         warning "Failed to find tailspin binary in archive"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+}
+
+install_delta() {
+    if check_command delta; then
+        substep "delta is already installed"
+        return
+    fi
+
+    substep "Installing delta (git-delta)..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install delta"
+        return
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install git-delta
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm git-delta
+            ;;
+        "apt")
+            install_delta_from_github
+            ;;
+        "dnf"|"yum")
+            if ! "${INSTALL_CMD_ARRAY[@]}" git-delta 2>/dev/null; then
+                install_delta_from_github
+            fi
+            ;;
+        *)
+            if check_command cargo; then
+                cargo install git-delta
+            else
+                install_delta_from_github
+            fi
+            ;;
+    esac
+}
+
+install_delta_from_github() {
+    local arch os_type target
+    arch=$(uname -m)
+    os_type=$(uname -s)
+
+    case "$os_type" in
+        Linux)
+            case "$arch" in
+                x86_64)  target="x86_64-unknown-linux-musl" ;;
+                aarch64) target="aarch64-unknown-linux-musl" ;;
+                arm64)   target="aarch64-unknown-linux-musl" ;;
+                *)
+                    warning "Unsupported architecture for delta: $arch"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            warning "Unsupported OS for delta GitHub install: $os_type"
+            return 1
+            ;;
+    esac
+
+    local version
+    version=$(curl -sI https://github.com/dandavison/delta/releases/latest | grep -i '^location:' | sed 's/.*tag\///' | tr -d '\r')
+
+    if [[ -z "$version" ]]; then
+        warning "Could not determine latest delta version"
+        return 1
+    fi
+
+    local url="https://github.com/dandavison/delta/releases/download/${version}/delta-${version}-${target}.tar.gz"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+
+    substep "Downloading delta ${version} from GitHub..."
+    if ! curl -sL "$url" | tar -xz -C "$tmp_dir"; then
+        warning "Failed to download delta"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local delta_bin
+    delta_bin=$(find "$tmp_dir" -name "delta" -type f 2>/dev/null | head -1)
+
+    if [[ -n "$delta_bin" ]]; then
+        sudo install -m 755 "$delta_bin" /usr/local/bin/delta
+        substep "Installed delta to /usr/local/bin/delta"
+    else
+        warning "Failed to find delta binary in archive"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+}
+
+install_lazygit() {
+    if check_command lazygit; then
+        substep "lazygit is already installed"
+        return
+    fi
+
+    substep "Installing lazygit..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install lazygit"
+        return
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install lazygit
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm lazygit
+            ;;
+        *)
+            install_lazygit_from_github
+            ;;
+    esac
+}
+
+install_lazygit_from_github() {
+    local arch os_type
+    arch=$(uname -m)
+    os_type=$(uname -s)
+
+    local lg_os lg_arch
+    case "$os_type" in
+        Linux)  lg_os="Linux" ;;
+        Darwin) lg_os="Darwin" ;;
+        *)
+            warning "Unsupported OS for lazygit: $os_type"
+            return 1
+            ;;
+    esac
+
+    case "$arch" in
+        x86_64)          lg_arch="x86_64" ;;
+        aarch64|arm64)   lg_arch="arm64" ;;
+        *)
+            warning "Unsupported architecture for lazygit: $arch"
+            return 1
+            ;;
+    esac
+
+    local version
+    version=$(curl -sI https://github.com/jesseduffield/lazygit/releases/latest | grep -i '^location:' | sed 's/.*tag\/v//' | tr -d '\r')
+
+    if [[ -z "$version" ]]; then
+        warning "Could not determine latest lazygit version"
+        return 1
+    fi
+
+    local url="https://github.com/jesseduffield/lazygit/releases/download/v${version}/lazygit_${version}_${lg_os}_${lg_arch}.tar.gz"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+
+    substep "Downloading lazygit v${version} from GitHub..."
+    if ! curl -sL "$url" | tar -xz -C "$tmp_dir"; then
+        warning "Failed to download lazygit"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    if [[ -f "$tmp_dir/lazygit" ]]; then
+        sudo install -m 755 "$tmp_dir/lazygit" /usr/local/bin/lazygit
+        substep "Installed lazygit to /usr/local/bin/lazygit"
+    else
+        warning "Failed to find lazygit binary in archive"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    rm -rf "$tmp_dir"
+}
+
+install_direnv() {
+    if check_command direnv; then
+        substep "direnv is already installed"
+        return
+    fi
+
+    substep "Installing direnv..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install direnv"
+        return
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install direnv
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm direnv
+            ;;
+        "apt")
+            "${INSTALL_CMD_ARRAY[@]}" direnv
+            ;;
+        "dnf"|"yum")
+            "${INSTALL_CMD_ARRAY[@]}" direnv
+            ;;
+        *)
+            warning "Please install direnv manually: https://direnv.net/docs/installation.html"
+            ;;
+    esac
+}
+
+install_yq() {
+    if check_command yq; then
+        substep "yq is already installed"
+        return
+    fi
+
+    substep "Installing yq..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install yq"
+        return
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install yq
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm yq
+            ;;
+        *)
+            install_yq_from_github
+            ;;
+    esac
+}
+
+install_yq_from_github() {
+    local arch os_type yq_os yq_arch
+    arch=$(uname -m)
+    os_type=$(uname -s)
+
+    case "$os_type" in
+        Linux)  yq_os="linux" ;;
+        Darwin) yq_os="darwin" ;;
+        *)
+            warning "Unsupported OS for yq: $os_type"
+            return 1
+            ;;
+    esac
+
+    case "$arch" in
+        x86_64)          yq_arch="amd64" ;;
+        aarch64|arm64)   yq_arch="arm64" ;;
+        *)
+            warning "Unsupported architecture for yq: $arch"
+            return 1
+            ;;
+    esac
+
+    local url="https://github.com/mikefarah/yq/releases/latest/download/yq_${yq_os}_${yq_arch}"
+
+    substep "Downloading yq from GitHub..."
+    local tmp_file
+    tmp_file=$(mktemp)
+
+    if curl -sL "$url" -o "$tmp_file"; then
+        sudo install -m 755 "$tmp_file" /usr/local/bin/yq
+        substep "Installed yq to /usr/local/bin/yq"
+    else
+        warning "Failed to download yq"
+    fi
+
+    rm -f "$tmp_file"
+}
+
+install_xh() {
+    if check_command xh; then
+        substep "xh is already installed"
+        return
+    fi
+
+    substep "Installing xh..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would install xh"
+        return
+    fi
+
+    case "$PACKAGE_MANAGER" in
+        "brew")
+            brew install xh
+            ;;
+        "pacman")
+            sudo pacman -S --noconfirm xh
+            ;;
+        "apt")
+            install_xh_from_github
+            ;;
+        "dnf"|"yum")
+            if ! "${INSTALL_CMD_ARRAY[@]}" xh 2>/dev/null; then
+                install_xh_from_github
+            fi
+            ;;
+        *)
+            if check_command cargo; then
+                cargo install xh
+            else
+                install_xh_from_github
+            fi
+            ;;
+    esac
+}
+
+install_xh_from_github() {
+    local arch os_type target
+    arch=$(uname -m)
+    os_type=$(uname -s)
+
+    case "$os_type" in
+        Linux)
+            case "$arch" in
+                x86_64)  target="x86_64-unknown-linux-musl" ;;
+                aarch64) target="aarch64-unknown-linux-musl" ;;
+                arm64)   target="aarch64-unknown-linux-musl" ;;
+                *)
+                    warning "Unsupported architecture for xh: $arch"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            warning "Unsupported OS for xh GitHub install: $os_type"
+            return 1
+            ;;
+    esac
+
+    local version
+    version=$(curl -sI https://github.com/ducaale/xh/releases/latest | grep -i '^location:' | sed 's/.*tag\/v//' | tr -d '\r')
+
+    if [[ -z "$version" ]]; then
+        warning "Could not determine latest xh version"
+        return 1
+    fi
+
+    local url="https://github.com/ducaale/xh/releases/download/v${version}/xh-v${version}-${target}.tar.gz"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+
+    substep "Downloading xh v${version} from GitHub..."
+    if ! curl -sL "$url" | tar -xz -C "$tmp_dir"; then
+        warning "Failed to download xh"
+        rm -rf "$tmp_dir"
+        return 1
+    fi
+
+    local xh_bin
+    xh_bin=$(find "$tmp_dir" -name "xh" -type f 2>/dev/null | head -1)
+
+    if [[ -n "$xh_bin" ]]; then
+        sudo install -m 755 "$xh_bin" /usr/local/bin/xh
+        substep "Installed xh to /usr/local/bin/xh"
+    else
+        warning "Failed to find xh binary in archive"
         rm -rf "$tmp_dir"
         return 1
     fi
