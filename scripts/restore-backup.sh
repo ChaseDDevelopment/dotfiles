@@ -12,11 +12,11 @@ restore_from_backup() {
     local backup_dir="$1"
     
     if [[ ! -d "$backup_dir" ]]; then
-        error "Backup directory not found: $backup_dir"
+        ui_error "Backup directory not found: $backup_dir"
         exit 1
     fi
     
-    substep "Restoring from backup: $backup_dir"
+    ui_info "Restoring from backup: $backup_dir"
     
     # List of files/directories that this installer manages
     local managed_paths=(
@@ -39,7 +39,7 @@ restore_from_backup() {
         local backup_path="$backup_dir/$(basename "$path")"
         
         if [[ -e "$backup_path" ]]; then
-            substep "Restoring $(basename "$path")..."
+            ui_info "Restoring $(basename "$path")..."
             
             if [[ "$DRY_RUN" == "false" ]]; then
                 # Remove current version if it exists
@@ -54,31 +54,31 @@ restore_from_backup() {
                     cp "$backup_path" "$path"
                 fi
                 
-                substep "Restored $path"
+                ui_info "Restored $path"
             else
-                substep "[DRY RUN] Would restore $path from $backup_path"
+                ui_info "[DRY RUN] Would restore $path from $backup_path"
             fi
         else
-            substep "No backup found for $(basename "$path"), skipping"
+            ui_info "No backup found for $(basename "$path"), skipping"
         fi
     done
     
-    success "Backup restoration completed"
-    
+    ui_success "Backup restoration completed"
+
     # Provide next steps
     echo
-    info "Backup restored successfully!"
-    info "You may need to restart your shell or reload configurations"
+    ui_info "Backup restored successfully!"
+    ui_info "You may need to restart your shell or reload configurations"
     echo
-    echo -e "  ${CYAN}exec zsh${NC}   # Restart shell"
-    echo -e "  ${CYAN}tmux source-file ~/.config/tmux/tmux.conf${NC}  # Reload Tmux config"
+    ui_info "  exec zsh   # Restart shell"
+    ui_info "  tmux source-file ~/.config/tmux/tmux.conf  # Reload Tmux config"
     echo
 }
 
 # Function to list available backups
 list_backups() {
     echo
-    info "Available backups:"
+    ui_info "Available backups:"
     
     local backup_pattern="$HOME/.dotfiles-backup-*"
     local found_backups=false
@@ -87,14 +87,14 @@ list_backups() {
         if [[ -d "$backup_dir" ]]; then
             local backup_date=$(basename "$backup_dir" | sed 's/\.dotfiles-backup-//')
             local formatted_date=$(echo "$backup_date" | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)-\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3 \4:\5:\6/')
-            echo -e "  ${CYAN}$backup_dir${NC} (created: $formatted_date)"
+            ui_info "  $backup_dir (created: $formatted_date)"
             found_backups=true
         fi
     done
     
     if [[ "$found_backups" == "false" ]]; then
-        warning "No backup directories found in $HOME"
-        echo -e "  Backup directories should match pattern: ${CYAN}~/.dotfiles-backup-*${NC}"
+        ui_warn "No backup directories found in $HOME"
+        ui_info "  Backup directories should match pattern: ~/.dotfiles-backup-*"
     fi
     
     echo
@@ -107,7 +107,7 @@ if [[ "${1:-}" == "--list" ]]; then
 fi
 
 if [[ $# -eq 0 ]]; then
-    error "Usage: $0 <backup-directory>"
+    ui_error "Usage: $0 <backup-directory>"
     echo "       $0 --list  # List available backups"
     list_backups
     exit 1

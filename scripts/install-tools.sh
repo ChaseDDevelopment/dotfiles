@@ -15,10 +15,10 @@ all_tools_installed() {
 }
 
 install_all_tools() {
-    step "Installing tools from official sources"
+    ui_step "Installing tools from official sources"
 
     if all_tools_installed; then
-        substep "All tools already installed, skipping"
+        ui_info "All tools already installed, skipping"
         return
     fi
 
@@ -26,19 +26,22 @@ install_all_tools() {
     install_atuin_tool
     install_tpm
 
-    success "All tools installed from official sources"
+    ui_success "All tools installed from official sources"
 }
 
 # -----------------------------------------------------------------------------
 # Node Version Manager (nvm)
 # -----------------------------------------------------------------------------
 install_nvm() {
-    substep "Installing Node Version Manager (nvm)..."
+    ui_info "Installing Node Version Manager (nvm)..."
 
     if [[ -d "$HOME/.config/nvm" ]] || [[ -d "$HOME/.nvm" ]]; then
-        substep "nvm already installed"
+        plan_add "  nvm" "Tool" "already installed"
+        ui_info "nvm already installed"
         return
     fi
+
+    plan_add "  nvm" "Tool" "would install"
 
     if [[ "$DRY_RUN" == "false" ]]; then
         # Set NVM_DIR to XDG-compliant location
@@ -46,21 +49,21 @@ install_nvm() {
         mkdir -p "$NVM_DIR"
 
         # Download and run installer
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+        ui_spin "Installing NVM" bash -c "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash"
 
         # Source nvm and install LTS
         [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
         if check_command nvm; then
-            nvm install --lts
+            ui_spin "Installing Node.js LTS" nvm install --lts
             nvm alias default lts/*
-            substep "nvm installed with Node LTS"
+            ui_info "nvm installed with Node LTS"
         else
-            warning "nvm installed but not available in current shell"
-            warning "Node LTS will be installed on next shell start"
+            ui_warn "nvm installed but not available in current shell"
+            ui_warn "Node LTS will be installed on next shell start"
         fi
     else
-        substep "[DRY RUN] Would install nvm and Node LTS"
+        ui_info "[DRY RUN] Would install nvm and Node LTS"
     fi
 }
 
@@ -68,12 +71,15 @@ install_nvm() {
 # Atuin (Shell History)
 # -----------------------------------------------------------------------------
 install_atuin_tool() {
-    substep "Installing Atuin (shell history)..."
+    ui_info "Installing Atuin (shell history)..."
 
     if check_command atuin; then
-        substep "atuin already installed"
+        plan_add "  atuin" "Tool" "already installed"
+        ui_info "atuin already installed"
         return
     fi
+
+    plan_add "  atuin" "Tool" "would install"
 
     if [[ "$DRY_RUN" == "false" ]]; then
         # Check if available via package manager first
@@ -86,14 +92,14 @@ install_atuin_tool() {
                 ;;
             *)
                 # Use official installer
-                curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh
+                ui_spin "Installing Atuin" bash -c "curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh"
                 # Add Atuin to PATH for current session
                 export PATH="$HOME/.atuin/bin:$PATH"
                 ;;
         esac
-        substep "Atuin installed"
+        ui_info "Atuin installed"
     else
-        substep "[DRY RUN] Would install Atuin"
+        ui_info "[DRY RUN] Would install Atuin"
     fi
 }
 
@@ -101,19 +107,22 @@ install_atuin_tool() {
 # TPM (Tmux Plugin Manager)
 # -----------------------------------------------------------------------------
 install_tpm() {
-    substep "Installing TPM (Tmux Plugin Manager)..."
+    ui_info "Installing TPM (Tmux Plugin Manager)..."
 
     local tpm_dir="$HOME/.tmux/plugins/tpm"
 
     if [[ -d "$tpm_dir" ]]; then
-        substep "TPM already installed"
+        plan_add "  tpm" "Tool" "already installed"
+        ui_info "TPM already installed"
         return
     fi
 
+    plan_add "  tpm" "Tool" "would install"
+
     if [[ "$DRY_RUN" == "false" ]]; then
-        git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
-        substep "TPM installed"
+        ui_spin "Cloning TPM" git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
+        ui_info "TPM installed"
     else
-        substep "[DRY RUN] Would install TPM"
+        ui_info "[DRY RUN] Would install TPM"
     fi
 }

@@ -7,11 +7,11 @@
 # =============================================================================
 
 setup_ghostty() {
-    substep "Starting Ghostty setup"
+    ui_info "Starting Ghostty setup"
 
     # Skip on headless/server systems
     if ! is_desktop_environment; then
-        info "Skipping Ghostty setup (no desktop environment detected)"
+        ui_info "Skipping Ghostty setup (no desktop environment detected)"
         return 0
     fi
 
@@ -21,7 +21,7 @@ setup_ghostty() {
     # Copy Ghostty configuration
     copy_ghostty_config
 
-    success "Ghostty setup completed"
+    ui_success "Ghostty setup completed"
 }
 
 is_desktop_environment() {
@@ -31,7 +31,7 @@ is_desktop_environment() {
 }
 
 copy_ghostty_config() {
-    substep "Symlinking Ghostty configuration..."
+    ui_info "Symlinking Ghostty configuration..."
 
     local source_dir="$SCRIPT_DIR/configs/ghostty"
     local dest_dir="$HOME/.config/ghostty"
@@ -39,6 +39,6 @@ copy_ghostty_config() {
     if [[ -d "$source_dir" ]]; then
         symlink_if_needed "$source_dir" "$dest_dir"
     else
-        warning "Ghostty config not found: $source_dir"
+        ui_warn "Ghostty config not found: $source_dir"
     fi
 }

@@ -26,35 +26,36 @@ all_packages_installed() {
 }
 
 install_packages() {
-    substep "Starting package installation"
+    ui_info "Starting package installation"
 
     # Update system (skip if --skip-update or all packages already present)
     if [[ "$SKIP_UPDATE" == "true" ]]; then
-        substep "Skipping system update (--skip-update)"
+        ui_info "Skipping system update (--skip-update)"
     elif all_packages_installed; then
-        substep "All packages already installed, skipping system update"
+        ui_info "All packages already installed, skipping system update"
     else
         update_system
     fi
 
     # Pre-flight: install nala on apt systems for prettier/faster installs
     if [[ "$PACKAGE_MANAGER" == "apt" ]] && ! check_command nala; then
-        substep "Installing nala (prettier apt frontend)..."
+        ui_info "Installing nala (prettier apt frontend)..."
         if [[ "$DRY_RUN" == "false" ]]; then
             if sudo apt-get install -y nala > /dev/null 2>&1; then
                 INSTALL_CMD_ARRAY=("sudo" "nala" "install" "-y")
                 UPDATE_CMD_ARRAY=("bash" "-c" "sudo nala upgrade -y")
-                success "Switched to nala for remaining installs"
+                ui_success "Switched to nala for remaining installs"
             else
-                warning "nala not available in repos, continuing with apt-get"
+                ui_warn "nala not available in repos, continuing with apt-get"
             fi
         else
-            substep "[DRY RUN] Would install nala and switch to it"
+            ui_info "[DRY RUN] Would install nala and switch to it"
         fi
     fi
 
     # Core development tools
-    substep "Installing core development tools..."
+    plan_add "Core Tools" "Install" "git curl wget unzip"
+    ui_info "Installing core development tools..."
     install_package "git"
     install_package "curl"
     install_package "wget"
@@ -66,10 +67,12 @@ install_packages() {
     fi
 
     # Rust/Cargo (needed early -- tree-sitter-cli, yazi, eza depend on cargo on Linux)
+    plan_add "Dev Tools" "Install" "rust cargo node bun uv"
     install_rust
 
     # Shell and terminal tools
-    substep "Installing shell and terminal tools..."
+    plan_add "Shell Tools" "Install" "zsh tmux fzf"
+    ui_info "Installing shell and terminal tools..."
     install_package "zsh"
     install_package "tmux"
 
@@ -82,14 +85,15 @@ install_packages() {
     install_package "fzf"
 
     # Text editor
-    substep "Installing Neovim..."
+    ui_info "Installing Neovim..."
     install_neovim
 
     # Tree-sitter CLI (needed by nvim-treesitter to compile parsers)
     install_tree_sitter_cli
 
     # Modern CLI tools
-    substep "Installing modern CLI tools..."
+    plan_add "CLI Tools" "Install" "modern replacements"
+    ui_info "Installing modern CLI tools..."
     install_eza
     install_bat
     install_ripgrep
@@ -125,5 +129,5 @@ install_packages() {
     # .NET SDK (for F#/C# LSP and Mason tools)
     install_dotnet_sdk
 
-    success "Package installation completed"
+    ui_success "Package installation completed"
 }

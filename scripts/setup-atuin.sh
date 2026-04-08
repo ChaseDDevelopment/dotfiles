@@ -7,11 +7,11 @@
 # =============================================================================
 
 setup_atuin() {
-    substep "Starting Atuin setup"
+    ui_info "Starting Atuin setup"
 
     # Check if atuin is installed
     if ! check_command atuin; then
-        warning "Atuin is not installed. It should be installed via install-tools.sh"
+        ui_warn "Atuin is not installed. It should be installed via install-tools.sh"
         return 0  # Don't fail the entire install for optional tool
     fi
 
@@ -21,11 +21,11 @@ setup_atuin() {
     # Copy Atuin configuration
     copy_atuin_config
 
-    success "Atuin setup completed"
+    ui_success "Atuin setup completed"
 }
 
 copy_atuin_config() {
-    substep "Symlinking Atuin configuration..."
+    ui_info "Symlinking Atuin configuration..."
 
     local source_dir="$SCRIPT_DIR/configs/atuin"
     local dest_dir="$HOME/.config/atuin"
@@ -33,6 +33,6 @@ copy_atuin_config() {
     if [[ -d "$source_dir" ]]; then
         symlink_if_needed "$source_dir" "$dest_dir"
     else
-        warning "Atuin config not found: $source_dir"
+        ui_warn "Atuin config not found: $source_dir"
     fi
 }

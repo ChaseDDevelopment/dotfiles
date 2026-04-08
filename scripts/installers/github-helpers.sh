@@ -26,7 +26,7 @@ github_latest_version() {
     fi
 
     if [[ -z "$version" ]]; then
-        warning "Could not determine latest version for $repo"
+        ui_warn "Could not determine latest version for $repo"
         return 1
     fi
 
@@ -42,7 +42,7 @@ detect_platform() {
     case "$PLATFORM_OS" in
         Linux|Darwin) ;;
         *)
-            warning "Unsupported OS: $PLATFORM_OS"
+            ui_warn "Unsupported OS: $PLATFORM_OS"
             return 1
             ;;
     esac
@@ -50,7 +50,7 @@ detect_platform() {
     case "$PLATFORM_ARCH" in
         x86_64|aarch64|arm64) ;;
         *)
-            warning "Unsupported architecture: $PLATFORM_ARCH"
+            ui_warn "Unsupported architecture: $PLATFORM_ARCH"
             return 1
             ;;
     esac
@@ -96,19 +96,19 @@ download_and_install_binary() {
     local tmp_dir
     tmp_dir=$(mktemp -d)
 
-    substep "Downloading $binary_name..."
+    ui_info "Downloading $binary_name..."
 
     if [[ "$download_type" == "binary" ]]; then
         local tmp_file="$tmp_dir/$binary_name"
         if ! curl -sL "$url" -o "$tmp_file"; then
-            warning "Failed to download $binary_name"
+            ui_warn "Failed to download $binary_name"
             rm -rf "$tmp_dir"
             return 1
         fi
         sudo install -m 755 "$tmp_file" "/usr/local/bin/$binary_name"
     else
         if ! curl -sL "$url" | tar -xz -C "$tmp_dir"; then
-            warning "Failed to download $binary_name"
+            ui_warn "Failed to download $binary_name"
             rm -rf "$tmp_dir"
             return 1
         fi
@@ -122,7 +122,7 @@ download_and_install_binary() {
         fi
 
         if [[ -z "$bin_path" ]]; then
-            warning "Failed to find $binary_name binary in archive"
+            ui_warn "Failed to find $binary_name binary in archive"
             rm -rf "$tmp_dir"
             return 1
         fi
@@ -130,6 +130,6 @@ download_and_install_binary() {
         sudo install -m 755 "$bin_path" "/usr/local/bin/$binary_name"
     fi
 
-    substep "Installed $binary_name to /usr/local/bin/$binary_name"
+    ui_info "Installed $binary_name to /usr/local/bin/$binary_name"
     rm -rf "$tmp_dir"
 }

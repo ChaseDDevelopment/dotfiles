@@ -7,11 +7,11 @@
 # =============================================================================
 
 setup_tmux() {
-    substep "Starting Tmux setup"
-    
+    ui_info "Starting Tmux setup"
+
     # Check if Tmux is installed
     if ! check_command tmux; then
-        error "Tmux is not installed. Run package installation first."
+        ui_error "Tmux is not installed. Run package installation first."
         return 1
     fi
     
@@ -31,18 +31,18 @@ setup_tmux() {
     
     # Theme will be applied automatically by TPM
     
-    success "Tmux setup completed"
+    ui_success "Tmux setup completed"
 }
 
 copy_tmux_config() {
-    substep "Symlinking Tmux configuration..."
+    ui_info "Symlinking Tmux configuration..."
 
     local source_dir="$SCRIPT_DIR/configs/tmux"
     local dest_dir="$HOME/.config/tmux"
     local legacy_dest="$HOME/.tmux.conf"
 
     if [[ ! -d "$source_dir" ]]; then
-        error "Tmux configuration directory not found: $source_dir"
+        ui_error "Tmux configuration directory not found: $source_dir"
         return 1
     fi
 
@@ -54,25 +54,25 @@ copy_tmux_config() {
 }
 
 install_tpm() {
-    substep "Installing TPM (Tmux Plugin Manager)..."
-    
+    ui_info "Installing TPM (Tmux Plugin Manager)..."
+
     local tpm_dir="$HOME/.tmux/plugins/tpm"
-    
+
     if [[ -d "$tpm_dir" ]]; then
-        substep "TPM is already installed"
+        ui_info "TPM is already installed"
         return
     fi
     
     if [[ "$DRY_RUN" == "false" ]]; then
         git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
-        substep "TPM installed successfully"
+        ui_info "TPM installed successfully"
     else
-        substep "[DRY RUN] Would clone TPM repository"
+        ui_info "[DRY RUN] Would clone TPM repository"
     fi
 }
 
 install_tmux_plugins() {
-    substep "Installing Tmux plugins..."
+    ui_info "Installing Tmux plugins..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
         # Source the tmux configuration to make sure TPM is loaded
@@ -93,43 +93,43 @@ install_tmux_plugins() {
 
             # Run the install script
             "$tpm_script"
-            substep "Tmux plugins installed"
+            ui_info "Tmux plugins installed"
             
             # Force reload configuration to apply theme
             if pgrep -x "tmux" > /dev/null; then
                 tmux source-file "$HOME/.config/tmux/tmux.conf" 2>/dev/null || true
-                substep "Tmux configuration reloaded"
+                ui_info "Tmux configuration reloaded"
             fi
         else
-            warning "TPM install script not found. Plugins will be installed on next tmux session."
+            ui_warn "TPM install script not found. Plugins will be installed on next tmux session."
         fi
     else
-        substep "[DRY RUN] Would install Tmux plugins"
+        ui_info "[DRY RUN] Would install Tmux plugins"
     fi
 }
 
 
 # Function to validate Tmux setup
 validate_tmux_setup() {
-    substep "Validating Tmux setup..."
+    ui_info "Validating Tmux setup..."
     
     local validation_passed=true
     
     # Check if Tmux is available
     if ! check_command tmux; then
-        error "Tmux is not available"
+        ui_error "Tmux is not available"
         validation_passed=false
     fi
     
     # Check if config file exists
     if [[ ! -f "$HOME/.config/tmux/tmux.conf" ]]; then
-        error "Tmux configuration file missing: $HOME/.config/tmux/tmux.conf"
+        ui_error "Tmux configuration file missing: $HOME/.config/tmux/tmux.conf"
         validation_passed=false
     fi
     
     # Check if TPM directory exists
     if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
-        error "TPM directory missing: $HOME/.tmux/plugins/tpm"
+        ui_error "TPM directory missing: $HOME/.tmux/plugins/tpm"
         validation_passed=false
     fi
     
@@ -138,16 +138,16 @@ validate_tmux_setup() {
         if ! tmux -f "$HOME/.config/tmux/tmux.conf" list-sessions 2>/dev/null; then
             # This is expected to fail if no sessions exist, but will catch syntax errors
             if ! tmux -f "$HOME/.config/tmux/tmux.conf" new-session -d -s validation_test \; kill-session -t validation_test 2>/dev/null; then
-                error "Tmux configuration has syntax errors"
+                ui_error "Tmux configuration has syntax errors"
                 validation_passed=false
             fi
         fi
     fi
     
     if [[ "$validation_passed" == "true" ]]; then
-        success "Tmux setup validation passed"
+        ui_success "Tmux setup validation passed"
     else
-        error "Tmux setup validation failed"
+        ui_error "Tmux setup validation failed"
         return 1
     fi
 }
@@ -155,7 +155,7 @@ validate_tmux_setup() {
 
 # Function to start tmux with plugin installation
 start_tmux_with_plugins() {
-    substep "Starting Tmux session to complete plugin installation..."
+    ui_info "Starting Tmux session to complete plugin installation..."
     
     if [[ "$DRY_RUN" == "false" ]]; then
         # Create a temporary session to trigger plugin installation
@@ -170,28 +170,28 @@ start_tmux_with_plugins() {
         # Kill the temporary session
         tmux kill-session -t setup_session 2>/dev/null || true
         
-        substep "Plugin installation completed"
+        ui_info "Plugin installation completed"
     else
-        substep "[DRY RUN] Would start tmux session for plugin installation"
+        ui_info "[DRY RUN] Would start tmux session for plugin installation"
     fi
 }
 
 # Function to display Tmux key bindings info
 show_tmux_info() {
     echo
-    info "Tmux is configured with the following key bindings:"
-    echo -e "  ${CYAN}Prefix:${NC} Ctrl+Space (instead of Ctrl+b)"
-    echo -e "  ${CYAN}Split horizontal:${NC} Prefix + %"
-    echo -e "  ${CYAN}Split vertical:${NC} Prefix + \""
-    echo -e "  ${CYAN}New window:${NC} Prefix + c"
-    echo -e "  ${CYAN}Previous window:${NC} Alt+H"
-    echo -e "  ${CYAN}Next window:${NC} Alt+L"
-    echo -e "  ${CYAN}Copy mode:${NC} Prefix + [ (vi-mode enabled)"
+    ui_info "Tmux is configured with the following key bindings:"
+    ui_info "  Prefix: Ctrl+Space (instead of Ctrl+b)"
+    ui_info "  Split horizontal: Prefix + %"
+    ui_info "  Split vertical: Prefix + \""
+    ui_info "  New window: Prefix + c"
+    ui_info "  Previous window: Alt+H"
+    ui_info "  Next window: Alt+L"
+    ui_info "  Copy mode: Prefix + [ (vi-mode enabled)"
     echo
-    info "Installed plugins:"
-    echo -e "  ${CYAN}•${NC} tmux-sensible (better defaults)"
-    echo -e "  ${CYAN}•${NC} vim-tmux-navigator (seamless vim/tmux navigation)"
-    echo -e "  ${CYAN}•${NC} tokyo-night-tmux (beautiful Tokyo Night theme)"
-    echo -e "  ${CYAN}•${NC} tmux-yank (copy to system clipboard)"
+    ui_info "Installed plugins:"
+    ui_info "  - tmux-sensible (better defaults)"
+    ui_info "  - vim-tmux-navigator (seamless vim/tmux navigation)"
+    ui_info "  - tokyo-night-tmux (beautiful Tokyo Night theme)"
+    ui_info "  - tmux-yank (copy to system clipboard)"
     echo
 }

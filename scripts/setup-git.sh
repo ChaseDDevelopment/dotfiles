@@ -7,7 +7,7 @@
 # =============================================================================
 
 setup_git() {
-    substep "Starting Git config setup"
+    ui_info "Starting Git config setup"
 
     # Setup git config (delta pager, merge settings)
     setup_git_config
@@ -15,11 +15,11 @@ setup_git() {
     # Setup lazygit config (Catppuccin theme)
     setup_lazygit_config
 
-    success "Git config setup completed"
+    ui_success "Git config setup completed"
 }
 
 setup_git_config() {
-    substep "Symlinking Git configuration..."
+    ui_info "Symlinking Git configuration..."
 
     local source_dir="$SCRIPT_DIR/configs/git"
     local dest_dir="$HOME/.config/git"
@@ -30,12 +30,12 @@ setup_git_config() {
         backup_file "$dest_dir/config"
         symlink_if_needed "$source_dir/config" "$dest_dir/config"
     else
-        warning "Git config not found: $source_dir"
+        ui_warn "Git config not found: $source_dir"
     fi
 }
 
 setup_lazygit_config() {
-    substep "Symlinking lazygit configuration..."
+    ui_info "Symlinking lazygit configuration..."
 
     local source_dir="$SCRIPT_DIR/configs/lazygit"
     local dest_dir="$HOME/.config/lazygit"
@@ -44,6 +44,6 @@ setup_lazygit_config() {
         backup_file "$dest_dir"
         symlink_if_needed "$source_dir" "$dest_dir"
     else
-        warning "Lazygit config not found: $source_dir"
+        ui_warn "Lazygit config not found: $source_dir"
     fi
 }

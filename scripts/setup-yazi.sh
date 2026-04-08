@@ -7,11 +7,11 @@
 # =============================================================================
 
 setup_yazi() {
-    substep "Starting Yazi setup"
+    ui_info "Starting Yazi setup"
 
     # Check if yazi is installed
     if ! check_command yazi; then
-        warning "Yazi is not installed. It should be installed via install-packages.sh"
+        ui_warn "Yazi is not installed. It should be installed via install-packages.sh"
         return 0  # Don't fail the entire install for optional tool
     fi
 
@@ -24,11 +24,11 @@ setup_yazi() {
     # Install plugins from package.toml
     install_yazi_plugins
 
-    success "Yazi setup completed"
+    ui_success "Yazi setup completed"
 }
 
 copy_yazi_config() {
-    substep "Symlinking Yazi configuration..."
+    ui_info "Symlinking Yazi configuration..."
 
     local source_dir="$SCRIPT_DIR/configs/yazi"
     local dest_dir="$HOME/.config/yazi"
@@ -36,23 +36,23 @@ copy_yazi_config() {
     if [[ -d "$source_dir" ]]; then
         symlink_if_needed "$source_dir" "$dest_dir"
     else
-        warning "Yazi config not found: $source_dir"
+        ui_warn "Yazi config not found: $source_dir"
     fi
 }
 
 install_yazi_plugins() {
-    substep "Installing Yazi plugins from package.toml..."
+    ui_info "Installing Yazi plugins from package.toml..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install Yazi plugins via 'ya pkg install'"
+        ui_info "[DRY RUN] Would install Yazi plugins via 'ya pkg install'"
         return
     fi
 
     # ya pkg install reads package.toml and installs all listed plugins/flavors
     if check_command ya; then
-        ya pkg install || warning "Failed to install some Yazi plugins"
+        ya pkg install || ui_warn "Failed to install some Yazi plugins"
     else
-        warning "'ya' CLI not found — plugins will need to be installed manually"
-        warning "Run 'ya pkg install' after yazi is available"
+        ui_warn "'ya' CLI not found — plugins will need to be installed manually"
+        ui_warn "Run 'ya pkg install' after yazi is available"
     fi
 }

@@ -28,14 +28,14 @@ detect_os() {
         PACKAGE_MANAGER="brew"
 
         if ! check_command brew; then
-            substep "Installing Homebrew..."
+            ui_info "Installing Homebrew..."
             if [[ "$DRY_RUN" == "false" ]]; then
                 local brew_installer="/tmp/homebrew-install.sh"
-                substep "Downloading Homebrew installer..."
+                ui_info "Downloading Homebrew installer..."
                 curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$brew_installer"
 
                 if [[ -f "$brew_installer" && -s "$brew_installer" ]]; then
-                    substep "Executing Homebrew installer..."
+                    ui_info "Executing Homebrew installer..."
                     /bin/bash "$brew_installer"
                     rm -f "$brew_installer"
 
@@ -45,7 +45,7 @@ detect_os() {
                         eval "$(/usr/local/bin/brew shellenv)"
                     fi
                 else
-                    error "Failed to download Homebrew installer"
+                    ui_error "Failed to download Homebrew installer"
                     rm -f "$brew_installer"
                     exit 1
                 fi
@@ -92,15 +92,15 @@ detect_os() {
             UPDATE_CMD_ARRAY=("sudo" "zypper" "update" "-y")
 
         else
-            error "Unsupported package manager. Please install packages manually."
+            ui_error "Unsupported package manager. Please install packages manually."
             exit 1
         fi
 
     else
-        error "Unsupported operating system"
+        ui_error "Unsupported operating system"
         exit 1
     fi
 
-    substep "OS: $OS_NAME $OS_VERSION ($OS_ARCH)"
-    substep "Package Manager: $PACKAGE_MANAGER"
+    ui_info "OS: $OS_NAME $OS_VERSION ($OS_ARCH)"
+    ui_info "Package Manager: $PACKAGE_MANAGER"
 }

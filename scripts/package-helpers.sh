@@ -91,21 +91,23 @@ install_package() {
 
     for package in $package_names; do
         if ! check_package_installed "$package"; then
-            if ! run_with_spinner "Installing $package" "${INSTALL_CMD_ARRAY[@]}" "$package"; then
+            plan_add "  $package" "Package" "would install"
+            if ! ui_spin "Installing $package" "${INSTALL_CMD_ARRAY[@]}" "$package"; then
                 case "$package" in
                     "git"|"curl"|"fish"|"tmux"|"neovim")
-                        error "Failed to install critical package: $package"
-                        error "Cannot continue without this package. Please install manually and retry."
+                        ui_error "Failed to install critical package: $package"
+                        ui_error "Cannot continue without this package. Please install manually and retry."
                         exit 1
                         ;;
                     *)
-                        warning "Failed to install optional package: $package"
-                        warning "Some features may not work correctly."
+                        ui_warn "Failed to install optional package: $package"
+                        ui_warn "Some features may not work correctly."
                         ;;
                 esac
             fi
         else
-            success "$package is already installed"
+            plan_add "  $package" "Package" "already installed"
+            ui_info "$package is already installed"
         fi
     done
 }
@@ -138,8 +140,8 @@ check_package_installed() {
 
 # Update all system packages using the detected package manager.
 update_system() {
-    if ! run_with_spinner "Updating system packages" "${UPDATE_CMD_ARRAY[@]}"; then
-        warning "System update failed. This is often non-critical."
-        warning "You may want to run system updates manually later."
+    if ! ui_spin "Updating system packages" "${UPDATE_CMD_ARRAY[@]}"; then
+        ui_warn "System update failed. This is often non-critical."
+        ui_warn "You may want to run system updates manually later."
     fi
 }

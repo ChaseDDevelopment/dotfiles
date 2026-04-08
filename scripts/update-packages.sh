@@ -21,7 +21,7 @@ readonly CARGO_TOOLS=(
 )
 
 update_all_packages() {
-    step "Updating all installed packages"
+    ui_step "Updating all installed packages"
 
     update_system_packages
     update_rust_toolchain
@@ -36,20 +36,20 @@ update_all_packages() {
     update_yazi_plugins
     update_tmux_plugins
 
-    success "All updates completed"
+    ui_success "All updates completed"
 
     echo
-    info "Note: Zsh plugins (Antidote) update automatically, or run:"
-    echo -e "  ${CYAN}antidote update${NC}"
-    info "Neovim plugins can be updated inside Neovim:"
-    echo -e "  ${CYAN}:lua vim.pack.update()${NC}"
+    ui_info "Note: Zsh plugins (Antidote) update automatically, or run:"
+    ui_info "  antidote update"
+    ui_info "Neovim plugins can be updated inside Neovim:"
+    ui_info "  :lua vim.pack.update()"
 }
 
 # -----------------------------------------------------------------------------
 # System packages
 # -----------------------------------------------------------------------------
 update_system_packages() {
-    substep "Updating system packages..."
+    ui_info "Updating system packages..."
     update_system
 }
 
@@ -61,11 +61,11 @@ update_rust_toolchain() {
         return
     fi
 
-    substep "Updating Rust toolchain..."
+    ui_info "Updating Rust toolchain..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        rustup update || warning "Failed to update Rust toolchain"
+        rustup update || ui_warn "Failed to update Rust toolchain"
     else
-        substep "[DRY RUN] Would run: rustup update"
+        ui_info "[DRY RUN] Would run: rustup update"
     fi
 }
 
@@ -77,18 +77,18 @@ update_cargo_binaries() {
         return
     fi
 
-    substep "Updating cargo-installed binaries..."
+    ui_info "Updating cargo-installed binaries..."
 
     for entry in "${CARGO_TOOLS[@]}"; do
         local cmd="${entry%%:*}"
         local crate="${entry##*:}"
 
         if check_command "$cmd"; then
-            substep "Updating $crate..."
+            ui_info "Updating $crate..."
             if [[ "$DRY_RUN" == "false" ]]; then
-                cargo install "$crate" || warning "Failed to update $crate"
+                cargo install "$crate" || ui_warn "Failed to update $crate"
             else
-                substep "[DRY RUN] Would run: cargo install $crate"
+                ui_info "[DRY RUN] Would run: cargo install $crate"
             fi
         fi
     done
@@ -97,11 +97,11 @@ update_cargo_binaries() {
     if check_command yazi; then
         # Only update via cargo if yazi was cargo-installed (not via brew/pacman)
         if [[ "$PACKAGE_MANAGER" != "brew" && "$PACKAGE_MANAGER" != "pacman" ]]; then
-            substep "Updating yazi..."
+            ui_info "Updating yazi..."
             if [[ "$DRY_RUN" == "false" ]]; then
-                cargo install --force yazi-build || warning "Failed to update yazi"
+                cargo install --force yazi-build || ui_warn "Failed to update yazi"
             else
-                substep "[DRY RUN] Would run: cargo install --force yazi-build"
+                ui_info "[DRY RUN] Would run: cargo install --force yazi-build"
             fi
         fi
     fi
@@ -115,18 +115,18 @@ update_uv_ecosystem() {
         return
     fi
 
-    substep "Updating uv..."
+    ui_info "Updating uv..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        uv self update || warning "Failed to update uv"
+        uv self update || ui_warn "Failed to update uv"
     else
-        substep "[DRY RUN] Would run: uv self update"
+        ui_info "[DRY RUN] Would run: uv self update"
     fi
 
-    substep "Updating uv-managed tools..."
+    ui_info "Updating uv-managed tools..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        uv tool upgrade --all || warning "Failed to update uv tools"
+        uv tool upgrade --all || ui_warn "Failed to update uv tools"
     else
-        substep "[DRY RUN] Would run: uv tool upgrade --all"
+        ui_info "[DRY RUN] Would run: uv tool upgrade --all"
     fi
 }
 
@@ -138,11 +138,11 @@ update_bun() {
         return
     fi
 
-    substep "Updating Bun..."
+    ui_info "Updating Bun..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        bun upgrade || warning "Failed to update Bun"
+        bun upgrade || ui_warn "Failed to update Bun"
     else
-        substep "[DRY RUN] Would run: bun upgrade"
+        ui_info "[DRY RUN] Would run: bun upgrade"
     fi
 }
 
@@ -160,20 +160,20 @@ update_nvm_node() {
         return
     fi
 
-    substep "Updating Node.js via nvm..."
+    ui_info "Updating Node.js via nvm..."
 
     if [[ "$DRY_RUN" == "false" ]]; then
         # Source nvm for this session
         [ -s "$nvm_dir/nvm.sh" ] && \. "$nvm_dir/nvm.sh"
 
         if check_command nvm; then
-            nvm install --lts || warning "Failed to install latest Node LTS"
+            nvm install --lts || ui_warn "Failed to install latest Node LTS"
             nvm alias default lts/* || true
         else
-            warning "nvm could not be loaded"
+            ui_warn "nvm could not be loaded"
         fi
     else
-        substep "[DRY RUN] Would run: nvm install --lts"
+        ui_info "[DRY RUN] Would run: nvm install --lts"
     fi
 }
 
@@ -185,7 +185,7 @@ update_starship() {
         return
     fi
 
-    substep "Updating Starship..."
+    ui_info "Updating Starship..."
     if [[ "$DRY_RUN" == "false" ]]; then
         local starship_installer="/tmp/starship-install.sh"
         curl -sS https://starship.rs/install.sh -o "$starship_installer"
@@ -194,11 +194,11 @@ update_starship() {
             sh "$starship_installer" --yes
             rm -f "$starship_installer"
         else
-            warning "Failed to download Starship installer"
+            ui_warn "Failed to download Starship installer"
             rm -f "$starship_installer"
         fi
     else
-        substep "[DRY RUN] Would re-run Starship installer"
+        ui_info "[DRY RUN] Would re-run Starship installer"
     fi
 }
 
@@ -210,23 +210,23 @@ update_atuin() {
         return
     fi
 
-    substep "Updating Atuin..."
+    ui_info "Updating Atuin..."
     if [[ "$DRY_RUN" == "false" ]]; then
         case "$PACKAGE_MANAGER" in
             "brew")
-                brew upgrade atuin || warning "Failed to update Atuin"
+                brew upgrade atuin || ui_warn "Failed to update Atuin"
                 ;;
             "pacman")
-                sudo pacman -S --noconfirm atuin || warning "Failed to update Atuin"
+                sudo pacman -S --noconfirm atuin || ui_warn "Failed to update Atuin"
                 ;;
             *)
                 # Re-run official installer for updates
                 curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh \
-                    || warning "Failed to update Atuin"
+                    || ui_warn "Failed to update Atuin"
                 ;;
         esac
     else
-        substep "[DRY RUN] Would update Atuin via $PACKAGE_MANAGER or official installer"
+        ui_info "[DRY RUN] Would update Atuin via $PACKAGE_MANAGER or official installer"
     fi
 }
 
@@ -238,19 +238,19 @@ update_neovim_binary() {
         return
     fi
 
-    substep "Updating Neovim..."
+    ui_info "Updating Neovim..."
     if [[ "$DRY_RUN" == "false" ]]; then
         case "$PACKAGE_MANAGER" in
             "brew")
-                brew upgrade neovim || warning "Failed to update Neovim"
+                brew upgrade neovim || ui_warn "Failed to update Neovim"
                 ;;
             "pacman")
                 if check_command yay; then
-                    yay -S --noconfirm neovim-git || warning "Failed to update Neovim"
+                    yay -S --noconfirm neovim-git || ui_warn "Failed to update Neovim"
                 elif check_command paru; then
-                    paru -S --noconfirm neovim-git || warning "Failed to update Neovim"
+                    paru -S --noconfirm neovim-git || ui_warn "Failed to update Neovim"
                 else
-                    sudo pacman -S --noconfirm neovim || warning "Failed to update Neovim"
+                    sudo pacman -S --noconfirm neovim || ui_warn "Failed to update Neovim"
                 fi
                 ;;
             "apt")
@@ -258,11 +258,11 @@ update_neovim_binary() {
                 install_neovim
                 ;;
             *)
-                "${UPDATE_CMD_ARRAY[@]}" || warning "Failed to update Neovim"
+                "${UPDATE_CMD_ARRAY[@]}" || ui_warn "Failed to update Neovim"
                 ;;
         esac
     else
-        substep "[DRY RUN] Would update Neovim via $PACKAGE_MANAGER"
+        ui_info "[DRY RUN] Would update Neovim via $PACKAGE_MANAGER"
     fi
 }
 
@@ -274,14 +274,14 @@ update_dotnet() {
         return
     fi
 
-    substep "Updating .NET SDK..."
+    ui_info "Updating .NET SDK..."
     if [[ "$DRY_RUN" == "false" ]]; then
         case "$PACKAGE_MANAGER" in
             "brew")
-                brew upgrade dotnet-sdk || warning "Failed to update .NET SDK"
+                brew upgrade dotnet-sdk || ui_warn "Failed to update .NET SDK"
                 ;;
             "pacman")
-                sudo pacman -S --noconfirm dotnet-sdk || warning "Failed to update .NET SDK"
+                sudo pacman -S --noconfirm dotnet-sdk || ui_warn "Failed to update .NET SDK"
                 ;;
             *)
                 # Re-run dotnet-install.sh for updates
@@ -293,7 +293,7 @@ update_dotnet() {
                 ;;
         esac
     else
-        substep "[DRY RUN] Would update .NET SDK"
+        ui_info "[DRY RUN] Would update .NET SDK"
     fi
 }
 
@@ -305,11 +305,11 @@ update_yazi_plugins() {
         return
     fi
 
-    substep "Updating Yazi plugins..."
+    ui_info "Updating Yazi plugins..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        ya pkg upgrade || warning "Failed to update Yazi plugins"
+        ya pkg upgrade || ui_warn "Failed to update Yazi plugins"
     else
-        substep "[DRY RUN] Would run: ya pkg upgrade"
+        ui_info "[DRY RUN] Would run: ya pkg upgrade"
     fi
 }
 
@@ -323,10 +323,10 @@ update_tmux_plugins() {
         return
     fi
 
-    substep "Updating Tmux plugins..."
+    ui_info "Updating Tmux plugins..."
     if [[ "$DRY_RUN" == "false" ]]; then
-        "$tpm_update" all || warning "Failed to update Tmux plugins"
+        "$tpm_update" all || ui_warn "Failed to update Tmux plugins"
     else
-        substep "[DRY RUN] Would run TPM update_plugin.sh all"
+        ui_info "[DRY RUN] Would run TPM update_plugin.sh all"
     fi
 }

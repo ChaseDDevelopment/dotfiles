@@ -10,11 +10,11 @@ readonly STARSHIP_CONFIG_DIR="$HOME/.config"
 readonly STARSHIP_CONFIG_FILE="$STARSHIP_CONFIG_DIR/starship.toml"
 
 setup_starship() {
-    substep "Starting Starship prompt setup"
-    
+    ui_info "Starting Starship prompt setup"
+
     # Check if Starship is installed
     if ! check_command starship; then
-        error "Starship is not installed. Run package installation first."
+        ui_error "Starship is not installed. Run package installation first."
         return 1
     fi
     
@@ -27,17 +27,17 @@ setup_starship() {
     # Configure shell integration
     setup_shell_integration
     
-    success "Starship prompt setup completed"
+    ui_success "Starship prompt setup completed"
 }
 
 backup_starship_config() {
-    substep "Backing up existing Starship configuration..."
+    ui_info "Backing up existing Starship configuration..."
     
     backup_file "$STARSHIP_CONFIG_FILE"
 }
 
 setup_starship_config() {
-    substep "Setting up Starship configuration..."
+    ui_info "Setting up Starship configuration..."
     
     # Create config directory
     if [[ "$DRY_RUN" == "false" ]]; then
@@ -49,11 +49,11 @@ setup_starship_config() {
     
     if [[ -f "$custom_config" ]]; then
         # Use custom configuration (symlink for auto-sync to repo)
-        substep "Symlinking custom Starship configuration..."
+        ui_info "Symlinking custom Starship configuration..."
         symlink_if_needed "$custom_config" "$STARSHIP_CONFIG_FILE"
     else
         # Generate Catppuccin preset configuration
-        substep "Generating Catppuccin preset configuration..."
+        ui_info "Generating Catppuccin preset configuration..."
         generate_catppuccin_config
     fi
 }
@@ -62,14 +62,14 @@ generate_catppuccin_config() {
     if [[ "$DRY_RUN" == "false" ]]; then
         # Use Starship's preset command to generate Catppuccin config
         starship preset catppuccin-powerline -o "$STARSHIP_CONFIG_FILE"
-        substep "Generated Catppuccin powerline preset"
+        ui_info "Generated Catppuccin powerline preset"
     else
-        substep "[DRY RUN] Would generate Catppuccin preset configuration"
+        ui_info "[DRY RUN] Would generate Catppuccin preset configuration"
     fi
 }
 
 setup_shell_integration() {
-    substep "Setting up shell integration..."
+    ui_info "Setting up shell integration..."
 
     # Zsh shell integration is handled in our zsh config (.zshrc)
     # The config includes: eval "$(starship init zsh)"
@@ -79,45 +79,45 @@ setup_shell_integration() {
 
 show_shell_integration_info() {
     echo
-    info "Shell integration instructions:"
+    ui_info "Shell integration instructions:"
     echo
-    echo -e "${CYAN}Zsh (already configured):${NC}"
-    echo -e "  ${WHITE}eval \"\$(starship init zsh)\"${NC}"
+    ui_info "Zsh (already configured):"
+    ui_info "  eval \"\$(starship init zsh)\""
     echo
-    echo -e "${CYAN}Bash:${NC}"
-    echo -e "  Add to ${WHITE}~/.bashrc${NC}: ${WHITE}eval \"\$(starship init bash)\"${NC}"
+    ui_info "Bash:"
+    ui_info "  Add to ~/.bashrc: eval \"\$(starship init bash)\""
     echo
 }
 
 # Function to validate Starship setup
 validate_starship_setup() {
-    substep "Validating Starship setup..."
+    ui_info "Validating Starship setup..."
     
     local validation_passed=true
     
     # Check if Starship is available
     if ! check_command starship; then
-        error "Starship is not available"
+        ui_error "Starship is not available"
         validation_passed=false
     fi
     
     # Check if config file exists
     if [[ ! -f "$STARSHIP_CONFIG_FILE" ]]; then
-        error "Starship configuration file missing: $STARSHIP_CONFIG_FILE"
+        ui_error "Starship configuration file missing: $STARSHIP_CONFIG_FILE"
         validation_passed=false
     fi
     
     # Validate configuration syntax
     if [[ "$DRY_RUN" == "false" ]]; then
         if ! starship config 2>/dev/null | grep -q "format"; then
-            warning "Starship configuration may have syntax issues"
+            ui_warn "Starship configuration may have syntax issues"
         fi
     fi
     
     if [[ "$validation_passed" == "true" ]]; then
-        success "Starship setup validation passed"
+        ui_success "Starship setup validation passed"
     else
-        error "Starship setup validation failed"
+        ui_error "Starship setup validation failed"
         return 1
     fi
 }
@@ -125,31 +125,31 @@ validate_starship_setup() {
 # Function to show available presets
 show_starship_presets() {
     echo
-    info "Available Starship presets (you can change anytime):"
-    echo -e "  ${CYAN}starship preset catppuccin-powerline${NC} - Current preset"
-    echo -e "  ${CYAN}starship preset nerd-font-symbols${NC} - Nerd font symbols"
-    echo -e "  ${CYAN}starship preset no-nerd-font${NC} - No nerd fonts required"
-    echo -e "  ${CYAN}starship preset minimal${NC} - Minimal prompt"
-    echo -e "  ${CYAN}starship preset pure-preset${NC} - Pure-like prompt"
+    ui_info "Available Starship presets (you can change anytime):"
+    ui_info "  starship preset catppuccin-powerline - Current preset"
+    ui_info "  starship preset nerd-font-symbols - Nerd font symbols"
+    ui_info "  starship preset no-nerd-font - No nerd fonts required"
+    ui_info "  starship preset minimal - Minimal prompt"
+    ui_info "  starship preset pure-preset - Pure-like prompt"
     echo
-    info "To change preset:"
-    echo -e "  ${WHITE}starship preset [preset-name] -o ~/.config/starship.toml${NC}"
+    ui_info "To change preset:"
+    ui_info "  starship preset [preset-name] -o ~/.config/starship.toml"
     echo
 }
 
 # Function to display Starship info
 show_starship_info() {
     echo
-    info "Starship prompt is configured with:"
-    echo -e "  ${CYAN}Theme:${NC} Catppuccin Powerline"
-    echo -e "  ${CYAN}Config:${NC} $STARSHIP_CONFIG_FILE"
+    ui_info "Starship prompt is configured with:"
+    ui_info "  Theme: Catppuccin Powerline"
+    ui_info "  Config: $STARSHIP_CONFIG_FILE"
     echo
-    info "Features enabled:"
-    echo -e "  ${CYAN}•${NC} Git status and branch information"
-    echo -e "  ${CYAN}•${NC} Programming language detection"
-    echo -e "  ${CYAN}•${NC} Directory information"
-    echo -e "  ${CYAN}•${NC} Command execution time"
-    echo -e "  ${CYAN}•${NC} Error status indicators"
+    ui_info "Features enabled:"
+    ui_info "  - Git status and branch information"
+    ui_info "  - Programming language detection"
+    ui_info "  - Directory information"
+    ui_info "  - Command execution time"
+    ui_info "  - Error status indicators"
     echo
     show_starship_presets
 }

@@ -7,11 +7,11 @@
 # =============================================================================
 
 setup_zsh() {
-    substep "Starting Zsh shell setup"
+    ui_info "Starting Zsh shell setup"
 
     # Check if Zsh is installed
     if ! check_command zsh; then
-        error "Zsh shell is not installed. Run package installation first."
+        ui_error "Zsh shell is not installed. Run package installation first."
         return 1
     fi
 
@@ -41,11 +41,11 @@ setup_zsh() {
     # Set Zsh as default shell
     set_zsh_default_shell
 
-    success "Zsh shell setup completed"
+    ui_success "Zsh shell setup completed"
 }
 
 create_xdg_directories() {
-    substep "Creating XDG directories..."
+    ui_info "Creating XDG directories..."
 
     if [[ "$DRY_RUN" == "false" ]]; then
         mkdir -p "$HOME/.config"
@@ -56,9 +56,9 @@ create_xdg_directories() {
         mkdir -p "$HOME/.cache"
         mkdir -p "$HOME/.cache/zsh"
         mkdir -p "$HOME/.cache/ohmyzsh/completions"
-        substep "XDG directories created"
+        ui_info "XDG directories created"
     else
-        substep "[DRY RUN] Would create XDG directories"
+        ui_info "[DRY RUN] Would create XDG directories"
     fi
 }
 
@@ -69,13 +69,13 @@ create_zsh_directories() {
 }
 
 copy_zsh_configs() {
-    substep "Symlinking Zsh configurations..."
+    ui_info "Symlinking Zsh configurations..."
 
     local source_dir="$SCRIPT_DIR/configs/zsh"
     local dest_dir="$HOME/.config/zsh"
 
     if [[ ! -d "$source_dir" ]]; then
-        error "Zsh config source not found: $source_dir"
+        ui_error "Zsh config source not found: $source_dir"
         return 1
     fi
 
@@ -83,7 +83,7 @@ copy_zsh_configs() {
 }
 
 setup_root_zshenv() {
-    substep "Creating root .zshenv symlink..."
+    ui_info "Creating root .zshenv symlink..."
 
     # Remove stale .zshrc (ZDOTDIR points to ~/.config/zsh for .zshrc)
     if [[ "$DRY_RUN" == "false" ]]; then
@@ -94,20 +94,20 @@ setup_root_zshenv() {
 }
 
 install_antidote() {
-    substep "Installing Antidote plugin manager..."
+    ui_info "Installing Antidote plugin manager..."
 
     # Check if already installed via Homebrew
     if [[ -f "/opt/homebrew/opt/antidote/share/antidote/antidote.zsh" ]] || \
        [[ -f "/usr/local/opt/antidote/share/antidote/antidote.zsh" ]] || \
        [[ -f "/home/linuxbrew/.linuxbrew/opt/antidote/share/antidote/antidote.zsh" ]]; then
-        substep "Antidote already installed via Homebrew"
+        ui_info "Antidote already installed via Homebrew"
         return
     fi
 
     # Check if already installed via git
     local antidote_dir="$HOME/.config/zsh/.antidote"
     if [[ -d "$antidote_dir" ]]; then
-        substep "Antidote already installed via git clone"
+        ui_info "Antidote already installed via git clone"
         return
     fi
 
@@ -115,19 +115,19 @@ install_antidote() {
         # Install via Homebrew if available
         if check_command brew; then
             brew install antidote
-            substep "Antidote installed via Homebrew"
+            ui_info "Antidote installed via Homebrew"
         else
             # Fallback: Install via git clone
             git clone --depth=1 https://github.com/mattmc3/antidote.git "$antidote_dir"
-            substep "Antidote installed via git clone to $antidote_dir"
+            ui_info "Antidote installed via git clone to $antidote_dir"
         fi
     else
-        substep "[DRY RUN] Would install Antidote"
+        ui_info "[DRY RUN] Would install Antidote"
     fi
 }
 
 compile_antidote_plugins() {
-    substep "Compiling Antidote plugins..."
+    ui_info "Compiling Antidote plugins..."
 
     if [[ "$DRY_RUN" == "false" ]]; then
         local plugins_txt="$HOME/.config/zsh/plugins/.zsh_plugins.txt"
@@ -149,17 +149,17 @@ compile_antidote_plugins() {
                 fi
                 antidote bundle < '$plugins_txt' > '$plugins_zsh' 2>/dev/null
             " 2>/dev/null || true
-            substep "Antidote plugins compiled (or will compile on first shell start)"
+            ui_info "Antidote plugins compiled (or will compile on first shell start)"
         else
-            warning "Plugin manifest not found: $plugins_txt"
+            ui_warn "Plugin manifest not found: $plugins_txt"
         fi
     else
-        substep "[DRY RUN] Would compile Antidote plugins"
+        ui_info "[DRY RUN] Would compile Antidote plugins"
     fi
 }
 
 set_zsh_default_shell() {
-    substep "Setting Zsh as default shell..."
+    ui_info "Setting Zsh as default shell..."
 
     if [[ "$DRY_RUN" == "false" ]]; then
         local zsh_path
@@ -171,23 +171,23 @@ set_zsh_default_shell() {
                 echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
             fi
             chsh -s "$zsh_path"
-            substep "Zsh set as default shell"
+            ui_info "Zsh set as default shell"
         else
-            substep "Zsh is already the default shell"
+            ui_info "Zsh is already the default shell"
         fi
     else
-        substep "[DRY RUN] Would set Zsh as default shell"
+        ui_info "[DRY RUN] Would set Zsh as default shell"
     fi
 }
 
 validate_zsh_setup() {
-    substep "Validating Zsh setup..."
+    ui_info "Validating Zsh setup..."
 
     local validation_passed=true
 
     # Check if Zsh is available
     if ! check_command zsh; then
-        error "Zsh shell is not available"
+        ui_error "Zsh shell is not available"
         validation_passed=false
     fi
 
@@ -200,15 +200,15 @@ validate_zsh_setup() {
 
     for file in "${required_files[@]}"; do
         if [[ ! -f "$file" ]]; then
-            error "Required file missing: $file"
+            ui_error "Required file missing: $file"
             validation_passed=false
         fi
     done
 
     if [[ "$validation_passed" == "true" ]]; then
-        success "Zsh setup validation passed"
+        ui_success "Zsh setup validation passed"
     else
-        error "Zsh setup validation failed"
+        ui_error "Zsh setup validation failed"
         return 1
     fi
 }

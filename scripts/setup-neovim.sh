@@ -9,11 +9,11 @@
 readonly NEOVIM_CONFIG_DIR="$HOME/.config/nvim"
 
 setup_neovim() {
-    substep "Starting Neovim setup"
+    ui_info "Starting Neovim setup"
 
     # Check if Neovim is installed
     if ! check_command nvim; then
-        error "Neovim is not installed. Run package installation first."
+        ui_error "Neovim is not installed. Run package installation first."
         return 1
     fi
 
@@ -32,11 +32,11 @@ setup_neovim() {
     # Initialize vim.pack plugins
     initialize_neovim
 
-    success "Neovim setup completed"
+    ui_success "Neovim setup completed"
 }
 
 check_neovim_version() {
-    substep "Checking Neovim version..."
+    ui_info "Checking Neovim version..."
 
     local nvim_version
     nvim_version=$(nvim --version 2>/dev/null | head -n1 | sed -n 's/.*v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
@@ -44,27 +44,27 @@ check_neovim_version() {
     local required_version="0.12.0"
 
     if [[ -z "$nvim_version" ]]; then
-        warning "Could not determine Neovim version. Please ensure Neovim >= $required_version is installed."
-        substep "Continuing with setup (version check skipped)..."
+        ui_warn "Could not determine Neovim version. Please ensure Neovim >= $required_version is installed."
+        ui_info "Continuing with setup (version check skipped)..."
         return 0
     fi
 
     if command -v python3 &>/dev/null; then
         if python3 -c "import sys; v='$nvim_version'.split('.'); r='$required_version'.split('.'); sys.exit(0 if [int(x) for x in v] >= [int(x) for x in r] else 1)" 2>/dev/null; then
-            substep "Neovim version $nvim_version is compatible"
+            ui_info "Neovim version $nvim_version is compatible"
         else
-            error "Neovim version $nvim_version is too old. vim.pack requires >= $required_version"
-            error "Please update Neovim to a newer version"
+            ui_error "Neovim version $nvim_version is too old. vim.pack requires >= $required_version"
+            ui_error "Please update Neovim to a newer version"
             return 1
         fi
     else
-        substep "Neovim version: $nvim_version (ensure it's >= $required_version)"
-        warning "Python not available for precise version comparison"
+        ui_info "Neovim version: $nvim_version (ensure it's >= $required_version)"
+        ui_warn "Python not available for precise version comparison"
     fi
 }
 
 backup_neovim_config() {
-    substep "Backing up existing Neovim configuration..."
+    ui_info "Backing up existing Neovim configuration..."
 
     backup_file "$NEOVIM_CONFIG_DIR"
     backup_file "$HOME/.local/share/nvim"
@@ -73,12 +73,12 @@ backup_neovim_config() {
 }
 
 copy_neovim_config() {
-    substep "Copying Neovim configuration..."
+    ui_info "Copying Neovim configuration..."
 
     local source_dir="$SCRIPT_DIR/configs/nvim"
 
     if [[ ! -d "$source_dir" ]]; then
-        error "Neovim config source not found: $source_dir"
+        ui_error "Neovim config source not found: $source_dir"
         return 1
     fi
 
@@ -86,19 +86,19 @@ copy_neovim_config() {
 }
 
 setup_neovim_prerequisites() {
-    substep "Setting up Neovim prerequisites..."
+    ui_info "Setting up Neovim prerequisites..."
 
     if ! check_command git; then
-        warning "Git not found. Some plugins may not install correctly."
+        ui_warn "Git not found. Some plugins may not install correctly."
     fi
 
     if ! check_command node; then
-        warning "Node.js not found. Some language servers may not work."
+        ui_warn "Node.js not found. Some language servers may not work."
     fi
 
     if ! check_command cargo; then
-        warning "Cargo not found. blink.cmp Rust fuzzy matcher will not be built."
-        warning "Install Rust via rustup: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+        ui_warn "Cargo not found. blink.cmp Rust fuzzy matcher will not be built."
+        ui_warn "Install Rust via rustup: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
     fi
 
     if [[ "$DRY_RUN" == "false" ]]; then
@@ -109,75 +109,75 @@ setup_neovim_prerequisites() {
 }
 
 initialize_neovim() {
-    substep "Initializing Neovim with vim.pack..."
+    ui_info "Initializing Neovim with vim.pack..."
 
     if [[ "$DRY_RUN" == "false" ]]; then
         if [[ -f "$NEOVIM_CONFIG_DIR/init.lua" ]]; then
-            substep "vim.pack configuration is ready"
-            substep "Plugins will be installed on first Neovim startup"
+            ui_info "vim.pack configuration is ready"
+            ui_info "Plugins will be installed on first Neovim startup"
 
             # Build blink.cmp Rust fuzzy matcher if cargo is available
             local blink_dir="$HOME/.local/share/nvim/site/pack/core/opt/blink.cmp"
             if check_command cargo && [[ -d "$blink_dir" ]]; then
-                substep "Building blink.cmp Rust fuzzy matcher..."
+                ui_info "Building blink.cmp Rust fuzzy matcher..."
                 if (cd "$blink_dir" && cargo build --release) 2>/dev/null; then
-                    substep "blink.cmp Rust binary built successfully"
+                    ui_info "blink.cmp Rust binary built successfully"
                 else
-                    warning "Failed to build blink.cmp Rust binary"
-                    warning "Falling back to Lua fuzzy matcher (still works fine)"
+                    ui_warn "Failed to build blink.cmp Rust binary"
+                    ui_warn "Falling back to Lua fuzzy matcher (still works fine)"
                 fi
             fi
         else
-            error "Neovim configuration not found or invalid"
+            ui_error "Neovim configuration not found or invalid"
             return 1
         fi
     else
-        substep "[DRY RUN] Would initialize vim.pack configuration"
+        ui_info "[DRY RUN] Would initialize vim.pack configuration"
     fi
 }
 
 validate_neovim_setup() {
-    substep "Validating Neovim setup..."
+    ui_info "Validating Neovim setup..."
 
     local validation_passed=true
 
     if ! check_command nvim; then
-        error "Neovim is not available"
+        ui_error "Neovim is not available"
         validation_passed=false
     fi
 
     if [[ ! -d "$NEOVIM_CONFIG_DIR" ]]; then
-        error "Neovim configuration directory missing: $NEOVIM_CONFIG_DIR"
+        ui_error "Neovim configuration directory missing: $NEOVIM_CONFIG_DIR"
         validation_passed=false
     fi
 
     if [[ ! -f "$NEOVIM_CONFIG_DIR/init.lua" ]]; then
-        error "Neovim init.lua missing: $NEOVIM_CONFIG_DIR/init.lua"
+        ui_error "Neovim init.lua missing: $NEOVIM_CONFIG_DIR/init.lua"
         validation_passed=false
     fi
 
     if [[ "$validation_passed" == "true" ]]; then
-        success "Neovim setup validation passed"
+        ui_success "Neovim setup validation passed"
     else
-        error "Neovim setup validation failed"
+        ui_error "Neovim setup validation failed"
         return 1
     fi
 }
 
 show_neovim_info() {
     echo
-    info "Neovim is configured with vim.pack (built-in plugin manager):"
-    echo -e "  ${CYAN}Configuration:${NC} $NEOVIM_CONFIG_DIR"
+    ui_info "Neovim is configured with vim.pack (built-in plugin manager):"
+    ui_info "  Configuration: $NEOVIM_CONFIG_DIR"
     echo
-    info "First startup instructions:"
-    echo -e "  ${CYAN}1.${NC} Run 'nvim' to start Neovim"
-    echo -e "  ${CYAN}2.${NC} Approve plugin installations when prompted"
-    echo -e "  ${CYAN}3.${NC} Wait for treesitter parsers to compile"
-    echo -e "  ${CYAN}4.${NC} Run ':checkhealth' to verify everything is working"
+    ui_info "First startup instructions:"
+    ui_info "  1. Run 'nvim' to start Neovim"
+    ui_info "  2. Approve plugin installations when prompted"
+    ui_info "  3. Wait for treesitter parsers to compile"
+    ui_info "  4. Run ':checkhealth' to verify everything is working"
     echo
-    info "Useful commands:"
-    echo -e "  ${CYAN}:lua vim.pack.update()${NC} - Update all plugins"
-    echo -e "  ${CYAN}:Mason${NC}                - LSP/formatter installer"
-    echo -e "  ${CYAN}:checkhealth${NC}          - Check system health"
+    ui_info "Useful commands:"
+    ui_info "  :lua vim.pack.update() - Update all plugins"
+    ui_info "  :Mason                - LSP/formatter installer"
+    ui_info "  :checkhealth          - Check system health"
     echo
 }

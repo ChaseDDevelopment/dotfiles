@@ -14,14 +14,16 @@
 # -----------------------------------------------------------------------------
 install_eza() {
     if check_command eza; then
-        substep "eza is already installed"
+        plan_add "  eza" "Package" "already installed"
+        ui_info "eza is already installed"
         return
     fi
 
-    substep "Installing eza..."
+    plan_add "  eza" "Package" "would install"
+    ui_info "Installing eza..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install eza"
+        ui_info "[DRY RUN] Would install eza"
         return
     fi
 
@@ -34,7 +36,7 @@ install_eza() {
             ;;
         "apt")
             if check_command cargo; then
-                cargo install eza
+                ui_spin "Building eza (cargo)" cargo install eza
             else
                 install_eza_from_github
             fi
@@ -42,7 +44,7 @@ install_eza() {
         "dnf"|"yum")
             if ! "${INSTALL_CMD_ARRAY[@]}" eza 2>/dev/null; then
                 if check_command cargo; then
-                    cargo install eza
+                    ui_spin "Building eza (cargo)" cargo install eza
                 else
                     install_eza_from_github
                 fi
@@ -62,7 +64,7 @@ install_eza_from_github() {
     version=$(github_latest_version "eza-community/eza") || return 1
 
     local url="https://github.com/eza-community/eza/releases/download/v${version}/eza_${target}.tar.gz"
-    download_and_install_binary "$url" "eza"
+    ui_spin "Downloading eza from GitHub" download_and_install_binary "$url" "eza"
 }
 
 # -----------------------------------------------------------------------------
@@ -70,11 +72,13 @@ install_eza_from_github() {
 # -----------------------------------------------------------------------------
 install_bat() {
     if check_command bat; then
-        substep "bat is already installed"
+        plan_add "  bat" "Package" "already installed"
+        ui_info "bat is already installed"
         return
     fi
 
-    substep "Installing bat..."
+    plan_add "  bat" "Package" "would install"
+    ui_info "Installing bat..."
 
     case "$PACKAGE_MANAGER" in
         "brew")
@@ -86,20 +90,20 @@ install_bat() {
 
                 if [[ -x "/usr/bin/batcat" ]]; then
                     sudo ln -sf /usr/bin/batcat /usr/local/bin/bat \
-                        || warning "Could not create system symlink for bat"
-                    substep "Created symlink: /usr/local/bin/bat -> /usr/bin/batcat"
+                        || ui_warn "Could not create system symlink for bat"
+                    ui_info "Created symlink: /usr/local/bin/bat -> /usr/bin/batcat"
                 else
-                    warning "batcat binary not found after install attempt"
+                    ui_warn "batcat binary not found after install attempt"
                 fi
             else
-                substep "[DRY RUN] Would install bat and create symlink"
+                ui_info "[DRY RUN] Would install bat and create symlink"
             fi
             ;;
         "dnf"|"yum"|"pacman")
             install_package "bat"
             ;;
         *)
-            warning "Please install bat manually"
+            ui_warn "Please install bat manually"
             ;;
     esac
 }
@@ -109,11 +113,13 @@ install_bat() {
 # -----------------------------------------------------------------------------
 install_ripgrep() {
     if check_command rg; then
-        substep "ripgrep is already installed"
+        plan_add "  ripgrep" "Package" "already installed"
+        ui_info "ripgrep is already installed"
         return
     fi
 
-    substep "Installing ripgrep..."
+    plan_add "  ripgrep" "Package" "would install"
+    ui_info "Installing ripgrep..."
     install_package "ripgrep"
 }
 
@@ -122,11 +128,13 @@ install_ripgrep() {
 # -----------------------------------------------------------------------------
 install_fd() {
     if check_command fd; then
-        substep "fd is already installed"
+        plan_add "  fd" "Package" "already installed"
+        ui_info "fd is already installed"
         return
     fi
 
-    substep "Installing fd..."
+    plan_add "  fd" "Package" "would install"
+    ui_info "Installing fd..."
 
     case "$PACKAGE_MANAGER" in
         "brew")
@@ -138,13 +146,13 @@ install_fd() {
 
                 if [[ -x "/usr/bin/fdfind" ]]; then
                     sudo ln -sf /usr/bin/fdfind /usr/local/bin/fd \
-                        || warning "Could not create system symlink for fd"
-                    substep "Created symlink: /usr/local/bin/fd -> /usr/bin/fdfind"
+                        || ui_warn "Could not create system symlink for fd"
+                    ui_info "Created symlink: /usr/local/bin/fd -> /usr/bin/fdfind"
                 else
-                    warning "fdfind binary not found after install attempt"
+                    ui_warn "fdfind binary not found after install attempt"
                 fi
             else
-                substep "[DRY RUN] Would install fd-find and create fd symlink"
+                ui_info "[DRY RUN] Would install fd-find and create fd symlink"
             fi
             ;;
         "dnf"|"yum")
@@ -154,7 +162,7 @@ install_fd() {
             install_package "fd"
             ;;
         *)
-            warning "Please install fd manually"
+            ui_warn "Please install fd manually"
             ;;
     esac
 }
@@ -164,11 +172,13 @@ install_fd() {
 # -----------------------------------------------------------------------------
 install_zoxide() {
     if check_command zoxide; then
-        substep "zoxide is already installed"
+        plan_add "  zoxide" "Package" "already installed"
+        ui_info "zoxide is already installed"
         return
     fi
 
-    substep "Installing zoxide..."
+    plan_add "  zoxide" "Package" "would install"
+    ui_info "Installing zoxide..."
 
     case "$PACKAGE_MANAGER" in
         "brew")
@@ -179,19 +189,19 @@ install_zoxide() {
                 if apt list zoxide 2>/dev/null | grep -q zoxide; then
                     "${INSTALL_CMD_ARRAY[@]}" zoxide
                 else
-                    curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+                    ui_spin "Installing zoxide (curl)" bash -c 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash'
                 fi
             else
-                substep "[DRY RUN] Would install zoxide"
+                ui_info "[DRY RUN] Would install zoxide"
             fi
             ;;
         "dnf"|"yum")
             if [[ "$DRY_RUN" == "false" ]]; then
                 if ! "${INSTALL_CMD_ARRAY[@]}" zoxide 2>/dev/null; then
-                    curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+                    ui_spin "Installing zoxide (curl)" bash -c 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash'
                 fi
             else
-                substep "[DRY RUN] Would install zoxide"
+                ui_info "[DRY RUN] Would install zoxide"
             fi
             ;;
         "pacman")
@@ -199,9 +209,9 @@ install_zoxide() {
             ;;
         *)
             if [[ "$DRY_RUN" == "false" ]]; then
-                curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash
+                ui_spin "Installing zoxide (curl)" bash -c 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | bash'
             else
-                substep "[DRY RUN] Would install zoxide via official installer"
+                ui_info "[DRY RUN] Would install zoxide via official installer"
             fi
             ;;
     esac
@@ -212,14 +222,16 @@ install_zoxide() {
 # -----------------------------------------------------------------------------
 install_tailspin() {
     if check_command tspin; then
-        substep "tailspin is already installed"
+        plan_add "  tailspin" "Package" "already installed"
+        ui_info "tailspin is already installed"
         return
     fi
 
-    substep "Installing tailspin..."
+    plan_add "  tailspin" "Package" "would install"
+    ui_info "Installing tailspin..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install tailspin via $PACKAGE_MANAGER (with GitHub fallback)"
+        ui_info "[DRY RUN] Would install tailspin via $PACKAGE_MANAGER (with GitHub fallback)"
         return
     fi
 
@@ -237,7 +249,7 @@ install_tailspin() {
     esac
 
     if [[ "$pkg_install_failed" == "true" ]]; then
-        substep "Package manager install unavailable, downloading from GitHub..."
+        ui_info "Package manager install unavailable, downloading from GitHub..."
         install_tailspin_from_github
     fi
 }
@@ -247,7 +259,7 @@ install_tailspin_from_github() {
     target=$(platform_target_triple "musl") || return 1
 
     local url="https://github.com/bensadeh/tailspin/releases/latest/download/tailspin-${target}.tar.gz"
-    download_and_install_binary "$url" "tspin"
+    ui_spin "Downloading tailspin from GitHub" download_and_install_binary "$url" "tspin"
 }
 
 # -----------------------------------------------------------------------------
@@ -255,14 +267,16 @@ install_tailspin_from_github() {
 # -----------------------------------------------------------------------------
 install_delta() {
     if check_command delta; then
-        substep "delta is already installed"
+        plan_add "  delta" "Package" "already installed"
+        ui_info "delta is already installed"
         return
     fi
 
-    substep "Installing delta (git-delta)..."
+    plan_add "  delta" "Package" "would install"
+    ui_info "Installing delta (git-delta)..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install delta"
+        ui_info "[DRY RUN] Would install delta"
         return
     fi
 
@@ -283,7 +297,7 @@ install_delta() {
             ;;
         *)
             if check_command cargo; then
-                cargo install git-delta
+                ui_spin "Building delta (cargo)" cargo install git-delta
             else
                 install_delta_from_github
             fi
@@ -299,7 +313,7 @@ install_delta_from_github() {
     version=$(github_latest_version "dandavison/delta" "false") || return 1
 
     local url="https://github.com/dandavison/delta/releases/download/${version}/delta-${version}-${target}.tar.gz"
-    download_and_install_binary "$url" "delta"
+    ui_spin "Downloading delta from GitHub" download_and_install_binary "$url" "delta"
 }
 
 # -----------------------------------------------------------------------------
@@ -307,14 +321,16 @@ install_delta_from_github() {
 # -----------------------------------------------------------------------------
 install_lazygit() {
     if check_command lazygit; then
-        substep "lazygit is already installed"
+        plan_add "  lazygit" "Package" "already installed"
+        ui_info "lazygit is already installed"
         return
     fi
 
-    substep "Installing lazygit..."
+    plan_add "  lazygit" "Package" "would install"
+    ui_info "Installing lazygit..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install lazygit"
+        ui_info "[DRY RUN] Would install lazygit"
         return
     fi
 
@@ -348,7 +364,7 @@ install_lazygit_from_github() {
     version=$(github_latest_version "jesseduffield/lazygit") || return 1
 
     local url="https://github.com/jesseduffield/lazygit/releases/download/v${version}/lazygit_${version}_${lg_os}_${lg_arch}.tar.gz"
-    download_and_install_binary "$url" "lazygit"
+    ui_spin "Downloading lazygit from GitHub" download_and_install_binary "$url" "lazygit"
 }
 
 # -----------------------------------------------------------------------------
@@ -356,14 +372,16 @@ install_lazygit_from_github() {
 # -----------------------------------------------------------------------------
 install_xh() {
     if check_command xh; then
-        substep "xh is already installed"
+        plan_add "  xh" "Package" "already installed"
+        ui_info "xh is already installed"
         return
     fi
 
-    substep "Installing xh..."
+    plan_add "  xh" "Package" "would install"
+    ui_info "Installing xh..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install xh"
+        ui_info "[DRY RUN] Would install xh"
         return
     fi
 
@@ -384,7 +402,7 @@ install_xh() {
             ;;
         *)
             if check_command cargo; then
-                cargo install xh
+                ui_spin "Building xh (cargo)" cargo install xh
             else
                 install_xh_from_github
             fi
@@ -400,7 +418,7 @@ install_xh_from_github() {
     version=$(github_latest_version "ducaale/xh") || return 1
 
     local url="https://github.com/ducaale/xh/releases/download/v${version}/xh-v${version}-${target}.tar.gz"
-    download_and_install_binary "$url" "xh"
+    ui_spin "Downloading xh from GitHub" download_and_install_binary "$url" "xh"
 }
 
 # -----------------------------------------------------------------------------
@@ -408,14 +426,16 @@ install_xh_from_github() {
 # -----------------------------------------------------------------------------
 install_yq() {
     if check_command yq; then
-        substep "yq is already installed"
+        plan_add "  yq" "Package" "already installed"
+        ui_info "yq is already installed"
         return
     fi
 
-    substep "Installing yq..."
+    plan_add "  yq" "Package" "would install"
+    ui_info "Installing yq..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install yq"
+        ui_info "[DRY RUN] Would install yq"
         return
     fi
 
@@ -446,7 +466,7 @@ install_yq_from_github() {
     esac
 
     local url="https://github.com/mikefarah/yq/releases/latest/download/yq_${yq_os}_${yq_arch}"
-    download_and_install_binary "$url" "yq" "binary"
+    ui_spin "Downloading yq from GitHub" download_and_install_binary "$url" "yq" "binary"
 }
 
 # -----------------------------------------------------------------------------
@@ -454,14 +474,16 @@ install_yq_from_github() {
 # -----------------------------------------------------------------------------
 install_direnv() {
     if check_command direnv; then
-        substep "direnv is already installed"
+        plan_add "  direnv" "Package" "already installed"
+        ui_info "direnv is already installed"
         return
     fi
 
-    substep "Installing direnv..."
+    plan_add "  direnv" "Package" "would install"
+    ui_info "Installing direnv..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        substep "[DRY RUN] Would install direnv"
+        ui_info "[DRY RUN] Would install direnv"
         return
     fi
 
@@ -479,7 +501,7 @@ install_direnv() {
             "${INSTALL_CMD_ARRAY[@]}" direnv
             ;;
         *)
-            warning "Please install direnv manually: https://direnv.net/docs/installation.html"
+            ui_warn "Please install direnv manually: https://direnv.net/docs/installation.html"
             ;;
     esac
 }
@@ -493,15 +515,17 @@ install_coreutils() {
     fi
 
     if command -v grm &>/dev/null; then
-        substep "coreutils (GNU rm) is already installed"
+        plan_add "  coreutils" "Package" "already installed"
+        ui_info "coreutils (GNU rm) is already installed"
         return
     fi
 
-    substep "Installing coreutils (GNU rm, ls, etc.)..."
+    plan_add "  coreutils" "Package" "would install"
+    ui_info "Installing coreutils (GNU rm, ls, etc.)..."
     if [[ "$DRY_RUN" == "false" ]]; then
         brew install coreutils
     else
-        substep "[DRY RUN] Would install coreutils via Homebrew"
+        ui_info "[DRY RUN] Would install coreutils via Homebrew"
     fi
 }
 
@@ -509,7 +533,8 @@ install_coreutils() {
 # Clipboard utilities (Linux only)
 # -----------------------------------------------------------------------------
 install_clipboard_utils() {
-    substep "Installing clipboard utilities..."
+    plan_add "  clipboard-utils" "Package" "would install"
+    ui_info "Installing clipboard utilities..."
 
     case "$PACKAGE_MANAGER" in
         "apt")
@@ -517,7 +542,7 @@ install_clipboard_utils() {
                 "${INSTALL_CMD_ARRAY[@]}" xclip wl-clipboard 2>/dev/null \
                     || "${INSTALL_CMD_ARRAY[@]}" xclip || true
             else
-                substep "[DRY RUN] Would install xclip and wl-clipboard"
+                ui_info "[DRY RUN] Would install xclip and wl-clipboard"
             fi
             ;;
         "dnf"|"yum")
@@ -525,7 +550,7 @@ install_clipboard_utils() {
                 "${INSTALL_CMD_ARRAY[@]}" xclip wl-clipboard 2>/dev/null \
                     || "${INSTALL_CMD_ARRAY[@]}" xclip || true
             else
-                substep "[DRY RUN] Would install xclip and wl-clipboard"
+                ui_info "[DRY RUN] Would install xclip and wl-clipboard"
             fi
             ;;
         "pacman")
@@ -533,7 +558,7 @@ install_clipboard_utils() {
                 sudo pacman -S --noconfirm xclip wl-clipboard 2>/dev/null \
                     || sudo pacman -S --noconfirm xclip || true
             else
-                substep "[DRY RUN] Would install xclip and wl-clipboard"
+                ui_info "[DRY RUN] Would install xclip and wl-clipboard"
             fi
             ;;
     esac
