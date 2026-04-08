@@ -4,19 +4,17 @@
 
 - `configs/` — Dotfile configs (zsh, tmux, nvim, starship, atuin, ghostty, yazi, git, lazygit)
 - `installer/` — Go TUI installer (Bubble Tea + Lipgloss, Catppuccin Mocha theme)
-- `install.sh` — Bash fallback installer (uses gum for TUI)
-- `scripts/` — Per-tool setup scripts sourced by the bash installer
+- `install.sh` — Bootstrap script (downloads Go binary from GitHub Releases, runs it)
 
 ## Build & Run
 
-### Go TUI installer
-- `cd installer && go build -o dotsetup .` — build
-- `./dotsetup` or `./installer/bootstrap.sh` — run
-- `go vet ./...` — static analysis
-- `go test ./...` — run tests (only registry package has tests)
+### Run
+- `./install.sh` — downloads Go binary (if needed) and launches TUI
+- `cd installer && go build -o dotsetup .` — build from source
 
-### Bash installer
-- `bash install.sh` — run directly (no build step)
+### Dev
+- `go vet ./...` — static analysis (run from `installer/`)
+- `go test ./...` — run tests (run from `installer/`)
 
 ## Go TUI: Lipgloss Styling Gotchas
 
@@ -31,4 +29,3 @@
 1. Add config files under `configs/<toolname>/`
 2. Register in `installer/internal/registry/` (see existing `*_tools.go` files)
 3. Add component setup in `installer/internal/config/components.go`
-4. Add bash setup script in `scripts/setup-<toolname>.sh`

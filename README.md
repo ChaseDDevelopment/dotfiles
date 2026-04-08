@@ -16,7 +16,7 @@
 - **Catppuccin Mocha everywhere** - Consistent theming across all tools
 - **Modern replacements** - eza > ls, bat > cat, ripgrep > grep, fd > find, zoxide > cd
 - **Cross-platform** - macOS (Intel + Apple Silicon) and Linux (Ubuntu, Arch, RHEL, Fedora)
-- **Modular installer** - Dry-run, backup/restore, skip/config-only modes
+- **Interactive TUI installer** - Go + Bubble Tea with dry-run, backup/restore, component selection
 
 ## Features
 
@@ -137,59 +137,28 @@ chmod +x install.sh
 
 ### Prerequisites
 - **Git** (version 2.0+)
-- **curl**
-- **Bash 4.2+** (installed automatically on macOS via Homebrew)
-- **Internet connection** for downloading packages and configurations
+- **curl** or **wget**
+- **Internet connection** for downloading the installer and packages
 
 ### Optional but Recommended
 - **A Nerd Font** for proper icon display ([Download here](https://www.nerdfonts.com/))
 - **Terminal with true color support** (most modern terminals)
 
-## Installation Options
+## How It Works
 
-### Standard Installation
-```bash
-./install.sh
-```
+`./install.sh` is a bootstrap script that:
+1. Downloads the `dotsetup` binary from GitHub Releases (auto-detects OS and architecture)
+2. Checks for updates on subsequent runs
+3. Launches the interactive TUI installer
 
-### Dry Run (Preview Only)
-```bash
-./install.sh --dry-run
-```
+All options (dry-run, component selection, backup/restore, update) are available
+in the TUI — no CLI flags needed.
 
-### Skip Package Installation
-```bash
-./install.sh --skip-packages
-```
+### Build from Source
 
-### Configuration Only
+If you prefer to build the installer yourself (requires Go 1.22+):
 ```bash
-./install.sh --config-only
-```
-
-### Restore from Backup
-```bash
-./install.sh --restore-backup ~/.dotfiles-backup-20240101-120000
-```
-
-### Update All Installed Tools
-```bash
-./install.sh --update
-```
-
-### Update (Preview Only)
-```bash
-./install.sh --update --dry-run
-```
-
-### Auto-Remove Backup on Success
-```bash
-./install.sh --clean-backup
-```
-
-### Verbose Output
-```bash
-./install.sh --verbose
+cd installer && go build -o dotsetup . && cd .. && ./install.sh
 ```
 
 ## Key Bindings
@@ -347,38 +316,25 @@ grep starship ~/.config/zsh/.zshrc
 3. Restart your terminal
 
 ### Log Files
-- Installation log: `~/dotfiles/install.log`
 - Backup location: `~/.dotfiles-backup-[timestamp]`
 
 ### Getting Help
-1. Check the installation log for errors
-2. Run the installer with `--dry-run` to see what would be executed
-3. Run with `--verbose` for detailed output
-4. Create an issue in this repository with:
+1. Use the dry-run option in the TUI to preview changes
+2. Create an issue in this repository with:
    - Your operating system and version
    - Terminal emulator being used
    - Full error message
-   - Installation log contents
 
 ## Updating
 
-### Update Everything (Packages + Tools)
+### Update Everything
 ```bash
 cd ~/dotfiles
 git pull
-./install.sh --update
+./install.sh
 ```
 
-This updates all installed tools across every package manager: system packages,
-Rust toolchain, cargo binaries, uv, ruff, Bun, Node.js (via nvm), Starship,
-Atuin, Neovim, .NET SDK, Yazi plugins, and Tmux plugins.
-
-### Update Configurations Only
-```bash
-cd ~/dotfiles
-git pull
-./install.sh --config-only
-```
+Run the installer and select the update option from the TUI menu.
 
 ### Update Zsh Plugins
 Plugins are managed by Antidote and update automatically, or run:
@@ -401,26 +357,11 @@ antidote update
 ```
 dotfiles/
 ├── README.md                    # This file
-├── install.sh                   # Main installer script
-├── scripts/
-│   ├── detect-os.sh            # OS detection utilities
-│   ├── package-helpers.sh      # Package install/check/update helpers
-│   ├── install-packages.sh     # Package installation orchestrator
-│   ├── install-tools.sh        # Official source tool installers (nvm, atuin, tpm)
-│   ├── update-packages.sh      # Update all installed packages and tools
-│   ├── restore-backup.sh       # Restore from a previous backup
-│   ├── installers/
-│   │   ├── github-helpers.sh   # GitHub release download helpers
-│   │   ├── cli-tools.sh        # CLI tool installers (eza, bat, rg, fd, etc.)
-│   │   └── dev-tools.sh        # Dev tool installers (rust, neovim, uv, etc.)
-│   ├── setup-zsh.sh            # Zsh shell setup
-│   ├── setup-tmux.sh           # Tmux setup
-│   ├── setup-neovim.sh         # Neovim setup
-│   ├── setup-starship.sh       # Starship setup
-│   ├── setup-atuin.sh          # Atuin setup
-│   ├── setup-ghostty.sh        # Ghostty setup (desktop only)
-│   ├── setup-yazi.sh           # Yazi file manager setup
-│   └── setup-git.sh            # Git + lazygit config setup
+├── install.sh                   # Bootstrap script (downloads + runs dotsetup)
+├── installer/                   # Go TUI installer (Bubble Tea + Lipgloss)
+│   ├── main.go                 # Entry point
+│   ├── go.mod / go.sum         # Go dependencies
+│   └── internal/               # TUI, registry, config, executor, etc.
 ├── configs/
 │   ├── zsh/
 │   │   ├── .zshenv             # Environment variables
