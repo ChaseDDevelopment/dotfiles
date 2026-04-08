@@ -158,7 +158,7 @@ func (m AppModel) View() string {
 	case PhaseInstalling:
 		content = m.progress.View(w)
 	case PhaseSummary:
-		content = m.summary.View(w)
+		content = m.summary.View(w, m.height)
 	}
 
 	// Wrap the content in a full-screen container with catBase background.
@@ -285,11 +285,26 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		if m.summary.dryRun {
+			m.summary.initViewport(msg.Width, msg.Height)
+		}
+		return m, nil
+	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter", "q":
 			return m, tea.Quit
 		}
+	}
+
+	// Forward to viewport for scroll handling.
+	if m.summary.dryRun && m.summary.viewportReady {
+		var cmd tea.Cmd
+		m.summary.viewport, cmd = m.summary.viewport.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -319,6 +334,9 @@ func (m *AppModel) startInstall() tea.Cmd {
 
 	if m.config.DryRun {
 		m.summary.rows = m.config.PlanRows
+		if m.width > 0 && m.height > 0 {
+			m.summary.initViewport(m.width, m.height)
+		}
 		m.phase = PhaseSummary
 		return nil
 	}
@@ -381,8 +399,9 @@ func (m *AppModel) buildInstallSteps() []installStep {
 		if !m.config.IsComponentSelected(comp.Name) {
 			continue
 		}
+		status := config.InspectComponent(comp.Name, m.config.RootDir)
 		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-			Component: comp.Name, Action: "Setup", Status: "would configure",
+			Component: comp.Name, Action: "Setup", Status: status,
 		})
 		steps = append(steps, installStep{
 			label: fmt.Sprintf("Setting up %s", comp.Name),

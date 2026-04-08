@@ -50,6 +50,79 @@ func AllSymlinks() []SymlinkEntry {
 	}
 }
 
+// SymlinkStatus represents the inspection state of a symlink entry.
+type SymlinkStatus int
+
+const (
+	// SymlinkAlreadyCorrect means the target symlink points to the correct source.
+	SymlinkAlreadyCorrect SymlinkStatus = iota
+	// SymlinkMissing means the target does not exist.
+	SymlinkMissing
+	// SymlinkWouldReplace means the target exists but is a regular file/dir
+	// or a symlink pointing to the wrong location.
+	SymlinkWouldReplace
+)
+
+// InspectSymlink checks the state of a single symlink entry without modifying anything.
+func InspectSymlink(entry SymlinkEntry, rootDir string) SymlinkStatus {
+	source := filepath.Join(rootDir, "configs", entry.Source)
+	target := os.ExpandEnv(entry.Target)
+
+	// If the target doesn't exist at all, it's missing.
+	info, err := os.Lstat(target)
+	if err != nil {
+		return SymlinkMissing
+	}
+
+	// If it's a symlink, check where it points.
+	if info.Mode()&os.ModeSymlink != 0 {
+		existing, err := os.Readlink(target)
+		if err != nil {
+			return SymlinkWouldReplace
+		}
+		// Canonicalize both paths for reliable comparison.
+		canonSource, err1 := filepath.Abs(source)
+		canonExisting, err2 := filepath.Abs(existing)
+		if err1 == nil && err2 == nil && canonSource == canonExisting {
+			return SymlinkAlreadyCorrect
+		}
+		return SymlinkWouldReplace
+	}
+
+	// Target exists as a regular file or directory.
+	return SymlinkWouldReplace
+}
+
+// InspectComponent aggregates symlink statuses for a component into a
+// single human-readable status string.
+func InspectComponent(component, rootDir string) string {
+	allCorrect := true
+	anyReplace := false
+
+	for _, entry := range AllSymlinks() {
+		if entry.Component != component {
+			continue
+		}
+		switch InspectSymlink(entry, rootDir) {
+		case SymlinkAlreadyCorrect:
+			// fine
+		case SymlinkMissing:
+			allCorrect = false
+		case SymlinkWouldReplace:
+			allCorrect = false
+			anyReplace = true
+		}
+	}
+
+	if allCorrect {
+		return "already configured"
+	}
+	if anyReplace {
+		return "would replace"
+	}
+	return "would configure"
+}
+
 // ApplySymlink creates a single symlink, backing up the existing target.
 func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun bool) error {
 	source := filepath.Join(rootDir, "configs", entry.Source)
