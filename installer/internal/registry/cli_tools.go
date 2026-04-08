@@ -46,11 +46,11 @@ func cliTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "eza"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "eza"},
-				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "eza"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "eza-community/eza", Pattern: github.PatternTargetTriple,
 					Binary: "eza", StripV: true, LibC: "gnu",
 				}},
+				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "eza"},
 			},
 			CargoCrate: "eza",
 		},
@@ -115,11 +115,11 @@ func cliTools() []Tool {
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "git-delta"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "git-delta"},
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "git-delta"},
-				{Method: MethodCargo, Crate: "git-delta"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "dandavison/delta", Pattern: github.PatternVersionPrefixed,
 					Binary: "delta", StripV: false, LibC: "musl",
 				}},
+				{Method: MethodCargo, Crate: "git-delta"},
 			},
 			CargoCrate: "git-delta",
 		},
@@ -139,11 +139,11 @@ func cliTools() []Tool {
 			Name: "xh", Command: "xh", Description: "Friendly HTTP client",
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "xh"},
-				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "xh"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "ducaale/xh", Pattern: github.PatternTargetTriple,
 					Binary: "xh", StripV: true, LibC: "musl",
 				}},
+				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "xh"},
 			},
 			CargoCrate: "xh",
 		},
