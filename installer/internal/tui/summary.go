@@ -17,11 +17,12 @@ type PlanRow struct {
 
 // summaryModel displays the completion screen or dry-run plan.
 type summaryModel struct {
-	rows      []PlanRow
-	steps     []stepResult
-	dryRun    bool
-	startTime time.Time
-	endTime   time.Time
+	rows            []PlanRow
+	steps           []stepResult
+	dryRun          bool
+	criticalFailure bool // true if a critical tool failed
+	startTime       time.Time
+	endTime         time.Time
 }
 
 func newSummaryModel(dryRun bool) summaryModel {
@@ -39,9 +40,18 @@ func (m summaryModel) completionView(width int) string {
 	w := contentWidth(width)
 	var b strings.Builder
 
-	// "Setup Complete" header.
-	header := titleStyle.Render("  ✦  Setup Complete  ✦")
-	b.WriteString(lipgloss.NewStyle().Align(lipgloss.Center).Width(w - 6).Render(header))
+	centerWrap := lipgloss.NewStyle().
+		Align(lipgloss.Center).
+		Width(w - 6).
+		Background(catSurface0)
+
+	if m.criticalFailure {
+		header := errorStyle.Render("  ✗  Install Aborted — Critical Tool Failed  ✗")
+		b.WriteString(centerWrap.Render(header))
+	} else {
+		header := titleStyle.Render("  ✦  Setup Complete  ✦")
+		b.WriteString(centerWrap.Render(header))
+	}
 	b.WriteString("\n\n")
 
 	// Stats row.
@@ -60,10 +70,7 @@ func (m summaryModel) completionView(width int) string {
 
 	statsLine := statsStyle.Render(fmt.Sprintf("%d steps", len(m.steps))) + dot +
 		statsStyle.Render(elapsed.String())
-	b.WriteString(lipgloss.NewStyle().
-		Align(lipgloss.Center).
-		Width(w - 6).
-		Render(statsLine))
+	b.WriteString(centerWrap.Render(statsLine))
 	b.WriteString("\n\n")
 
 	// Success/failure counts.
@@ -71,10 +78,7 @@ func (m summaryModel) completionView(width int) string {
 	if failed > 0 {
 		counts += "     " + errorStyle.Render(fmt.Sprintf("✗ %d failed", failed))
 	}
-	b.WriteString(lipgloss.NewStyle().
-		Align(lipgloss.Center).
-		Width(w - 6).
-		Render(counts))
+	b.WriteString(centerWrap.Render(counts))
 
 	// Quick start section — inside the panel.
 	b.WriteString("\n\n")
@@ -96,17 +100,26 @@ func (m summaryModel) completionView(width int) string {
 	}
 
 	// Wrap everything in panel.
+	borderColor := catGreen
+	if m.criticalFailure {
+		borderColor = catRed
+	}
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(catGreen).
+		BorderForeground(borderColor).
 		Background(catSurface0).
 		Padding(1, 2).
 		Width(w).
 		Render(b.String())
 
 	footer := renderFooter("q exit", "enter exit")
+	footerBlock := lipgloss.NewStyle().
+		Width(panelOuterWidth(w)).
+		AlignHorizontal(lipgloss.Center).
+		Background(catBase).
+		Render(footer)
 
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
 }
 
 func (m summaryModel) dryRunView(width int) string {
@@ -118,6 +131,7 @@ func (m summaryModel) dryRunView(width int) string {
 	b.WriteString(lipgloss.NewStyle().
 		Align(lipgloss.Center).
 		Width(w - 6).
+		Background(catSurface0).
 		Render(header))
 	b.WriteString("\n\n")
 
@@ -125,28 +139,28 @@ func (m summaryModel) dryRunView(width int) string {
 		b.WriteString(dimStyle.Render("  No actions planned."))
 		b.WriteString("\n")
 	} else {
-		// Table header.
-		b.WriteString(fmt.Sprintf("  %-28s %-12s %s\n",
-			tableHeaderStyle.Render("Component"),
-			tableHeaderStyle.Render("Action"),
+		// Table header — pad plain text first, then apply style.
+		b.WriteString(fmt.Sprintf("  %s %s %s\n",
+			tableHeaderStyle.Width(28).Render("Component"),
+			tableHeaderStyle.Width(12).Render("Action"),
 			tableHeaderStyle.Render("Status"),
 		))
 		b.WriteString(dimStyle.Render("  "+strings.Repeat("─", w-8)))
 		b.WriteString("\n")
 
 		for _, row := range m.rows {
-			status := row.Status
-			switch status {
+			var status string
+			switch row.Status {
 			case "would install", "would configure":
-				status = warnStyle.Render(status)
+				status = warnStyle.Render(row.Status)
 			case "already installed":
-				status = successStyle.Render(status)
+				status = successStyle.Render(row.Status)
 			default:
-				status = dimStyle.Render(status)
+				status = dimStyle.Render(row.Status)
 			}
-			b.WriteString(fmt.Sprintf("  %-28s %-12s %s\n",
-				tableCellStyle.Render(row.Component),
-				tableCellStyle.Render(row.Action),
+			b.WriteString(fmt.Sprintf("  %s %s %s\n",
+				tableCellStyle.Width(28).Render(row.Component),
+				tableCellStyle.Width(12).Render(row.Action),
 				status,
 			))
 		}
@@ -155,6 +169,11 @@ func (m summaryModel) dryRunView(width int) string {
 	// Wrap in panel.
 	panel := dryRunPanelStyle.Width(w).Render(b.String())
 	footer := renderFooter("q exit", "enter exit")
+	footerBlock := lipgloss.NewStyle().
+		Width(panelOuterWidth(w)).
+		AlignHorizontal(lipgloss.Center).
+		Background(catBase).
+		Render(footer)
 
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
 }

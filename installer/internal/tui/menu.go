@@ -15,7 +15,6 @@ import (
 type mainMenuModel struct {
 	items  []menuItem
 	cursor int
-	pulse  bool // for cursor animation
 }
 
 type menuItem struct {
@@ -38,12 +37,8 @@ func newMainMenu() mainMenuModel {
 	}
 }
 
-// cursorTickMsg toggles the cursor animation state.
-type cursorTickMsg struct{}
-
 func (m mainMenuModel) Update(msg tea.Msg) (mainMenuModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
@@ -54,8 +49,6 @@ func (m mainMenuModel) Update(msg tea.Msg) (mainMenuModel, tea.Cmd) {
 				m.cursor++
 			}
 		}
-	case cursorTickMsg:
-		m.pulse = !m.pulse
 	}
 	return m, nil
 }
@@ -72,11 +65,7 @@ func (m mainMenuModel) View(width int) string {
 		// Cursor
 		cursor := "  "
 		if isSelected {
-			cs := cursorStyle
-			if m.pulse {
-				cs = cursorAltStyle
-			}
-			cursor = cs.Render("▸ ")
+			cursor = cursorStyle.Render("▸ ")
 		}
 
 		// Icon
@@ -107,8 +96,13 @@ func (m mainMenuModel) View(width int) string {
 	panel := panelStyle.Width(w).Render(content)
 
 	footer := renderFooter("↑/↓ navigate", "enter select", "q quit")
+	footerBlock := lipgloss.NewStyle().
+		Width(panelOuterWidth(w)).
+		AlignHorizontal(lipgloss.Center).
+		Background(catBase).
+		Render(footer)
 
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
 }
 
 func (m mainMenuModel) selected() InstallMode {
@@ -125,6 +119,7 @@ type optionsMenuModel struct {
 }
 
 type toggleOption struct {
+	key     string // stable identifier for config mapping
 	label   string
 	enabled bool
 }
@@ -132,12 +127,22 @@ type toggleOption struct {
 func newOptionsMenu() optionsMenuModel {
 	return optionsMenuModel{
 		options: []toggleOption{
-			{"Skip system update", false},
-			{"Skip packages", false},
-			{"Verbose output", false},
-			{"Clean backup after", false},
+			{key: "skip_update", label: "Skip system update"},
+			{key: "skip_packages", label: "Skip packages"},
+			{key: "verbose", label: "Verbose output"},
+			{key: "clean_backup", label: "Clean backup after"},
 		},
 	}
+}
+
+// optionEnabled returns the enabled state for the given key.
+func (m optionsMenuModel) optionEnabled(key string) bool {
+	for _, opt := range m.options {
+		if opt.key == key {
+			return opt.enabled
+		}
+	}
+	return false
 }
 
 func (m optionsMenuModel) Update(msg tea.Msg) (optionsMenuModel, tea.Cmd) {
@@ -189,8 +194,13 @@ func (m optionsMenuModel) View(width int) string {
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
 	footer := renderFooter("space toggle", "enter continue", "q quit")
+	footerBlock := lipgloss.NewStyle().
+		Width(panelOuterWidth(w)).
+		AlignHorizontal(lipgloss.Center).
+		Background(catBase).
+		Render(footer)
 
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
 }
 
 // ---------------------------------------------------------------------------
@@ -283,8 +293,13 @@ func (m componentPickerModel) View(width int) string {
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
 	footer := renderFooter("space toggle", "enter continue", "q quit")
+	footerBlock := lipgloss.NewStyle().
+		Width(panelOuterWidth(w)).
+		AlignHorizontal(lipgloss.Center).
+		Background(catBase).
+		Render(footer)
 
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
 }
 
 func (m componentPickerModel) selectedComponents() []string {
@@ -297,14 +312,3 @@ func (m componentPickerModel) selectedComponents() []string {
 	return sel
 }
 
-func (m componentPickerModel) isSelected(name string) bool {
-	for _, item := range m.items {
-		if item.name == "All" && item.selected {
-			return true
-		}
-		if item.name == name && item.selected {
-			return true
-		}
-	}
-	return false
-}
