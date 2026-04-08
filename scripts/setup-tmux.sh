@@ -64,16 +64,13 @@ install_tpm() {
     fi
     
     if [[ "$DRY_RUN" == "false" ]]; then
-        git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
-        ui_info "TPM installed successfully"
+        ui_spin "Cloning TPM..." git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
     else
         ui_info "[DRY RUN] Would clone TPM repository"
     fi
 }
 
 install_tmux_plugins() {
-    ui_info "Installing Tmux plugins..."
-    
     if [[ "$DRY_RUN" == "false" ]]; then
         # Source the tmux configuration to make sure TPM is loaded
         if pgrep -x "tmux" > /dev/null; then
@@ -93,7 +90,7 @@ install_tmux_plugins() {
 
             # Run the install script
             "$tpm_script"
-            ui_info "Tmux plugins installed"
+            ui_success "Tmux plugins installed"
             
             # Force reload configuration to apply theme
             if pgrep -x "tmux" > /dev/null; then

@@ -65,11 +65,9 @@ check_neovim_version() {
 
 backup_neovim_config() {
     ui_info "Backing up existing Neovim configuration..."
-
+    # Only backup config — plugin data, state, and cache are regenerable
+    # via vim.pack on next nvim startup
     backup_file "$NEOVIM_CONFIG_DIR"
-    backup_file "$HOME/.local/share/nvim"
-    backup_file "$HOME/.local/state/nvim"
-    backup_file "$HOME/.cache/nvim"
 }
 
 copy_neovim_config() {
@@ -119,9 +117,9 @@ initialize_neovim() {
             # Build blink.cmp Rust fuzzy matcher if cargo is available
             local blink_dir="$HOME/.local/share/nvim/site/pack/core/opt/blink.cmp"
             if check_command cargo && [[ -d "$blink_dir" ]]; then
-                ui_info "Building blink.cmp Rust fuzzy matcher..."
-                if (cd "$blink_dir" && cargo build --release) 2>/dev/null; then
-                    ui_info "blink.cmp Rust binary built successfully"
+                if ui_spin "Building blink.cmp Rust fuzzy matcher..." \
+                    bash -c "cd '$blink_dir' && cargo build --release"; then
+                    : # ui_spin prints success
                 else
                     ui_warn "Failed to build blink.cmp Rust binary"
                     ui_warn "Falling back to Lua fuzzy matcher (still works fine)"

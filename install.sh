@@ -78,9 +78,27 @@ ui_spin() {
         return 0
     fi
 
-    local rc=0
-    gum spin --spinner dot --title "  $label" -- \
-        bash -c 'log="$1"; shift; "$@" >"$log" 2>&1' _ "$log_tmp" "$@" || rc=$?
+    local frames=("⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷")
+    local i=0 rc=0
+
+    # Show initial spinner frame immediately (visible even for fast commands)
+    printf "  %s %s" "${frames[0]}" "$label" >&2
+
+    # Run command in background
+    "$@" >"$log_tmp" 2>&1 &
+    local pid=$!
+
+    # Animate spinner while command runs
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 0.08
+        i=$((i + 1))
+        printf "\r  %s %s" "${frames[$((i % ${#frames[@]}))]}" "$label" >&2
+    done
+
+    wait "$pid" || rc=$?
+
+    # Clear spinner line
+    printf "\r\033[2K" >&2
 
     cat "$log_tmp" >> "$LOG_FILE" 2>/dev/null
 
@@ -179,8 +197,7 @@ backup_file() {
     if [[ -f "$file" || -d "$file" ]]; then
         if [[ "$DRY_RUN" == "false" ]]; then
             mkdir -p "$BACKUP_DIR"
-            cp -r "$file" "$BACKUP_DIR/" 2>/dev/null || true
-            ui_info "Backed up $file to $BACKUP_DIR"
+            ui_spin "Backing up $(basename "$file")" cp -a "$file" "$BACKUP_DIR/"
         else
             ui_info "[DRY RUN] Would backup $file"
         fi

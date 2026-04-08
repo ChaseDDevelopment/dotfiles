@@ -29,9 +29,6 @@ restore_from_backup() {
         "$HOME/.config/tmux"
         "$HOME/.tmux.conf"
         "$HOME/.tmux"
-        "$HOME/.local/share/nvim"
-        "$HOME/.local/state/nvim"
-        "$HOME/.cache/nvim"
     )
     
     # Restore each managed path

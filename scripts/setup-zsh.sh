@@ -114,12 +114,11 @@ install_antidote() {
     if [[ "$DRY_RUN" == "false" ]]; then
         # Install via Homebrew if available
         if check_command brew; then
-            brew install antidote
-            ui_info "Antidote installed via Homebrew"
+            ui_spin "Installing Antidote (brew)..." brew install antidote
         else
             # Fallback: Install via git clone
-            git clone --depth=1 https://github.com/mattmc3/antidote.git "$antidote_dir"
-            ui_info "Antidote installed via git clone to $antidote_dir"
+            ui_spin "Cloning Antidote..." \
+                git clone --depth=1 https://github.com/mattmc3/antidote.git "$antidote_dir"
         fi
     else
         ui_info "[DRY RUN] Would install Antidote"
@@ -127,8 +126,6 @@ install_antidote() {
 }
 
 compile_antidote_plugins() {
-    ui_info "Compiling Antidote plugins..."
-
     if [[ "$DRY_RUN" == "false" ]]; then
         local plugins_txt="$HOME/.config/zsh/plugins/.zsh_plugins.txt"
         local plugins_zsh="$HOME/.config/zsh/plugins/.zsh_plugins.zsh"
@@ -136,20 +133,20 @@ compile_antidote_plugins() {
         if [[ -f "$plugins_txt" ]]; then
             # Try to compile plugins using zsh
             # This may fail on first run before antidote is fully set up
-            zsh -c "
-                export ZDOTDIR=\"$HOME/.config/zsh\"
-                if [[ -f \"/opt/homebrew/opt/antidote/share/antidote/antidote.zsh\" ]]; then
-                    source /opt/homebrew/opt/antidote/share/antidote/antidote.zsh
-                elif [[ -f \"/usr/local/opt/antidote/share/antidote/antidote.zsh\" ]]; then
-                    source /usr/local/opt/antidote/share/antidote/antidote.zsh
-                elif [[ -f \"/home/linuxbrew/.linuxbrew/opt/antidote/share/antidote/antidote.zsh\" ]]; then
-                    source /home/linuxbrew/.linuxbrew/opt/antidote/share/antidote/antidote.zsh
-                elif [[ -d \"\$ZDOTDIR/.antidote\" ]]; then
-                    source \"\$ZDOTDIR/.antidote/antidote.zsh\"
-                fi
-                antidote bundle < '$plugins_txt' > '$plugins_zsh' 2>/dev/null
-            " 2>/dev/null || true
-            ui_info "Antidote plugins compiled (or will compile on first shell start)"
+            ui_spin "Compiling Antidote plugins..." \
+                zsh -c "
+                    export ZDOTDIR=\"$HOME/.config/zsh\"
+                    if [[ -f \"/opt/homebrew/opt/antidote/share/antidote/antidote.zsh\" ]]; then
+                        source /opt/homebrew/opt/antidote/share/antidote/antidote.zsh
+                    elif [[ -f \"/usr/local/opt/antidote/share/antidote/antidote.zsh\" ]]; then
+                        source /usr/local/opt/antidote/share/antidote/antidote.zsh
+                    elif [[ -f \"/home/linuxbrew/.linuxbrew/opt/antidote/share/antidote/antidote.zsh\" ]]; then
+                        source /home/linuxbrew/.linuxbrew/opt/antidote/share/antidote/antidote.zsh
+                    elif [[ -d \"\$ZDOTDIR/.antidote\" ]]; then
+                        source \"\$ZDOTDIR/.antidote/antidote.zsh\"
+                    fi
+                    antidote bundle < '$plugins_txt' > '$plugins_zsh' 2>/dev/null
+                " || true
         else
             ui_warn "Plugin manifest not found: $plugins_txt"
         fi
@@ -170,8 +167,7 @@ set_zsh_default_shell() {
             if ! grep -q "$zsh_path" /etc/shells 2>/dev/null; then
                 echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
             fi
-            chsh -s "$zsh_path"
-            ui_info "Zsh set as default shell"
+            ui_spin "Setting Zsh as default shell..." chsh -s "$zsh_path"
         else
             ui_info "Zsh is already the default shell"
         fi

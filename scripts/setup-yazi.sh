@@ -50,7 +50,7 @@ install_yazi_plugins() {
 
     # ya pkg install reads package.toml and installs all listed plugins/flavors
     if check_command ya; then
-        ya pkg install || ui_warn "Failed to install some Yazi plugins"
+        ui_spin "Installing Yazi plugins..." ya pkg install
     else
         ui_warn "'ya' CLI not found — plugins will need to be installed manually"
         ui_warn "Run 'ya pkg install' after yazi is available"

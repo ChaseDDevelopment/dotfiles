@@ -61,8 +61,8 @@ setup_starship_config() {
 generate_catppuccin_config() {
     if [[ "$DRY_RUN" == "false" ]]; then
         # Use Starship's preset command to generate Catppuccin config
-        starship preset catppuccin-powerline -o "$STARSHIP_CONFIG_FILE"
-        ui_info "Generated Catppuccin powerline preset"
+        ui_spin "Generating Catppuccin preset..." \
+            starship preset catppuccin-powerline -o "$STARSHIP_CONFIG_FILE"
     else
         ui_info "[DRY RUN] Would generate Catppuccin preset configuration"
     fi
