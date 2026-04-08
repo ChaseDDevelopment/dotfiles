@@ -57,13 +57,13 @@ func (m mainMenuModel) View(width int) string {
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("  Choose an action"))
-	b.WriteString("\n\n")
+	b.WriteString(panelGap("\n\n"))
 
 	for i, item := range m.items {
 		isSelected := i == m.cursor
 
 		// Cursor
-		cursor := "  "
+		cursor := panelGap("  ")
 		if isSelected {
 			cursor = cursorStyle.Render("▸ ")
 		}
@@ -83,10 +83,10 @@ func (m mainMenuModel) View(width int) string {
 		// Description
 		desc := ""
 		if item.desc != "" && isSelected {
-			desc = "  " + descStyle.Render(item.desc)
+			desc = panelGap("  ") + descStyle.Render(item.desc)
 		}
 
-		b.WriteString(fmt.Sprintf("%s%s%s%s\n", cursor, icon, label, desc))
+		b.WriteString(fmt.Sprintf("%s%s%s%s%s", cursor, icon, label, desc, panelGap("\n")))
 	}
 
 	content := b.String()
@@ -167,12 +167,12 @@ func (m optionsMenuModel) View(width int) string {
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("  Options"))
-	b.WriteString("\n\n")
+	b.WriteString(panelGap("\n\n"))
 
 	for i, opt := range m.options {
 		isSelected := i == m.cursor
 
-		cursor := "  "
+		cursor := panelGap("  ")
 		if isSelected {
 			cursor = cursorStyle.Render("▸ ")
 		}
@@ -187,7 +187,7 @@ func (m optionsMenuModel) View(width int) string {
 			label = selectedStyle.Render(opt.label)
 		}
 
-		b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, check, label))
+		b.WriteString(fmt.Sprintf("%s%s %s%s", cursor, check, label, panelGap("\n")))
 	}
 
 	content := b.String()
@@ -261,12 +261,12 @@ func (m componentPickerModel) View(width int) string {
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("  Select Components"))
-	b.WriteString("\n\n")
+	b.WriteString(panelGap("\n\n"))
 
 	for i, item := range m.items {
 		isSelected := i == m.cursor
 
-		cursor := "  "
+		cursor := panelGap("  ")
 		if isSelected {
 			cursor = cursorStyle.Render("▸ ")
 		}
@@ -286,7 +286,7 @@ func (m componentPickerModel) View(width int) string {
 			label = selectedStyle.Render(item.name)
 		}
 
-		b.WriteString(fmt.Sprintf("%s%s %s %s\n", cursor, check, icon, label))
+		b.WriteString(fmt.Sprintf("%s%s %s %s%s", cursor, check, icon, label, panelGap("\n")))
 	}
 
 	content := b.String()

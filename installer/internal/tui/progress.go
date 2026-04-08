@@ -10,16 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Messages for the progress model.
-type stepStartMsg struct{ label string }
-type stepDoneMsg struct {
-	label    string
-	success  bool
-	critical bool // true if this was a critical tool
-	err      error
-}
-type allDoneMsg struct{}
-
 // toolStatus tracks the state of a single tool in the grid.
 type toolStatus int
 
@@ -28,6 +18,7 @@ const (
 	statusActive
 	statusDone
 	statusFailed
+	statusSkipped
 )
 
 // stepResult tracks the outcome of one install step.
@@ -42,7 +33,7 @@ type progressModel struct {
 	spinner  spinner.Model
 	progress progress.Model
 	steps    []stepResult
-	current  string
+	active   []string // currently running task labels
 	done     bool
 	verbose  bool
 
@@ -77,55 +68,77 @@ func (m progressModel) Init() tea.Cmd {
 	return m.spinner.Tick
 }
 
+// markActive is called when an engine task starts running.
+func (m *progressModel) markActive(id, label string) {
+	name := stripLabelPrefix(label)
+	if _, exists := m.toolStatuses[name]; !exists {
+		m.toolNames = append(m.toolNames, name)
+		m.totalTools = len(m.toolNames)
+	}
+	m.toolStatuses[name] = statusActive
+	m.active = append(m.active, label)
+}
+
+// markDone is called when an engine task finishes.
+func (m *progressModel) markDone(id string, err error) {
+	name := stripLabelPrefix(m.labelForActive(id))
+	if err != nil {
+		m.toolStatuses[name] = statusFailed
+		m.steps = append(m.steps, stepResult{label: name, success: false, err: err})
+	} else {
+		m.toolStatuses[name] = statusDone
+		m.steps = append(m.steps, stepResult{label: name, success: true})
+	}
+	m.doneCount++
+	m.removeActive(id)
+}
+
+// markSkipped is called when an engine task is skipped.
+func (m *progressModel) markSkipped(id, reason string) {
+	// Skipped tasks might not have been added to the grid yet.
+	name := id
+	if _, exists := m.toolStatuses[name]; !exists {
+		m.toolNames = append(m.toolNames, name)
+		m.totalTools = len(m.toolNames)
+	}
+	m.toolStatuses[name] = statusSkipped
+	m.steps = append(m.steps, stepResult{label: name, success: false, err: fmt.Errorf("skipped: %s", reason)})
+	m.doneCount++
+}
+
+func (m *progressModel) removeActive(id string) {
+	prefix := "Installing " + id
+	prefix2 := "Setting up " + id
+	prefix3 := "Updating " + id
+	var filtered []string
+	for _, a := range m.active {
+		if a != prefix && a != prefix2 && a != prefix3 && !strings.HasSuffix(a, id) {
+			filtered = append(filtered, a)
+		}
+	}
+	m.active = filtered
+}
+
+func (m *progressModel) labelForActive(id string) string {
+	for _, a := range m.active {
+		if strings.HasSuffix(a, id) || strings.Contains(a, id) {
+			return a
+		}
+	}
+	return id
+}
+
+func stripLabelPrefix(label string) string {
+	for _, prefix := range []string{"Installing ", "Setting up ", "Updating "} {
+		if strings.HasPrefix(label, prefix) {
+			return strings.TrimPrefix(label, prefix)
+		}
+	}
+	return label
+}
+
 func (m progressModel) Update(msg tea.Msg) (progressModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case stepStartMsg:
-		m.current = msg.label
-		// Extract tool name from "Installing xyz" labels.
-		name := msg.label
-		if strings.HasPrefix(name, "Installing ") {
-			name = strings.TrimPrefix(name, "Installing ")
-		} else if strings.HasPrefix(name, "Setting up ") {
-			name = strings.TrimPrefix(name, "Setting up ")
-		} else if strings.HasPrefix(name, "Updating ") {
-			name = strings.TrimPrefix(name, "Updating ")
-		}
-		if _, exists := m.toolStatuses[name]; !exists {
-			m.toolNames = append(m.toolNames, name)
-			m.totalTools = len(m.toolNames)
-		}
-		m.toolStatuses[name] = statusActive
-		return m, nil
-
-	case stepDoneMsg:
-		m.steps = append(m.steps, stepResult{
-			label:   msg.label,
-			success: msg.success,
-			err:     msg.err,
-		})
-		// Update tool status.
-		name := msg.label
-		if strings.HasPrefix(name, "Installing ") {
-			name = strings.TrimPrefix(name, "Installing ")
-		} else if strings.HasPrefix(name, "Setting up ") {
-			name = strings.TrimPrefix(name, "Setting up ")
-		} else if strings.HasPrefix(name, "Updating ") {
-			name = strings.TrimPrefix(name, "Updating ")
-		}
-		if msg.success {
-			m.toolStatuses[name] = statusDone
-		} else {
-			m.toolStatuses[name] = statusFailed
-		}
-		m.doneCount++
-		m.current = ""
-		return m, nil
-
-	case allDoneMsg:
-		m.done = true
-		m.current = ""
-		return m, nil
-
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -145,7 +158,7 @@ func (m progressModel) View(width int) string {
 
 	// Panel title inside content.
 	b.WriteString(titleStyle.Render("  Installing"))
-	b.WriteString("\n\n")
+	b.WriteString(panelGap("\n\n"))
 
 	// Tool grid (3 columns).
 	if len(m.toolNames) > 0 {
@@ -163,14 +176,15 @@ func (m progressModel) View(width int) string {
 				label = label[:colWidth-6] + "…"
 			}
 
-			cell := fmt.Sprintf("%s %-*s", icon, colWidth-4, label)
+			pad := dimStyle.Render(fmt.Sprintf("%-*s", colWidth-4, label))
+			cell := fmt.Sprintf("%s %s", icon, pad)
 			b.WriteString(cell)
 
 			if (i+1)%cols == 0 || i == len(m.toolNames)-1 {
-				b.WriteString("\n")
+				b.WriteString(panelGap("\n"))
 			}
 		}
-		b.WriteString("\n")
+		b.WriteString(panelGap("\n"))
 	}
 
 	// Progress bar.
@@ -181,24 +195,26 @@ func (m progressModel) View(width int) string {
 	m.progress.Width = w - 14
 	bar := m.progress.ViewAs(pct)
 	pctStr := dimStyle.Render(fmt.Sprintf(" %d%%", int(pct*100)))
-	b.WriteString(bar + pctStr + "\n\n")
+	b.WriteString(bar + pctStr + panelGap("\n\n"))
 
-	// Current task.
-	if m.current != "" {
-		b.WriteString(fmt.Sprintf("  %s %s\n", m.spinner.View(), selectedStyle.Render(m.current)))
+	// Active tasks.
+	if len(m.active) > 0 {
+		for _, label := range m.active {
+			b.WriteString(panelGap("  ") + m.spinner.View() + panelGap(" ") + selectedStyle.Render(stripLabelPrefix(label)) + panelGap("\n"))
+		}
 		// Verbose: show recent output lines.
 		if m.verbose && len(m.recentLines) > 0 {
-			b.WriteString("\n")
+			b.WriteString(panelGap("\n"))
 			for _, line := range m.recentLines {
 				truncated := line
 				if len(truncated) > w-8 {
 					truncated = truncated[:w-9] + "…"
 				}
-				b.WriteString("  " + dimStyle.Render(truncated) + "\n")
+				b.WriteString(panelGap("  ") + dimStyle.Render(truncated) + panelGap("\n"))
 			}
 		}
 	} else if m.done {
-		b.WriteString(successStyle.Render("  ✦ All steps completed!") + "\n")
+		b.WriteString(successStyle.Render("  ✦ All steps completed!") + panelGap("\n"))
 	}
 
 	content := b.String()
@@ -222,6 +238,8 @@ func (m progressModel) statusIcon(s toolStatus) string {
 		return progressActiveStyle.Render("●")
 	case statusFailed:
 		return progressFailedStyle.Render("✗")
+	case statusSkipped:
+		return dimStyle.Render("⊘")
 	default:
 		return progressQueuedStyle.Render("○")
 	}

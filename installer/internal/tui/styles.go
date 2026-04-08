@@ -101,6 +101,12 @@ var (
 	stepStyle = lipgloss.NewStyle().Bold(true).Foreground(catSapphire).Background(catSurface0)
 )
 
+// panelGap wraps bare whitespace/newlines with the panel interior background
+// so ANSI resets from child styles never leak the terminal's default background.
+func panelGap(s string) string {
+	return lipgloss.NewStyle().Background(catSurface0).Render(s)
+}
+
 // ---------------------------------------------------------------------------
 // Banner — clean styled text, no ASCII art
 // ---------------------------------------------------------------------------

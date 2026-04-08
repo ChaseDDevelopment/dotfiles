@@ -55,7 +55,7 @@ func (m summaryModel) completionView(width int) string {
 		header := titleStyle.Render("  ✦  Setup Complete  ✦")
 		b.WriteString(centerWrap.Render(header))
 	}
-	b.WriteString("\n\n")
+	b.WriteString(panelGap("\n\n"))
 
 	// Stats row.
 	succeeded := 0
@@ -74,21 +74,21 @@ func (m summaryModel) completionView(width int) string {
 	statsLine := statsStyle.Render(fmt.Sprintf("%d steps", len(m.steps))) + dot +
 		statsStyle.Render(elapsed.String())
 	b.WriteString(centerWrap.Render(statsLine))
-	b.WriteString("\n\n")
+	b.WriteString(panelGap("\n\n"))
 
 	// Success/failure counts.
 	counts := successStyle.Render(fmt.Sprintf("✓ %d succeeded", succeeded))
 	if failed > 0 {
-		counts += "     " + errorStyle.Render(fmt.Sprintf("✗ %d failed", failed))
+		counts += panelGap("     ") + errorStyle.Render(fmt.Sprintf("✗ %d failed", failed))
 	}
 	b.WriteString(centerWrap.Render(counts))
 
 	// Quick start section — inside the panel.
-	b.WriteString("\n\n")
+	b.WriteString(panelGap("\n\n"))
 	b.WriteString(stepStyle.Render("  Quick Start"))
-	b.WriteString("\n")
+	b.WriteString(panelGap("\n"))
 	b.WriteString(thinRule(w))
-	b.WriteString("\n")
+	b.WriteString(panelGap("\n"))
 
 	quickItems := []struct{ cmd, desc string }{
 		{"exec zsh", "Reload shell"},
@@ -96,10 +96,8 @@ func (m summaryModel) completionView(width int) string {
 		{"nvim", "Open Neovim"},
 	}
 	for _, item := range quickItems {
-		b.WriteString(fmt.Sprintf(" %s  %s\n",
-			selectedStyle.Render(fmt.Sprintf("%-16s", item.cmd)),
-			descStyle.Render(item.desc),
-		))
+		b.WriteString(panelGap(" ") + selectedStyle.Render(fmt.Sprintf("%-16s", item.cmd)) +
+			panelGap("  ") + descStyle.Render(item.desc) + panelGap("\n"))
 	}
 
 	// Wrap everything in panel.
