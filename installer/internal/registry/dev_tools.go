@@ -25,13 +25,10 @@ func rustToolchain() []Tool {
 
 func devTools() []Tool {
 	return []Tool{
-		// Neovim — minimum version 0.12.0
+		// Neovim
 		{
 			Name: "neovim", Command: "nvim", Description: "Hyperextensible text editor",
-			Critical:   true,
-			MinVersion: "0.12.0",
-			VersionCmd: "nvim --version",
-			VersionRe:  `([0-9]+\.[0-9]+\.[0-9]+)`,
+			Critical: true,
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodCustom,
 					CustomFunc: func(ctx context.Context, ic *InstallContext) error {
@@ -47,9 +44,26 @@ func devTools() []Tool {
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "neovim"},
 			},
 		},
-		// tree-sitter library
+		// tree-sitter library (dev dependency — not a binary in PATH)
 		{
-			Name: "tree-sitter-lib", Command: "tree-sitter", Description: "Tree-sitter parser library",
+			Name: "tree-sitter-lib", Command: "tree-sitter-lib", Description: "Tree-sitter parser library",
+			IsInstalledFunc: func() bool {
+				// Check via pkg-config (Linux) or header existence (macOS/brew).
+				if err := exec.Command("pkg-config", "--exists", "tree-sitter").Run(); err == nil {
+					return true
+				}
+				// Brew installs headers to known paths.
+				for _, p := range []string{
+					"/opt/homebrew/include/tree_sitter/api.h",
+					"/usr/local/include/tree_sitter/api.h",
+					"/usr/include/tree_sitter/api.h",
+				} {
+					if _, err := os.Stat(p); err == nil {
+						return true
+					}
+				}
+				return false
+			},
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "tree-sitter"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "tree-sitter"},
@@ -209,10 +223,12 @@ func installNeovimApt(ctx context.Context, ic *InstallContext) error {
 }
 
 func installYaziApt(ctx context.Context, ic *InstallContext) error {
-	// Install companion packages first.
+	// Install companion packages first (best-effort — log failures).
 	deps := []string{"ffmpeg", "p7zip-full", "jq", "poppler-utils", "resvg", "imagemagick"}
 	for _, dep := range deps {
-		_ = ic.PkgMgr.Install(ctx, dep)
+		if err := ic.PkgMgr.Install(ctx, dep); err != nil {
+			ic.Runner.Log.Write(fmt.Sprintf("WARNING: optional dep %s failed: %v", dep, err))
+		}
 	}
 	// Build yazi from source via cargo.
 	return ic.Runner.Run(ctx, "cargo", "install", "--force", "yazi-build")

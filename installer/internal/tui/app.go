@@ -141,9 +141,16 @@ func (m AppModel) View() string {
 	var content string
 	switch m.phase {
 	case PhaseMainMenu:
+		cw := contentWidth(w)
+		fullW := panelOuterWidth(cw)
 		banner := renderBanner(w, Version, m.config.Platform)
+		bannerBlock := lipgloss.NewStyle().
+			Width(fullW).
+			AlignHorizontal(lipgloss.Center).
+			Background(catBase).
+			Render(banner)
 		menu := m.mainMenu.View(w)
-		content = lipgloss.JoinVertical(lipgloss.Center, banner, "", menu)
+		content = lipgloss.JoinVertical(lipgloss.Center, bannerBlock, menu)
 	case PhaseOptionsMenu:
 		content = m.options.View(w)
 	case PhaseComponentPicker:
@@ -154,9 +161,18 @@ func (m AppModel) View() string {
 		content = m.summary.View(w)
 	}
 
-	// Center horizontally.
+	// Wrap the content in a full-screen container with catBase background.
+	// Using Style.Render instead of lipgloss.Place ensures that ALL
+	// whitespace — including JoinVertical centering padding between the
+	// banner, panel, and footer — gets the catBase background.
 	if m.width > 0 && m.height > 0 {
-		content = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+		content = lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height).
+			AlignHorizontal(lipgloss.Center).
+			AlignVertical(lipgloss.Center).
+			Background(catBase).
+			Render(content)
 	}
 
 	return content
@@ -199,11 +215,11 @@ func (m AppModel) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) updateOptionsMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "enter" {
-		m.config.SkipUpdate = m.options.options[0].enabled
-		m.config.SkipPackages = m.options.options[1].enabled
-		m.config.Verbose = m.options.options[2].enabled
+		m.config.SkipUpdate = m.options.optionEnabled("skip_update")
+		m.config.SkipPackages = m.options.optionEnabled("skip_packages")
+		m.config.Verbose = m.options.optionEnabled("verbose")
 		m.config.Runner.Verbose = m.config.Verbose
-		m.config.CleanBackup = m.options.options[3].enabled
+		m.config.CleanBackup = m.options.optionEnabled("clean_backup")
 
 		if m.config.Mode == ModeCustomInstall {
 			m.phase = PhaseComponentPicker
@@ -235,6 +251,15 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.progress, cmd = m.progress.Update(msg)
 
+		// Abort if a critical tool failed.
+		if msg.critical && !msg.success {
+			m.summary.steps = m.progress.steps
+			m.summary.endTime = time.Now()
+			m.summary.criticalFailure = true
+			m.phase = PhaseSummary
+			return m, cmd
+		}
+
 		// Chain the next step.
 		if m.stepIdx < len(m.installSteps) {
 			next := m.installSteps[m.stepIdx]
@@ -251,7 +276,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		// Copy verbose output lines from Runner on each tick.
 		if m.config.Verbose && m.config.Runner != nil {
-			m.progress.recentLines = m.config.Runner.RecentLines
+			m.progress.recentLines = m.config.Runner.RecentLinesSnapshot()
 		}
 		var cmd tea.Cmd
 		m.progress, cmd = m.progress.Update(msg)
@@ -275,8 +300,9 @@ func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // installStep is a generic step that can be a tool install, update, or component setup.
 type installStep struct {
-	label string
-	fn    func() error
+	label    string
+	critical bool // if true, failure aborts the entire install
+	fn       func() error
 }
 
 func (m *AppModel) startInstall() tea.Cmd {
@@ -338,7 +364,8 @@ func (m *AppModel) buildInstallSteps() []installStep {
 				Component: t.Name, Action: "Package", Status: "would install",
 			})
 			steps = append(steps, installStep{
-				label: fmt.Sprintf("Installing %s", t.Name),
+				label:    fmt.Sprintf("Installing %s", t.Name),
+				critical: t.Critical,
 				fn: func() error {
 					ic := &registry.InstallContext{Runner: runner, PkgMgr: mgr}
 					return registry.ExecuteInstall(context.Background(), &t, ic, plat)
@@ -407,14 +434,15 @@ func (m *AppModel) buildRestoreSteps() []installStep {
 }
 
 func (m *AppModel) runStepCmd(step installStep) tea.Cmd {
-	return tea.Batch(
+	return tea.Sequence(
 		func() tea.Msg { return stepStartMsg{label: step.label} },
 		func() tea.Msg {
 			err := step.fn()
 			return stepDoneMsg{
-				label:   step.label,
-				success: err == nil,
-				err:     err,
+				label:    step.label,
+				success:  err == nil,
+				critical: step.critical,
+				err:      err,
 			}
 		},
 	)
@@ -433,10 +461,3 @@ func (cfg *AppConfig) IsComponentSelected(name string) bool {
 	return false
 }
 
-// FormatError returns a user-friendly error string.
-func FormatError(err error) string {
-	if err == nil {
-		return ""
-	}
-	return fmt.Sprintf("%v", err)
-}

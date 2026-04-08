@@ -13,9 +13,10 @@ import (
 // Messages for the progress model.
 type stepStartMsg struct{ label string }
 type stepDoneMsg struct {
-	label   string
-	success bool
-	err     error
+	label    string
+	success  bool
+	critical bool // true if this was a critical tool
+	err      error
 }
 type allDoneMsg struct{}
 

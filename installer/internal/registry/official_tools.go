@@ -9,9 +9,21 @@ import (
 
 func officialInstallerTools() []Tool {
 	return []Tool{
-		// nvm — Node Version Manager
+		// nvm — Node Version Manager (shell function, not a binary)
 		{
 			Name: "nvm", Command: "nvm", Description: "Node Version Manager",
+			IsInstalledFunc: func() bool {
+				home := os.Getenv("HOME")
+				for _, p := range []string{
+					filepath.Join(home, ".config", "nvm", "nvm.sh"),
+					filepath.Join(home, ".nvm", "nvm.sh"),
+				} {
+					if _, err := os.Stat(p); err == nil {
+						return true
+					}
+				}
+				return false
+			},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: installNvm},
 			},
@@ -32,9 +44,14 @@ func officialInstallerTools() []Tool {
 				{Method: MethodCustom, CustomFunc: installAtuin},
 			},
 		},
-		// TPM — Tmux Plugin Manager
+		// TPM — Tmux Plugin Manager (git repo, not a binary)
 		{
 			Name: "tpm", Command: "tpm", Description: "Tmux Plugin Manager",
+			IsInstalledFunc: func() bool {
+				tpmDir := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins", "tpm")
+				_, err := os.Stat(tpmDir)
+				return err == nil
+			},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: installTPM},
 			},

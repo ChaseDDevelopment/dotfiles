@@ -45,8 +45,12 @@ func ShouldInstall(t *Tool, p *platform.Platform) bool {
 	return false
 }
 
-// IsInstalled checks if a tool's command is available in PATH.
+// IsInstalled checks if a tool is already present on the system.
+// Uses IsInstalledFunc if set, otherwise falls back to exec.LookPath.
 func IsInstalled(t *Tool) bool {
+	if t.IsInstalledFunc != nil {
+		return t.IsInstalledFunc()
+	}
 	_, err := exec.LookPath(t.Command)
 	return err == nil
 }
@@ -63,7 +67,9 @@ func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platfor
 		err := executeStrategy(ctx, &strategy, ic, p)
 		if err == nil {
 			for _, pa := range strategy.PostInstall {
-				executePostAction(ctx, &pa, ic)
+				if paErr := executePostAction(ctx, &pa, ic); paErr != nil {
+					ic.Runner.Log.Write(fmt.Sprintf("WARNING: %v", paErr))
+				}
 			}
 			return nil
 		}
@@ -143,14 +149,17 @@ func executeScript(ctx context.Context, cfg *ScriptConfig, ic *InstallContext) e
 	return ic.Runner.Run(ctx, shell, args...)
 }
 
-func executePostAction(ctx context.Context, pa *PostAction, ic *InstallContext) {
+func executePostAction(ctx context.Context, pa *PostAction, ic *InstallContext) error {
 	switch pa.Type {
 	case PostSymlink:
 		src := os.ExpandEnv(pa.Source)
 		tgt := os.ExpandEnv(pa.Target)
-		_ = ic.Runner.Run(ctx, "sudo", "ln", "-sf", src, tgt)
+		if err := ic.Runner.Run(ctx, "sudo", "ln", "-sf", src, tgt); err != nil {
+			return fmt.Errorf("post-install symlink %s -> %s: %w", src, tgt, err)
+		}
 	case PostAddToPath:
 		// PATH additions are handled by the runner's Env.
 		ic.Runner.AddEnv("PATH", os.ExpandEnv(pa.Target)+":"+os.Getenv("PATH"))
 	}
+	return nil
 }

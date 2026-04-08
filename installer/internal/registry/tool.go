@@ -33,9 +33,11 @@ type Tool struct {
 	Command     string // binary name to check in PATH
 	Description string
 	Critical    bool   // abort on failure vs warn and continue
-	MinVersion  string // minimum acceptable version (optional)
-	VersionCmd  string // command to get version (optional, e.g. "nvim --version")
-	VersionRe   string // regex to extract version from command output
+
+	// IsInstalledFunc overrides the default exec.LookPath check.
+	// Use for tools that aren't binaries in PATH (e.g., shell functions,
+	// git repos, libraries).
+	IsInstalledFunc func() bool
 
 	// Strategies are tried in order; the first applicable one that
 	// succeeds wins. Each strategy may be restricted to specific
