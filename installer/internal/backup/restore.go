@@ -30,12 +30,24 @@ func Restore(backupDir string, dryRun bool) error {
 		return fmt.Errorf("backup directory not found: %s", backupDir)
 	}
 
+	home := os.Getenv("HOME")
 	for _, path := range ManagedPaths {
 		target := os.ExpandEnv(path)
-		source := filepath.Join(backupDir, filepath.Base(target))
+
+		// Compute backup source using relative path (matches
+		// BackupFile's directory-preserving layout).
+		rel, err := filepath.Rel(home, target)
+		if err != nil {
+			continue
+		}
+		source := filepath.Join(backupDir, rel)
 
 		if _, err := os.Stat(source); os.IsNotExist(err) {
-			continue
+			// Fall back to legacy basename layout for old backups.
+			source = filepath.Join(backupDir, filepath.Base(target))
+			if _, err := os.Stat(source); os.IsNotExist(err) {
+				continue
+			}
 		}
 
 		if dryRun {

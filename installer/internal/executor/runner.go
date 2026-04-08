@@ -53,8 +53,12 @@ func (r *Runner) RunWithOutput(
 	r.Log.Write(fmt.Sprintf("Running: %s", cmdStr))
 
 	cmd := exec.CommandContext(ctx, name, args...)
-	if len(r.Env) > 0 {
-		cmd.Env = append(cmd.Environ(), r.Env...)
+	r.mu.Lock()
+	envCopy := make([]string, len(r.Env))
+	copy(envCopy, r.Env)
+	r.mu.Unlock()
+	if len(envCopy) > 0 {
+		cmd.Env = append(cmd.Environ(), envCopy...)
 	}
 
 	var buf bytes.Buffer
@@ -109,8 +113,12 @@ func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string)
 
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	if len(r.Env) > 0 {
-		cmd.Env = append(cmd.Environ(), r.Env...)
+	r.mu.Lock()
+	envCopy := make([]string, len(r.Env))
+	copy(envCopy, r.Env)
+	r.mu.Unlock()
+	if len(envCopy) > 0 {
+		cmd.Env = append(cmd.Environ(), envCopy...)
 	}
 
 	var buf bytes.Buffer
@@ -135,8 +143,11 @@ func (r *Runner) RunShell(ctx context.Context, script string) error {
 }
 
 // AddEnv appends an environment variable for subsequent commands.
+// Safe to call from multiple goroutines.
 func (r *Runner) AddEnv(key, value string) {
+	r.mu.Lock()
 	r.Env = append(r.Env, fmt.Sprintf("%s=%s", key, value))
+	r.mu.Unlock()
 }
 
 // LastLines returns the last n lines from a string of output.

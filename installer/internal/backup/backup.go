@@ -6,14 +6,17 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
 // Manager handles creating timestamped backups of config files.
+// Safe to use from multiple goroutines.
 type Manager struct {
 	dir     string
 	dryRun  bool
-	created bool
+	once    sync.Once
+	initErr error
 }
 
 // NewManager creates a backup manager with a timestamped directory.
@@ -31,6 +34,7 @@ func NewManager(dryRun bool) *Manager {
 func (m *Manager) Dir() string { return m.dir }
 
 // BackupFile copies a file or directory to the backup dir.
+// Safe to call from multiple goroutines.
 func (m *Manager) BackupFile(path string) error {
 	if m.dryRun {
 		return nil
@@ -39,27 +43,46 @@ func (m *Manager) BackupFile(path string) error {
 		return nil
 	}
 
-	if !m.created {
-		if err := os.MkdirAll(m.dir, 0o755); err != nil {
-			return fmt.Errorf("create backup dir: %w", err)
-		}
-		m.created = true
+	m.once.Do(func() {
+		m.initErr = os.MkdirAll(m.dir, 0o755)
+	})
+	if m.initErr != nil {
+		return fmt.Errorf("create backup dir: %w", m.initErr)
 	}
 
-	dest := filepath.Join(m.dir, filepath.Base(path))
+	dest := m.backupDest(path)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return fmt.Errorf("create backup subdir: %w", err)
+	}
 	return copyRecursive(path, dest)
+}
+
+// backupDest computes the backup destination for a given path,
+// preserving directory structure relative to $HOME to avoid
+// collisions between files with the same basename.
+func (m *Manager) backupDest(path string) string {
+	home := os.Getenv("HOME")
+	rel, err := filepath.Rel(home, path)
+	if err != nil {
+		// Path not under $HOME — fall back to basename.
+		return filepath.Join(m.dir, filepath.Base(path))
+	}
+	return filepath.Join(m.dir, rel)
 }
 
 // Cleanup removes the backup directory.
 func (m *Manager) Cleanup() error {
-	if m.created {
+	if m.Exists() {
 		return os.RemoveAll(m.dir)
 	}
 	return nil
 }
 
 // Exists returns true if the backup directory was created.
-func (m *Manager) Exists() bool { return m.created }
+func (m *Manager) Exists() bool {
+	_, err := os.Stat(m.dir)
+	return err == nil
+}
 
 func copyRecursive(src, dst string) error {
 	info, err := os.Lstat(src)
@@ -111,8 +134,10 @@ func copyFile(src, dst string, info fs.FileInfo) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	_, err = io.Copy(out, in)
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
 	return err
 }

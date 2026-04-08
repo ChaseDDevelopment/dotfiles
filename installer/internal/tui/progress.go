@@ -28,12 +28,18 @@ type stepResult struct {
 	err     error
 }
 
+// activeTask tracks a running task by ID and display label.
+type activeTask struct {
+	id    string
+	label string
+}
+
 // progressModel shows the install dashboard.
 type progressModel struct {
 	spinner  spinner.Model
 	progress progress.Model
 	steps    []stepResult
-	active   []string // currently running task labels
+	active   []activeTask // currently running tasks
 	done     bool
 	verbose  bool
 
@@ -43,8 +49,14 @@ type progressModel struct {
 	totalTools   int
 	doneCount    int
 
+	// Label lookup by task ID.
+	labelByID map[string]string
+
 	// Verbose output lines (read from Runner.RecentLines).
 	recentLines []string
+
+	// Pre-allocated panel style.
+	panelStyle lipgloss.Style
 }
 
 func newProgressModel() progressModel {
@@ -61,6 +73,12 @@ func newProgressModel() progressModel {
 		spinner:      s,
 		progress:     p,
 		toolStatuses: make(map[string]toolStatus),
+		labelByID:    make(map[string]string),
+		panelStyle: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(catMauve).
+			Background(catSurface0).
+			Padding(1, 2),
 	}
 }
 
@@ -71,17 +89,18 @@ func (m progressModel) Init() tea.Cmd {
 // markActive is called when an engine task starts running.
 func (m *progressModel) markActive(id, label string) {
 	name := stripLabelPrefix(label)
+	m.labelByID[id] = name
 	if _, exists := m.toolStatuses[name]; !exists {
 		m.toolNames = append(m.toolNames, name)
 		m.totalTools = len(m.toolNames)
 	}
 	m.toolStatuses[name] = statusActive
-	m.active = append(m.active, label)
+	m.active = append(m.active, activeTask{id: id, label: label})
 }
 
 // markDone is called when an engine task finishes.
 func (m *progressModel) markDone(id string, err error) {
-	name := stripLabelPrefix(m.labelForActive(id))
+	name := m.nameForID(id)
 	if err != nil {
 		m.toolStatuses[name] = statusFailed
 		m.steps = append(m.steps, stepResult{label: name, success: false, err: err})
@@ -94,36 +113,39 @@ func (m *progressModel) markDone(id string, err error) {
 }
 
 // markSkipped is called when an engine task is skipped.
-func (m *progressModel) markSkipped(id, reason string) {
-	// Skipped tasks might not have been added to the grid yet.
-	name := id
+func (m *progressModel) markSkipped(id, label, reason string) {
+	name := stripLabelPrefix(label)
+	if name == "" {
+		name = id
+	}
+	m.labelByID[id] = name
 	if _, exists := m.toolStatuses[name]; !exists {
 		m.toolNames = append(m.toolNames, name)
 		m.totalTools = len(m.toolNames)
 	}
 	m.toolStatuses[name] = statusSkipped
-	m.steps = append(m.steps, stepResult{label: name, success: false, err: fmt.Errorf("skipped: %s", reason)})
+	m.steps = append(m.steps, stepResult{
+		label:   name,
+		success: false,
+		err:     fmt.Errorf("skipped: %s", reason),
+	})
 	m.doneCount++
 }
 
 func (m *progressModel) removeActive(id string) {
-	prefix := "Installing " + id
-	prefix2 := "Setting up " + id
-	prefix3 := "Updating " + id
-	var filtered []string
+	var filtered []activeTask
 	for _, a := range m.active {
-		if a != prefix && a != prefix2 && a != prefix3 && !strings.HasSuffix(a, id) {
+		if a.id != id {
 			filtered = append(filtered, a)
 		}
 	}
 	m.active = filtered
 }
 
-func (m *progressModel) labelForActive(id string) string {
-	for _, a := range m.active {
-		if strings.HasSuffix(a, id) || strings.Contains(a, id) {
-			return a
-		}
+// nameForID returns the display name for a task ID.
+func (m *progressModel) nameForID(id string) string {
+	if name, ok := m.labelByID[id]; ok {
+		return name
 	}
 	return id
 }
@@ -199,8 +221,9 @@ func (m progressModel) View(width int) string {
 
 	// Active tasks.
 	if len(m.active) > 0 {
-		for _, label := range m.active {
-			b.WriteString(panelGap("  ") + m.spinner.View() + panelGap(" ") + selectedStyle.Render(stripLabelPrefix(label)) + panelGap("\n"))
+		for _, at := range m.active {
+			name := stripLabelPrefix(at.label)
+			b.WriteString(panelGap("  ") + m.spinner.View() + panelGap(" ") + selectedStyle.Render(name) + panelGap("\n"))
 		}
 		// Verbose: show recent output lines.
 		if m.verbose && len(m.recentLines) > 0 {
@@ -219,13 +242,7 @@ func (m progressModel) View(width int) string {
 
 	content := b.String()
 
-	panel := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(catMauve).
-		Background(catSurface0).
-		Padding(1, 2).
-		Width(w).
-		Render(content)
+	panel := m.panelStyle.Width(w).Render(content)
 
 	return panel
 }

@@ -74,6 +74,10 @@ type AppModel struct {
 	// Parallel engine event channel.
 	eventCh <-chan any
 
+	// cancelEngine cancels the engine context, stopping all running
+	// tasks and preventing goroutine leaks on Ctrl+C or critical failure.
+	cancelEngine context.CancelFunc
+
 	startTime time.Time
 }
 
@@ -102,6 +106,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "ctrl+c":
+			if m.cancelEngine != nil {
+				m.cancelEngine()
+			}
 			m.quitting = true
 			return m, tea.Quit
 		case "q":
@@ -261,16 +268,19 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progress.markDone(msg.ID, msg.Err)
 		// Abort if a critical tool failed.
 		if msg.Critical && msg.Err != nil {
+			if m.cancelEngine != nil {
+				m.cancelEngine()
+			}
 			m.summary.steps = m.progress.steps
 			m.summary.endTime = time.Now()
 			m.summary.criticalFailure = true
 			m.phase = PhaseSummary
-			return m, nil
+			return m, drainCmd(m.eventCh)
 		}
 		return m, listenCmd(m.eventCh)
 
 	case engine.TaskSkippedMsg:
-		m.progress.markSkipped(msg.ID, msg.Reason)
+		m.progress.markSkipped(msg.ID, msg.Label, msg.Reason)
 		return m, listenCmd(m.eventCh)
 
 	case engine.AllDoneMsg:
@@ -292,6 +302,12 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case engine.AllDoneMsg:
+		// Engine finished draining — nothing to do.
+		return m, nil
+	case engine.TaskStartedMsg, engine.TaskDoneMsg, engine.TaskSkippedMsg:
+		// Straggler events from engine drain — ignore.
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -352,7 +368,9 @@ func (m *AppModel) startInstall() tea.Cmd {
 		return nil
 	}
 
-	m.eventCh = engine.Run(context.Background(), tasks, maxParallelWorkers)
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelEngine = cancel
+	m.eventCh = engine.Run(ctx, tasks, maxParallelWorkers)
 	return tea.Batch(m.progress.Init(), listenCmd(m.eventCh))
 }
 
@@ -368,28 +386,45 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 
 	// Package installation.
 	if !m.config.SkipPackages {
-		// Build set of tasks being installed (for dependency filtering).
-		installedSet := map[string]bool{}
 		tools := registry.AllTools()
+
+		// Pass 1: build the set of tools that do NOT need a task
+		// (already installed or filtered by platform). This must
+		// be complete before creating tasks so that dependency
+		// filtering works regardless of iteration order.
+		installedSet := map[string]bool{}
+		for _, t := range tools {
+			if !registry.ShouldInstall(&t, plat) {
+				installedSet[t.Command] = true
+				continue
+			}
+			if registry.IsInstalled(&t) {
+				installedSet[t.Command] = true
+			}
+		}
+
+		// Pass 2: create tasks for tools that need installation.
 		for _, t := range tools {
 			if !registry.ShouldInstall(&t, plat) {
 				continue
 			}
 			if registry.IsInstalled(&t) {
-				installedSet[t.Command] = true
 				m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-					Component: t.Name, Action: "Package", Status: "already installed",
+					Component: t.Name, Action: "Package",
+					Status: "already installed",
 				})
 				continue
 			}
 			m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-				Component: t.Name, Action: "Package", Status: "would install",
+				Component: t.Name, Action: "Package",
+				Status: "would install",
 			})
 
 			t := t // capture
 			taskID := t.Command
 
-			// Only depend on tasks that are actually being installed.
+			// Only depend on tasks that are actually being
+			// installed (not already present or platform-filtered).
 			var deps []string
 			for _, dep := range t.DependsOn {
 				if !installedSet[dep] {
@@ -513,6 +548,18 @@ func listenCmd(ch <-chan any) tea.Cmd {
 			return engine.AllDoneMsg{}
 		}
 		return msg
+	}
+}
+
+// drainCmd consumes and discards remaining engine events after the
+// TUI has transitioned away from the install phase (e.g., on critical
+// failure). This prevents engine goroutines from blocking on sends.
+func drainCmd(ch <-chan any) tea.Cmd {
+	return func() tea.Msg {
+		for range ch {
+			// Discard until channel is closed.
+		}
+		return engine.AllDoneMsg{}
 	}
 }
 

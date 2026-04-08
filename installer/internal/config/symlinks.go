@@ -144,7 +144,9 @@ func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun
 
 	// Backup existing target if it exists.
 	if _, err := os.Lstat(target); err == nil {
-		bm.BackupFile(target)
+		if err := bm.BackupFile(target); err != nil {
+			return fmt.Errorf("backup %s: %w", target, err)
+		}
 	}
 
 	// Ensure parent directory exists.
