@@ -63,8 +63,13 @@ detect_os() {
 
         if check_command apt; then
             PACKAGE_MANAGER="apt"
-            INSTALL_CMD_ARRAY=("sudo" "apt" "install" "-y")
-            UPDATE_CMD_ARRAY=("bash" "-c" "sudo apt update && sudo apt upgrade -y")
+            if check_command nala; then
+                INSTALL_CMD_ARRAY=("sudo" "nala" "install" "-y")
+                UPDATE_CMD_ARRAY=("bash" "-c" "sudo nala upgrade -y")
+            else
+                INSTALL_CMD_ARRAY=("sudo" "apt-get" "install" "-y")
+                UPDATE_CMD_ARRAY=("bash" "-c" "sudo apt-get update && sudo apt-get upgrade -y")
+            fi
 
         elif check_command dnf; then
             PACKAGE_MANAGER="dnf"

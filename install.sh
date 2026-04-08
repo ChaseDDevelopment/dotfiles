@@ -39,37 +39,91 @@ CLEAN_BACKUP=false
 # =============================================================================
 
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" | tee -a "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG_FILE"
 }
 
 info() {
-    echo -e "${BLUE}::${NC} $*"
+    printf "${BLUE}::${NC} %s\n" "$*"
     log "INFO: $*"
 }
 
 success() {
-    echo -e "${GREEN}::${NC} $*"
+    printf "${GREEN}✓${NC}  %s\n" "$*"
     log "SUCCESS: $*"
 }
 
 warning() {
-    echo -e "${YELLOW}::${NC} $*"
+    printf "${YELLOW}::${NC} %s\n" "$*"
     log "WARNING: $*"
 }
 
 error() {
-    echo -e "${RED}::${NC} $*" >&2
+    printf "${RED}✗${NC}  %s\n" "$*" >&2
     log "ERROR: $*"
 }
 
 step() {
-    echo -e "\n${PURPLE}=>${NC} ${WHITE}$*${NC}"
+    printf "\n${PURPLE}==>${NC} ${WHITE}%s${NC}\n" "$*"
     log "STEP: $*"
 }
 
 substep() {
-    echo -e "  ${CYAN}->${NC} $*"
+    printf "  ${CYAN}->${NC} %s\n" "$*"
     log "SUBSTEP: $*"
+}
+
+# Run a command with a spinner (hides output, shows on failure)
+run_with_spinner() {
+    local label="$1"; shift
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        substep "[DRY RUN] Would run: $*"
+        return 0
+    fi
+
+    local log_tmp
+    log_tmp=$(mktemp)
+
+    # Non-interactive: just run with label
+    if [[ ! -t 1 ]]; then
+        substep "$label"
+        if "$@" > "$log_tmp" 2>&1; then
+            rm -f "$log_tmp"
+            return 0
+        else
+            local rc=$?
+            tail -20 "$log_tmp" >&2
+            rm -f "$log_tmp"
+            return $rc
+        fi
+    fi
+
+    printf "  ${CYAN}->${NC} %s " "$label"
+
+    "$@" > "$log_tmp" 2>&1 &
+    local pid=$!
+    local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r  ${CYAN}->${NC} %s ${CYAN}%s${NC} " "$label" "${frames:i%10:1}"
+        sleep 0.1
+        ((i++))
+    done
+
+    wait "$pid"
+    local rc=$?
+
+    if [[ $rc -eq 0 ]]; then
+        printf "\r  ${GREEN}✓${NC}  %s\n" "$label"
+    else
+        printf "\r  ${RED}✗${NC}  %s\n" "$label"
+        error "Command failed (exit $rc). Last 20 lines:"
+        tail -20 "$log_tmp" >&2
+    fi
+
+    rm -f "$log_tmp"
+    return $rc
 }
 
 prompt_continue() {
@@ -331,7 +385,8 @@ main() {
     # Initialize log file
     echo "Installation started at $(date)" > "$LOG_FILE"
 
-    # Redirect all output to both terminal and log file
+    # Log all output while preserving terminal colors
+    exec 3>&1
     exec > >(tee -a "$LOG_FILE") 2>&1
 
     if [[ "$DRY_RUN" == "true" ]]; then

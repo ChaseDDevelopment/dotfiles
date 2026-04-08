@@ -91,26 +91,21 @@ install_package() {
 
     for package in $package_names; do
         if ! check_package_installed "$package"; then
-            substep "Installing $package..."
-            if [[ "$DRY_RUN" == "false" ]]; then
-                if ! "${INSTALL_CMD_ARRAY[@]}" "$package"; then
-                    case "$package" in
-                        "git"|"curl"|"fish"|"tmux"|"neovim")
-                            error "Failed to install critical package: $package"
-                            error "Cannot continue without this package. Please install manually and retry."
-                            exit 1
-                            ;;
-                        *)
-                            warning "Failed to install optional package: $package"
-                            warning "Some features may not work correctly."
-                            ;;
-                    esac
-                fi
-            else
-                substep "[DRY RUN] Would install: $package"
+            if ! run_with_spinner "Installing $package" "${INSTALL_CMD_ARRAY[@]}" "$package"; then
+                case "$package" in
+                    "git"|"curl"|"fish"|"tmux"|"neovim")
+                        error "Failed to install critical package: $package"
+                        error "Cannot continue without this package. Please install manually and retry."
+                        exit 1
+                        ;;
+                    *)
+                        warning "Failed to install optional package: $package"
+                        warning "Some features may not work correctly."
+                        ;;
+                esac
             fi
         else
-            substep "$package is already installed"
+            success "$package is already installed"
         fi
     done
 }
@@ -143,15 +138,8 @@ check_package_installed() {
 
 # Update all system packages using the detected package manager.
 update_system() {
-    substep "Updating system packages..."
-    if [[ "$DRY_RUN" == "false" ]]; then
-        if ! "${UPDATE_CMD_ARRAY[@]}"; then
-            warning "System update failed. This is often non-critical."
-            warning "You may want to run system updates manually later."
-        else
-            substep "System packages updated successfully"
-        fi
-    else
-        substep "[DRY RUN] Would run: ${UPDATE_CMD_ARRAY[*]}"
+    if ! run_with_spinner "Updating system packages" "${UPDATE_CMD_ARRAY[@]}"; then
+        warning "System update failed. This is often non-critical."
+        warning "You may want to run system updates manually later."
     fi
 }

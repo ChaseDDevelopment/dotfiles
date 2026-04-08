@@ -37,6 +37,22 @@ install_packages() {
         update_system
     fi
 
+    # Pre-flight: install nala on apt systems for prettier/faster installs
+    if [[ "$PACKAGE_MANAGER" == "apt" ]] && ! check_command nala; then
+        substep "Installing nala (prettier apt frontend)..."
+        if [[ "$DRY_RUN" == "false" ]]; then
+            if sudo apt-get install -y nala > /dev/null 2>&1; then
+                INSTALL_CMD_ARRAY=("sudo" "nala" "install" "-y")
+                UPDATE_CMD_ARRAY=("bash" "-c" "sudo nala upgrade -y")
+                success "Switched to nala for remaining installs"
+            else
+                warning "nala not available in repos, continuing with apt-get"
+            fi
+        else
+            substep "[DRY RUN] Would install nala and switch to it"
+        fi
+    fi
+
     # Core development tools
     substep "Installing core development tools..."
     install_package "git"
