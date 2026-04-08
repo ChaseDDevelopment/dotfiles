@@ -12,6 +12,9 @@
 install.log
 *.log
 
+# Claude Code workspace
+.claude/
+
 # Backup directories
 backups/
 .dotfiles-backup-*/
