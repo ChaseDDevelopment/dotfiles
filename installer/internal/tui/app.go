@@ -10,6 +10,7 @@ import (
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/engine"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
@@ -59,19 +60,21 @@ type AppConfig struct {
 
 // AppModel is the top-level Bubble Tea model.
 type AppModel struct {
-	phase     Phase
-	config    *AppConfig
-	mainMenu  mainMenuModel
-	options   optionsMenuModel
-	picker    componentPickerModel
-	progress  progressModel
-	summary   summaryModel
-	width        int
-	height       int
-	quitting     bool
-	stepIdx      int
-	installSteps []installStep
-	startTime    time.Time
+	phase    Phase
+	config   *AppConfig
+	mainMenu mainMenuModel
+	options  optionsMenuModel
+	picker   componentPickerModel
+	progress progressModel
+	summary  summaryModel
+	width    int
+	height   int
+	quitting bool
+
+	// Parallel engine event channel.
+	eventCh <-chan any
+
+	startTime time.Time
 }
 
 // NewApp creates the initial application model.
@@ -88,7 +91,10 @@ func NewApp(cfg *AppConfig) AppModel {
 }
 
 func (m AppModel) Init() tea.Cmd {
-	return m.progress.Init()
+	// Don't start the spinner tick here — it dies during PhaseMainMenu
+	// because updateMainMenu doesn't forward spinner.TickMsg. The tick
+	// chain is started in startInstall() when actually needed.
+	return nil
 }
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -247,34 +253,34 @@ func (m AppModel) updateComponentPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case stepDoneMsg:
-		var cmd tea.Cmd
-		m.progress, cmd = m.progress.Update(msg)
+	case engine.TaskStartedMsg:
+		m.progress.markActive(msg.ID, msg.Label)
+		return m, listenCmd(m.eventCh)
 
+	case engine.TaskDoneMsg:
+		m.progress.markDone(msg.ID, msg.Err)
 		// Abort if a critical tool failed.
-		if msg.critical && !msg.success {
+		if msg.Critical && msg.Err != nil {
 			m.summary.steps = m.progress.steps
 			m.summary.endTime = time.Now()
 			m.summary.criticalFailure = true
 			m.phase = PhaseSummary
-			return m, cmd
+			return m, nil
 		}
+		return m, listenCmd(m.eventCh)
 
-		// Chain the next step.
-		if m.stepIdx < len(m.installSteps) {
-			next := m.installSteps[m.stepIdx]
-			m.stepIdx++
-			return m, tea.Batch(cmd, m.runStepCmd(next))
-		}
+	case engine.TaskSkippedMsg:
+		m.progress.markSkipped(msg.ID, msg.Reason)
+		return m, listenCmd(m.eventCh)
 
-		// All done.
+	case engine.AllDoneMsg:
 		m.summary.steps = m.progress.steps
 		m.summary.endTime = time.Now()
 		m.phase = PhaseSummary
-		return m, cmd
+		return m, nil
 
 	default:
-		// Copy verbose output lines from Runner on each tick.
+		// Forward spinner ticks, progress frames, etc.
 		if m.config.Verbose && m.config.Runner != nil {
 			m.progress.recentLines = m.config.Runner.RecentLinesSnapshot()
 		}
@@ -310,26 +316,21 @@ func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // --------------------------------------------------------------------------
-// Install orchestration
+// Install orchestration (parallel engine)
 // --------------------------------------------------------------------------
 
-// installStep is a generic step that can be a tool install, update, or component setup.
-type installStep struct {
-	label    string
-	critical bool // if true, failure aborts the entire install
-	fn       func() error
-}
+const maxParallelWorkers = 5
 
 func (m *AppModel) startInstall() tea.Cmd {
-	var steps []installStep
+	var tasks []engine.Task
 
 	switch m.config.Mode {
 	case ModeUpdate:
-		steps = m.buildUpdateSteps()
+		tasks = m.buildUpdateTasks()
 	case ModeRestore:
-		steps = m.buildRestoreSteps()
+		tasks = m.buildRestoreTasks()
 	default:
-		steps = m.buildInstallSteps()
+		tasks = m.buildInstallTasks()
 	}
 
 	if m.config.DryRun {
@@ -341,38 +342,41 @@ func (m *AppModel) startInstall() tea.Cmd {
 		return nil
 	}
 
-	m.installSteps = steps
-	m.stepIdx = 0
 	m.startTime = time.Now()
 	m.summary.startTime = m.startTime
 	m.progress.verbose = m.config.Verbose
 
-	if len(steps) == 0 {
+	if len(tasks) == 0 {
 		m.summary.steps = nil
 		m.phase = PhaseSummary
 		return nil
 	}
 
-	first := m.installSteps[0]
-	m.stepIdx = 1
-	return m.runStepCmd(first)
+	m.eventCh = engine.Run(context.Background(), tasks, maxParallelWorkers)
+	return tea.Batch(m.progress.Init(), listenCmd(m.eventCh))
 }
 
-func (m *AppModel) buildInstallSteps() []installStep {
-	var steps []installStep
+func (m *AppModel) buildInstallTasks() []engine.Task {
+	var tasks []engine.Task
 	runner := m.config.Runner
 	mgr := m.config.PkgMgr
 	plat := m.config.Platform
+	mgrName := mgr.Name()
+
+	// Collect tool task IDs for component setup dependencies.
+	var toolTaskIDs []string
 
 	// Package installation.
 	if !m.config.SkipPackages {
+		// Build set of tasks being installed (for dependency filtering).
+		installedSet := map[string]bool{}
 		tools := registry.AllTools()
 		for _, t := range tools {
-			t := t // capture
 			if !registry.ShouldInstall(&t, plat) {
 				continue
 			}
 			if registry.IsInstalled(&t) {
+				installedSet[t.Command] = true
 				m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 					Component: t.Name, Action: "Package", Status: "already installed",
 				})
@@ -381,18 +385,34 @@ func (m *AppModel) buildInstallSteps() []installStep {
 			m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 				Component: t.Name, Action: "Package", Status: "would install",
 			})
-			steps = append(steps, installStep{
-				label:    fmt.Sprintf("Installing %s", t.Name),
-				critical: t.Critical,
-				fn: func() error {
+
+			t := t // capture
+			taskID := t.Command
+
+			// Only depend on tasks that are actually being installed.
+			var deps []string
+			for _, dep := range t.DependsOn {
+				if !installedSet[dep] {
+					deps = append(deps, dep)
+				}
+			}
+
+			tasks = append(tasks, engine.Task{
+				ID:        taskID,
+				Label:     fmt.Sprintf("Installing %s", t.Name),
+				Critical:  t.Critical,
+				DependsOn: deps,
+				Resources: resourcesForTool(&t, mgrName),
+				Run: func(ctx context.Context) error {
 					ic := &registry.InstallContext{Runner: runner, PkgMgr: mgr}
-					return registry.ExecuteInstall(context.Background(), &t, ic, plat)
+					return registry.ExecuteInstall(ctx, &t, ic, plat)
 				},
 			})
+			toolTaskIDs = append(toolTaskIDs, taskID)
 		}
 	}
 
-	// Component setup (symlinks + hooks).
+	// Component setup (symlinks + hooks) — depends on all tool installs.
 	bm := backup.NewManager(m.config.DryRun)
 	for _, comp := range config.AllComponents() {
 		comp := comp // capture
@@ -403,9 +423,11 @@ func (m *AppModel) buildInstallSteps() []installStep {
 		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 			Component: comp.Name, Action: "Setup", Status: status,
 		})
-		steps = append(steps, installStep{
-			label: fmt.Sprintf("Setting up %s", comp.Name),
-			fn: func() error {
+		tasks = append(tasks, engine.Task{
+			ID:        "setup-" + comp.Name,
+			Label:     fmt.Sprintf("Setting up %s", comp.Name),
+			DependsOn: toolTaskIDs,
+			Run: func(ctx context.Context) error {
 				sc := &config.SetupContext{
 					Runner:   runner,
 					RootDir:  m.config.RootDir,
@@ -413,58 +435,85 @@ func (m *AppModel) buildInstallSteps() []installStep {
 					DryRun:   m.config.DryRun,
 					Platform: plat,
 				}
-				return config.SetupComponent(context.Background(), comp, sc)
+				return config.SetupComponent(ctx, comp, sc)
 			},
 		})
 	}
 
-	return steps
+	return tasks
 }
 
-func (m *AppModel) buildUpdateSteps() []installStep {
-	var steps []installStep
+// resourcesForTool determines which engine resources a tool needs based
+// on its first applicable install strategy for the current platform.
+func resourcesForTool(t *registry.Tool, mgrName string) []engine.Resource {
+	for _, s := range t.Strategies {
+		if !s.AppliesTo(mgrName) {
+			continue
+		}
+		switch s.Method {
+		case registry.MethodPackageManager:
+			if mgrName == "apt" {
+				return []engine.Resource{engine.ResApt}
+			}
+		case registry.MethodCargo:
+			return []engine.Resource{engine.ResCargo}
+		}
+		// First applicable strategy determines the resource.
+		return nil
+	}
+	return nil
+}
+
+func (m *AppModel) buildUpdateTasks() []engine.Task {
+	var tasks []engine.Task
 	updateSteps := update.AllSteps(m.config.Runner, m.config.PkgMgr, m.config.Platform)
+	var prevID string
 	for _, s := range updateSteps {
 		s := s
-		steps = append(steps, installStep{
-			label: fmt.Sprintf("Updating %s", s.Name),
-			fn: func() error {
-				return s.Fn(context.Background())
+		id := "update-" + s.Name
+		var deps []string
+		if prevID != "" {
+			deps = []string{prevID}
+		}
+		tasks = append(tasks, engine.Task{
+			ID:        id,
+			Label:     fmt.Sprintf("Updating %s", s.Name),
+			DependsOn: deps,
+			Run: func(ctx context.Context) error {
+				return s.Fn(ctx)
 			},
 		})
+		prevID = id
 	}
-	return steps
+	return tasks
 }
 
-func (m *AppModel) buildRestoreSteps() []installStep {
-	return []installStep{
+func (m *AppModel) buildRestoreTasks() []engine.Task {
+	return []engine.Task{
 		{
-			label: "Restoring from backup",
-			fn: func() error {
+			ID:    "restore",
+			Label: "Restoring from backup",
+			Run: func(_ context.Context) error {
 				backups, err := backup.ListBackups()
 				if err != nil || len(backups) == 0 {
 					return fmt.Errorf("no backups found")
 				}
-				// Use the most recent backup.
 				return backup.Restore(backups[0].Path, m.config.DryRun)
 			},
 		},
 	}
 }
 
-func (m *AppModel) runStepCmd(step installStep) tea.Cmd {
-	return tea.Sequence(
-		func() tea.Msg { return stepStartMsg{label: step.label} },
-		func() tea.Msg {
-			err := step.fn()
-			return stepDoneMsg{
-				label:    step.label,
-				success:  err == nil,
-				critical: step.critical,
-				err:      err,
-			}
-		},
-	)
+// listenCmd returns a Bubble Tea command that blocks until the next
+// engine event arrives, then delivers it as a tea.Msg.
+func listenCmd(ch <-chan any) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return engine.AllDoneMsg{}
+		}
+		return msg
+	}
 }
 
 // IsComponentSelected checks if a component should be set up.
