@@ -50,6 +50,10 @@ type Tool struct {
 	// OSFilter restricts this tool to specific operating systems.
 	// Empty means install on all platforms.
 	OSFilter []string // e.g., ["darwin"] or ["linux"]
+
+	// DependsOn lists tool Command names that must be installed before
+	// this tool. Used by the parallel install engine for DAG ordering.
+	DependsOn []string
 }
 
 // InstallStrategy describes one way to install a tool.

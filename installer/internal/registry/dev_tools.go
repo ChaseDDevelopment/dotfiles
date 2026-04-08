@@ -74,6 +74,7 @@ func devTools() []Tool {
 		// tree-sitter CLI
 		{
 			Name: "tree-sitter-cli", Command: "tree-sitter", Description: "Tree-sitter CLI",
+			DependsOn: []string{"cargo"}, // cargo fallback on apt/dnf
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "tree-sitter-cli"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "tree-sitter-cli"},
@@ -93,6 +94,7 @@ func devTools() []Tool {
 		// ruff — Python linter/formatter
 		{
 			Name: "ruff", Command: "ruff", Description: "Python linter and formatter",
+			DependsOn: []string{"uv"},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
 					return ic.Runner.Run(ctx, "uv", "tool", "install", "ruff")
