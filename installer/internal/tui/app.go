@@ -502,6 +502,14 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 			continue
 		}
 		status := config.InspectComponent(comp.Name, m.config.RootDir)
+		if status == "already configured" && !m.config.ForceReinstall {
+			m.summary.alreadyConfigured++
+			m.config.PlanRows = append(m.config.PlanRows, PlanRow{
+				Component: comp.Name, Action: "Setup",
+				Status: "already configured",
+			})
+			continue
+		}
 		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 			Component: comp.Name, Action: "Setup", Status: status,
 		})

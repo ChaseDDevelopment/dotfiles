@@ -22,7 +22,8 @@ type summaryModel struct {
 	steps            []stepResult
 	dryRun           bool
 	criticalFailure  bool // true if a critical tool failed
-	alreadyInstalled int  // tools skipped because already present
+	alreadyInstalled  int // tools skipped because already present
+	alreadyConfigured int // components skipped because configs match
 	startTime        time.Time
 	endTime          time.Time
 	viewport         viewport.Model
@@ -94,6 +95,10 @@ func (m summaryModel) completionView(width int) string {
 	if m.alreadyInstalled > 0 {
 		parts = append(parts, dimStyle.Render(
 			fmt.Sprintf("● %d already installed", m.alreadyInstalled)))
+	}
+	if m.alreadyConfigured > 0 {
+		parts = append(parts, dimStyle.Render(
+			fmt.Sprintf("● %d already configured", m.alreadyConfigured)))
 	}
 	if len(parts) == 0 {
 		parts = append(parts, dimStyle.Render("No changes needed"))
