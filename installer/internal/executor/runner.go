@@ -21,13 +21,40 @@ type Runner struct {
 	// recentLines holds the last N lines of output when Verbose is true.
 	// Protected by mu; use RecentLinesSnapshot() to read.
 	recentLines []string
-	mu          sync.Mutex
-	maxRecent   int
+	// verboseCh receives human-readable status lines when verbose mode
+	// is active. Nil until EnableVerboseChannel is called.
+	verboseCh chan string
+	mu        sync.Mutex
+	maxRecent int
 }
 
 // NewRunner creates a Runner attached to the given log file.
 func NewRunner(log *LogFile, dryRun bool) *Runner {
 	return &Runner{Log: log, DryRun: dryRun, maxRecent: 8}
+}
+
+// EnableVerboseChannel creates the buffered channel used by
+// EmitVerbose. Call once before starting tasks.
+func (r *Runner) EnableVerboseChannel(bufSize int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.verboseCh == nil {
+		r.verboseCh = make(chan string, bufSize)
+	}
+}
+
+// EmitVerbose sends a human-readable status line to the verbose
+// channel. No-op when the channel is nil. Uses a non-blocking
+// send so task goroutines never stall if the TUI falls behind.
+func (r *Runner) EmitVerbose(msg string) {
+	ch := r.verboseCh
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- msg:
+	default:
+	}
 }
 
 // Run executes a command, captures stdout+stderr to the log,
@@ -51,6 +78,7 @@ func (r *Runner) RunWithOutput(
 	}
 
 	r.Log.Write(fmt.Sprintf("Running: %s", cmdStr))
+	r.EmitVerbose("$ " + cmdStr)
 
 	cmd := exec.CommandContext(ctx, name, args...)
 	r.mu.Lock()
@@ -70,15 +98,13 @@ func (r *Runner) RunWithOutput(
 	err := cmd.Run()
 	output := buf.String()
 
-	// Store recent output lines for verbose TUI display.
+	// Emit output lines to the verbose channel.
 	if r.Verbose && output != "" {
-		lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-		if len(lines) > r.maxRecent {
-			lines = lines[len(lines)-r.maxRecent:]
+		for _, line := range strings.Split(
+			strings.TrimRight(output, "\n"), "\n",
+		) {
+			r.EmitVerbose(line)
 		}
-		r.mu.Lock()
-		r.recentLines = lines
-		r.mu.Unlock()
 	}
 
 	if err != nil {
@@ -90,11 +116,29 @@ func (r *Runner) RunWithOutput(
 	return output, nil
 }
 
-// RecentLinesSnapshot returns a copy of the recent output lines.
-// Safe to call from a different goroutine than RunWithOutput.
+// RecentLinesSnapshot drains any pending verbose channel messages
+// into recentLines and returns a copy. Safe to call from a
+// different goroutine than RunWithOutput.
 func (r *Runner) RecentLinesSnapshot() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// Drain the verbose channel into recentLines.
+	if r.verboseCh != nil {
+		for {
+			select {
+			case line := <-r.verboseCh:
+				r.recentLines = append(
+					r.recentLines, line,
+				)
+				if len(r.recentLines) > r.maxRecent {
+					r.recentLines = r.recentLines[len(r.recentLines)-r.maxRecent:]
+				}
+			default:
+				goto drained
+			}
+		}
+	drained:
+	}
 	cp := make([]string, len(r.recentLines))
 	copy(cp, r.recentLines)
 	return cp
@@ -110,6 +154,7 @@ func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string)
 	}
 
 	r.Log.Write(fmt.Sprintf("Running (in %s): %s", dir, cmdStr))
+	r.EmitVerbose("$ " + cmdStr)
 
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
@@ -129,17 +174,13 @@ func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string)
 	err := cmd.Run()
 	output := buf.String()
 
-	// Store recent output lines for verbose TUI display.
+	// Emit output lines to the verbose channel.
 	if r.Verbose && output != "" {
-		lines := strings.Split(
+		for _, line := range strings.Split(
 			strings.TrimRight(output, "\n"), "\n",
-		)
-		if len(lines) > r.maxRecent {
-			lines = lines[len(lines)-r.maxRecent:]
+		) {
+			r.EmitVerbose(line)
 		}
-		r.mu.Lock()
-		r.recentLines = lines
-		r.mu.Unlock()
 	}
 
 	if err != nil {

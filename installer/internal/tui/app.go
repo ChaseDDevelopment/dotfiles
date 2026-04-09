@@ -393,6 +393,10 @@ func (m *AppModel) startInstall() tea.Cmd {
 	m.summary.startTime = m.startTime
 	m.progress.verbose = m.config.Verbose
 
+	if m.config.Verbose {
+		m.config.Runner.EnableVerboseChannel(64)
+	}
+
 	if len(tasks) == 0 {
 		m.summary.steps = nil
 		m.phase = PhaseSummary
@@ -480,6 +484,7 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 
 	// Component setup (symlinks + hooks) — depends on all tool installs.
 	bm := backup.NewManager(m.config.DryRun)
+	var setupTaskIDs []string
 	for _, comp := range config.AllComponents() {
 		comp := comp // capture
 		if !m.config.IsComponentSelected(comp.Name) {
@@ -489,8 +494,9 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 			Component: comp.Name, Action: "Setup", Status: status,
 		})
+		taskID := "setup-" + comp.Name
 		tasks = append(tasks, engine.Task{
-			ID:        "setup-" + comp.Name,
+			ID:        taskID,
 			Label:     fmt.Sprintf("Setting up %s", comp.Name),
 			DependsOn: toolTaskIDs,
 			Run: func(ctx context.Context) error {
@@ -504,6 +510,26 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 				return config.SetupComponent(ctx, comp, sc)
 			},
 		})
+		setupTaskIDs = append(setupTaskIDs, taskID)
+	}
+
+	// Cleanup backup directory if requested.
+	if m.config.CleanBackup {
+		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
+			Component: "Backup", Action: "Cleanup",
+			Status: "would remove",
+		})
+		if !m.config.DryRun {
+			allDeps := append(toolTaskIDs, setupTaskIDs...)
+			tasks = append(tasks, engine.Task{
+				ID:        "cleanup-backup",
+				Label:     "Cleaning up backup",
+				DependsOn: allDeps,
+				Run: func(_ context.Context) error {
+					return bm.Cleanup()
+				},
+			})
+		}
 	}
 
 	return tasks

@@ -46,6 +46,10 @@ func SetupComponent(ctx context.Context, comp Component, sc *SetupContext) error
 	// Check required command.
 	if comp.RequiredCmd != "" {
 		if _, err := exec.LookPath(comp.RequiredCmd); err != nil {
+			sc.Runner.EmitVerbose(fmt.Sprintf(
+				"Skipping %s: %s not found",
+				comp.Name, comp.RequiredCmd,
+			))
 			sc.Runner.Log.Write(fmt.Sprintf(
 				"Skipping %s setup: %s not found", comp.Name, comp.RequiredCmd))
 			return nil
@@ -53,7 +57,10 @@ func SetupComponent(ctx context.Context, comp Component, sc *SetupContext) error
 	}
 
 	// Apply symlinks for this component.
-	if err := ApplyAllSymlinks(comp.Name, sc.RootDir, sc.Backup, sc.DryRun); err != nil {
+	sc.Runner.EmitVerbose("Configuring symlinks for " + comp.Name)
+	if err := ApplyAllSymlinks(
+		comp.Name, sc.RootDir, sc.Backup, sc.DryRun, sc.Runner,
+	); err != nil {
 		return fmt.Errorf("symlinks for %s: %w", comp.Name, err)
 	}
 
@@ -88,6 +95,7 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 	home := os.Getenv("HOME")
 
 	// Create XDG directories.
+	sc.Runner.EmitVerbose("Creating XDG directories")
 	dirs := []string{
 		filepath.Join(home, ".config"),
 		filepath.Join(home, ".local", "share"),
@@ -122,6 +130,7 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		}
 	}
 	if !antidoteFound {
+		sc.Runner.EmitVerbose("Installing Antidote plugin manager")
 		if platform.HasCommand("brew") {
 			if err := sc.Runner.Run(ctx, "brew", "install", "antidote"); err != nil {
 				return fmt.Errorf("install antidote: %w", err)
@@ -164,6 +173,7 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 
 func setupTmux(ctx context.Context, sc *SetupContext) error {
 	// Install TPM plugins if TPM exists.
+	sc.Runner.EmitVerbose("Checking for TPM plugins")
 	tpmScript := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins", "tpm", "scripts", "install_plugins.sh")
 	if _, err := os.Stat(tpmScript); err == nil {
 		// Start tmux server and source config for TPM env (best-effort).
@@ -193,6 +203,7 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 
 func setupNeovim(ctx context.Context, sc *SetupContext) error {
 	home := os.Getenv("HOME")
+	sc.Runner.EmitVerbose("Creating Neovim directories")
 	for _, d := range []string{
 		filepath.Join(home, ".local", "share", "nvim"),
 		filepath.Join(home, ".local", "state", "nvim"),
@@ -206,6 +217,7 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 	// Build blink.cmp fuzzy matcher if available.
 	blinkDir := filepath.Join(home, ".local", "share", "nvim", "site", "pack", "core", "opt", "blink.cmp")
 	if _, err := os.Stat(blinkDir); err == nil && platform.HasCommand("cargo") {
+		sc.Runner.EmitVerbose("Building blink.cmp fuzzy matcher")
 		if err := sc.Runner.RunInDir(ctx, blinkDir, "cargo", "build", "--release"); err != nil {
 			sc.Runner.Log.Write(fmt.Sprintf("WARNING: blink.cmp cargo build failed: %v", err))
 		}
@@ -240,6 +252,9 @@ func setupYazi(ctx context.Context, sc *SetupContext) error {
 
 func setupGhostty(sc *SetupContext) error {
 	if !sc.Platform.IsDesktopEnvironment() {
+		sc.Runner.EmitVerbose(
+			"Skipping Ghostty: no desktop environment",
+		)
 		sc.Runner.Log.Write(
 			"Skipping Ghostty: no desktop environment detected",
 		)
@@ -251,6 +266,7 @@ func setupGhostty(sc *SetupContext) error {
 
 func setupGit(_ context.Context, sc *SetupContext) error {
 	// Ensure ~/.config/git/ exists before the file symlink.
+	sc.Runner.EmitVerbose("Creating ~/.config/git directory")
 	gitDir := os.ExpandEnv("$HOME/.config/git")
 	return os.MkdirAll(gitDir, 0o755)
 }

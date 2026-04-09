@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 )
 
 // SymlinkEntry defines one config symlink mapping.
@@ -123,8 +124,16 @@ func InspectComponent(component, rootDir string) string {
 	return "would configure"
 }
 
-// ApplySymlink creates a single symlink, backing up the existing target.
-func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun bool) error {
+// ApplySymlink creates a single symlink, backing up the existing
+// target. The runner parameter is used for verbose status output
+// and may be nil.
+func ApplySymlink(
+	entry SymlinkEntry,
+	rootDir string,
+	bm *backup.Manager,
+	dryRun bool,
+	runner *executor.Runner,
+) error {
 	source := filepath.Join(rootDir, "configs", entry.Source)
 	target := os.ExpandEnv(entry.Target)
 
@@ -140,6 +149,11 @@ func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun
 		canonExisting, err2 := filepath.Abs(existing)
 		if err1 == nil && err2 == nil &&
 			canonSource == canonExisting {
+			if runner != nil {
+				runner.EmitVerbose(
+					"✓ " + target + " (already correct)",
+				)
+			}
 			return nil // already correct
 		}
 	}
@@ -150,6 +164,9 @@ func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun
 
 	// Backup existing target if it exists.
 	if _, err := os.Lstat(target); err == nil {
+		if runner != nil {
+			runner.EmitVerbose("Backing up " + target)
+		}
 		if err := bm.BackupFile(target); err != nil {
 			return fmt.Errorf("backup %s: %w", target, err)
 		}
@@ -162,6 +179,9 @@ func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun
 
 	// Remove stale target and create symlink.
 	os.RemoveAll(target)
+	if runner != nil {
+		runner.EmitVerbose("Symlink " + target)
+	}
 	if err := os.Symlink(source, target); err != nil {
 		return fmt.Errorf("symlink %s -> %s: %w", source, target, err)
 	}
@@ -170,12 +190,21 @@ func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun
 }
 
 // ApplyAllSymlinks creates all symlinks for a given component.
-func ApplyAllSymlinks(component, rootDir string, bm *backup.Manager, dryRun bool) error {
+// The runner parameter is used for verbose status output and may
+// be nil.
+func ApplyAllSymlinks(
+	component, rootDir string,
+	bm *backup.Manager,
+	dryRun bool,
+	runner *executor.Runner,
+) error {
 	for _, entry := range AllSymlinks() {
 		if entry.Component != component {
 			continue
 		}
-		if err := ApplySymlink(entry, rootDir, bm, dryRun); err != nil {
+		if err := ApplySymlink(
+			entry, rootDir, bm, dryRun, runner,
+		); err != nil {
 			return err
 		}
 	}
