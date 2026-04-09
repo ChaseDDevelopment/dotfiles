@@ -33,7 +33,7 @@ func NeedsSudo() bool {
 func PreAuth() error {
 	fmt.Fprintln(
 		os.Stderr,
-		"[sudo] Password required for installation...",
+		"[sudo] Password required (cached for this session only):",
 	)
 	cmd := exec.Command("sudo", "-v")
 	cmd.Stdin = os.Stdin
@@ -42,10 +42,6 @@ func PreAuth() error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("sudo authentication failed: %w", err)
 	}
-	fmt.Fprintln(
-		os.Stderr,
-		"[sudo] Credentials cached for this session only.",
-	)
 	return nil
 }
 
