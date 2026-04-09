@@ -133,11 +133,22 @@ func executeStrategy(ctx context.Context, s *InstallStrategy, ic *InstallContext
 	}
 }
 
-func executeScript(ctx context.Context, cfg *ScriptConfig, ic *InstallContext) error {
-	tmpFile := fmt.Sprintf("/tmp/dotsetup-script-%d.sh", os.Getpid())
+func executeScript(
+	ctx context.Context,
+	cfg *ScriptConfig,
+	ic *InstallContext,
+) error {
+	f, err := os.CreateTemp("", "dotsetup-script-*.sh")
+	if err != nil {
+		return fmt.Errorf("create temp script: %w", err)
+	}
+	tmpFile := f.Name()
+	f.Close()
 	defer os.Remove(tmpFile)
 
-	if err := ic.Runner.Run(ctx, "curl", "-fsSL", cfg.URL, "-o", tmpFile); err != nil {
+	if err := ic.Runner.Run(
+		ctx, "curl", "-fsSL", cfg.URL, "-o", tmpFile,
+	); err != nil {
 		return fmt.Errorf("download script: %w", err)
 	}
 

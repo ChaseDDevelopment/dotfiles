@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"runtime"
 )
 
 func rustToolchain() []Tool {
@@ -184,12 +184,7 @@ func installNeovimPacman(ctx context.Context, ic *InstallContext) error {
 func installNeovimApt(ctx context.Context, ic *InstallContext) error {
 	// Download from GitHub releases for apt systems (repos are too old).
 	arch := "x86_64"
-	if strings.Contains(strings.ToLower(os.Getenv("HOSTTYPE")), "aarch64") {
-		arch = "arm64"
-	}
-	// Check runtime arch as well.
-	out, _ := exec.Command("uname", "-m").Output()
-	if strings.TrimSpace(string(out)) == "aarch64" {
+	if runtime.GOARCH == "arm64" {
 		arch = "arm64"
 	}
 

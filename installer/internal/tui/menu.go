@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ func newMainMenu() mainMenuModel {
 }
 
 func (m mainMenuModel) Update(msg tea.Msg) (mainMenuModel, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
@@ -99,7 +99,6 @@ func (m mainMenuModel) View(width int) string {
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).
-		Background(catBase).
 		Render(footer)
 
 	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
@@ -146,7 +145,7 @@ func (m optionsMenuModel) optionEnabled(key string) bool {
 }
 
 func (m optionsMenuModel) Update(msg tea.Msg) (optionsMenuModel, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
@@ -156,7 +155,7 @@ func (m optionsMenuModel) Update(msg tea.Msg) (optionsMenuModel, tea.Cmd) {
 			if m.cursor < len(m.options)-1 {
 				m.cursor++
 			}
-		case " ", "x":
+		case "space", "x":
 			m.options[m.cursor].enabled = !m.options[m.cursor].enabled
 		}
 	}
@@ -193,11 +192,10 @@ func (m optionsMenuModel) View(width int) string {
 	content := b.String()
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
-	footer := renderFooter("space toggle", "enter continue", "q quit")
+	footer := renderFooter("space toggle", "enter continue", "esc back")
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).
-		Background(catBase).
 		Render(footer)
 
 	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
@@ -235,7 +233,7 @@ func newComponentPicker() componentPickerModel {
 }
 
 func (m componentPickerModel) Update(msg tea.Msg) (componentPickerModel, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
@@ -245,7 +243,7 @@ func (m componentPickerModel) Update(msg tea.Msg) (componentPickerModel, tea.Cmd
 			if m.cursor < len(m.items)-1 {
 				m.cursor++
 			}
-		case " ", "x":
+		case "space", "x":
 			m.items[m.cursor].selected = !m.items[m.cursor].selected
 			if m.cursor == 0 {
 				for i := 1; i < len(m.items); i++ {
@@ -292,11 +290,10 @@ func (m componentPickerModel) View(width int) string {
 	content := b.String()
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
-	footer := renderFooter("space toggle", "enter continue", "q quit")
+	footer := renderFooter("space toggle", "enter continue", "esc back")
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).
-		Background(catBase).
 		Render(footer)
 
 	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)

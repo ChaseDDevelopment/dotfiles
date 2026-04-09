@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 )
 
 // PlanRow holds one row of the dry-run summary table.
@@ -113,11 +113,10 @@ func (m summaryModel) completionView(width int) string {
 		Width(w).
 		Render(b.String())
 
-	footer := renderFooter("q exit", "enter exit")
+	footer := renderFooter("enter menu", "q quit")
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).
-		Background(catBase).
 		Render(footer)
 
 	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
@@ -196,7 +195,7 @@ func (m summaryModel) dryRunView(width, height int) string {
 		hdr.WriteString("\n")
 
 		panel := dryRunPanelStyle.Width(w).Render(hdr.String())
-		footer := renderFooter("q exit", "enter exit")
+		footer := renderFooter("enter menu", "q quit")
 		footerBlock := lipgloss.NewStyle().
 			Width(panelOuterWidth(w)).
 			AlignHorizontal(lipgloss.Center).
@@ -262,11 +261,10 @@ func (m summaryModel) dryRunView(width, height int) string {
 	if needsScroll {
 		hints = "↑↓ scroll · q exit"
 	}
-	footer := renderFooter(hints, "enter exit")
+	footer := renderFooter(hints, "enter menu", "q quit")
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).
-		Background(catBase).
 		Render(footer)
 
 	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
@@ -285,7 +283,10 @@ func (m *summaryModel) initViewport(width, height int) {
 		availableRows = 5
 	}
 
-	m.viewport = viewport.New(innerW, availableRows)
+	m.viewport = viewport.New(
+		viewport.WithWidth(innerW),
+		viewport.WithHeight(availableRows),
+	)
 	m.viewport.SetContent(m.dryRunTableRows(w))
 	m.viewport.Style = lipgloss.NewStyle().
 		Width(innerW).

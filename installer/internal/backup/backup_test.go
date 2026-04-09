@@ -20,9 +20,7 @@ func TestBackupPreservesPath(t *testing.T) {
 	os.WriteFile(fileB, []byte("content-b"), 0o644)
 
 	// Override HOME so backupDest computes relative paths from tmpDir.
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
 
 	bm := NewManager(false)
 	// Override the backup dir to be under tmpDir for cleanup.

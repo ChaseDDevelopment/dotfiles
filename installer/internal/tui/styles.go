@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
@@ -20,8 +20,7 @@ var (
 	catSubtext0  = lipgloss.Color("#a6adc8")
 	catSubtext1  = lipgloss.Color("#bac2de")
 	catText      = lipgloss.Color("#cdd6f4")
-	catLavender  = lipgloss.Color("#b4befe")
-	catSapphire  = lipgloss.Color("#74c7ec")
+	catSapphire = lipgloss.Color("#74c7ec")
 	catGreen     = lipgloss.Color("#a6e3a1")
 	catYellow    = lipgloss.Color("#f9e2af")
 	catRed       = lipgloss.Color("#f38ba8")
@@ -29,10 +28,10 @@ var (
 )
 
 // ---------------------------------------------------------------------------
-// Styles — every inline style carries an explicit Background so that child
-// ANSI resets (\x1b[0m) never leak the terminal's transparent background.
-//   • Panel-interior styles use catSurface0
-//   • Screen-level styles (banner, footer) use catBase
+// Styles — panel-interior styles carry explicit Background(catSurface0) so
+// that child ANSI resets (\x1b[0m) never leak catBase into the panel.
+// Screen-level styles no longer need explicit Background(catBase) because
+// tea.View.BackgroundColor sets the terminal background at the VT level.
 // ---------------------------------------------------------------------------
 
 var (
@@ -57,8 +56,7 @@ var (
 			MarginBottom(1)
 
 	subtitleStyle = lipgloss.NewStyle().
-			Foreground(catOverlay1).
-			Background(catBase)
+			Foreground(catOverlay1)
 
 	dimStyle = lipgloss.NewStyle().
 			Foreground(catOverlay0).
@@ -93,9 +91,9 @@ var (
 	tableHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(catMauve).Background(catSurface0).PaddingRight(3)
 	tableCellStyle   = lipgloss.NewStyle().Foreground(catText).Background(catSurface0).PaddingRight(3)
 
-	// Footer (screen level – outside panels)
-	footerStyle    = lipgloss.NewStyle().Foreground(catOverlay0).Background(catBase).MarginTop(1)
-	footerKeyStyle = lipgloss.NewStyle().Foreground(catSubtext0).Background(catBase)
+	// Footer (screen level – outside panels; VT bg handles catBase)
+	footerStyle    = lipgloss.NewStyle().Foreground(catOverlay0).MarginTop(1)
+	footerKeyStyle = lipgloss.NewStyle().Foreground(catSubtext0)
 
 	// Section headers inside panels
 	stepStyle = lipgloss.NewStyle().Bold(true).Foreground(catSapphire).Background(catSurface0)
@@ -115,10 +113,9 @@ func renderBanner(_ int, version string, plat *platform.Platform) string {
 	bannerTitle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(catMauve).
-		Background(catBase).
 		Render("  dotsetup")
 
-	dot := lipgloss.NewStyle().Foreground(catOverlay0).Background(catBase).Render(" · ")
+	dot := lipgloss.NewStyle().Foreground(catOverlay0).Render(" · ")
 	sub := subtitleStyle.Render(" chaseddevelopment/dotfiles") +
 		dot + subtitleStyle.Render(version) +
 		dot + subtitleStyle.Render(plat.OSName+" "+plat.Arch.String())
@@ -132,7 +129,7 @@ func renderBanner(_ int, version string, plat *platform.Platform) string {
 
 // renderFooter builds a key-hint footer line.
 func renderFooter(hints ...string) string {
-	dot := lipgloss.NewStyle().Foreground(catOverlay0).Background(catBase).Render(" · ")
+	dot := lipgloss.NewStyle().Foreground(catOverlay0).Render(" · ")
 	parts := make([]string, len(hints))
 	for i, h := range hints {
 		parts[i] = footerKeyStyle.Render(h)

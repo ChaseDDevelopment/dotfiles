@@ -127,9 +127,25 @@ func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string)
 	cmd.Stderr = io.MultiWriter(&buf, logWriter)
 
 	err := cmd.Run()
+	output := buf.String()
+
+	// Store recent output lines for verbose TUI display.
+	if r.Verbose && output != "" {
+		lines := strings.Split(
+			strings.TrimRight(output, "\n"), "\n",
+		)
+		if len(lines) > r.maxRecent {
+			lines = lines[len(lines)-r.maxRecent:]
+		}
+		r.mu.Lock()
+		r.recentLines = lines
+		r.mu.Unlock()
+	}
 
 	if err != nil {
-		r.Log.Write(fmt.Sprintf("FAILED: %s (exit: %v)", cmdStr, err))
+		r.Log.Write(fmt.Sprintf(
+			"FAILED: %s (exit: %v)", cmdStr, err,
+		))
 		return fmt.Errorf("%s: %w", cmdStr, err)
 	}
 

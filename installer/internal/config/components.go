@@ -240,8 +240,12 @@ func setupYazi(ctx context.Context, sc *SetupContext) error {
 
 func setupGhostty(sc *SetupContext) error {
 	if !sc.Platform.IsDesktopEnvironment() {
-		sc.Runner.Log.Write("Skipping Ghostty: no desktop environment detected")
+		sc.Runner.Log.Write(
+			"Skipping Ghostty: no desktop environment detected",
+		)
+		return nil
 	}
+	// Ghostty config is handled by symlinks — no extra setup needed.
 	return nil
 }
 

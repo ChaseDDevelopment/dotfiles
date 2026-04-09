@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -20,10 +21,7 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
 	out := make(chan any, 128)
 
 	go func() {
-		defer func() {
-			send(ctx, out, AllDoneMsg{})
-			close(out)
-		}()
+		defer close(out)
 
 		if len(tasks) == 0 {
 			return
@@ -90,12 +88,18 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
 						cycled = append(cycled, id)
 					}
 				}
-				send(ctx, out, TaskDoneMsg{
-					ID:       cycled[0],
-					Label:    byID[cycled[0]].Label,
-					Err:      fmt.Errorf("dependency cycle involving: %v", cycled),
-					Critical: true,
-				})
+				sort.Strings(cycled)
+				for _, id := range cycled {
+					send(ctx, out, TaskDoneMsg{
+						ID:    id,
+						Label: byID[id].Label,
+						Err: fmt.Errorf(
+							"dependency cycle involving: %v",
+							cycled,
+						),
+						Critical: true,
+					})
+				}
 				return
 			}
 		}
@@ -209,6 +213,7 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
 							for _, res := range acquired {
 								<-resSems[res]
 							}
+							markFinished()
 							return
 						}
 

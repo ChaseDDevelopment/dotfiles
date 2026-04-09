@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -63,7 +64,7 @@ func (m *Manager) BackupFile(path string) error {
 func (m *Manager) backupDest(path string) string {
 	home := os.Getenv("HOME")
 	rel, err := filepath.Rel(home, path)
-	if err != nil {
+	if err != nil || strings.HasPrefix(rel, "..") {
 		// Path not under $HOME — fall back to basename.
 		return filepath.Join(m.dir, filepath.Base(path))
 	}

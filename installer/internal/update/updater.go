@@ -91,19 +91,42 @@ var cargoTools = [][2]string{
 	{"tree-sitter", "tree-sitter-cli"},
 }
 
-func updateCargoBinaries(ctx context.Context, runner *executor.Runner, mgrName string) error {
+func updateCargoBinaries(
+	ctx context.Context,
+	runner *executor.Runner,
+	mgrName string,
+) error {
 	if !platform.HasCommand("cargo") {
 		return nil
 	}
+	var errs []error
 	for _, pair := range cargoTools {
 		cmd, crate := pair[0], pair[1]
 		if platform.HasCommand(cmd) {
-			_ = runner.Run(ctx, "cargo", "install", crate)
+			if err := runner.Run(
+				ctx, "cargo", "install", crate,
+			); err != nil {
+				errs = append(errs, fmt.Errorf(
+					"cargo install %s: %w", crate, err,
+				))
+			}
 		}
 	}
 	// yazi via cargo only if not brew/pacman installed
-	if platform.HasCommand("yazi") && mgrName != "brew" && mgrName != "pacman" {
-		_ = runner.Run(ctx, "cargo", "install", "--force", "yazi-build")
+	if platform.HasCommand("yazi") &&
+		mgrName != "brew" && mgrName != "pacman" {
+		if err := runner.Run(
+			ctx, "cargo", "install", "--force", "yazi-build",
+		); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"cargo install yazi-build: %w", err,
+			))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf(
+			"cargo update failures: %v", errs,
+		)
 	}
 	return nil
 }
@@ -168,7 +191,7 @@ func updateNeovim(ctx context.Context, runner *executor.Runner, mgr pkgmgr.Packa
 			rm -f /tmp/nvim.tar.gz
 		`)
 	default:
-		return mgr.UpdateAll(ctx)
+		return mgr.Install(ctx, "neovim")
 	}
 }
 

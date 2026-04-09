@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
@@ -103,7 +103,7 @@ func (m AppModel) Init() tea.Cmd {
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle global keys.
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
 		switch msg.String() {
 		case "ctrl+c":
 			if m.cancelEngine != nil {
@@ -141,9 +141,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m AppModel) View() string {
+func (m AppModel) View() tea.View {
 	if m.quitting {
-		return ""
+		return tea.NewView("")
 	}
 
 	w := m.width
@@ -160,7 +160,6 @@ func (m AppModel) View() string {
 		bannerBlock := lipgloss.NewStyle().
 			Width(fullW).
 			AlignHorizontal(lipgloss.Center).
-			Background(catBase).
 			Render(banner)
 		menu := m.mainMenu.View(w)
 		content = lipgloss.JoinVertical(lipgloss.Center, bannerBlock, menu)
@@ -174,21 +173,23 @@ func (m AppModel) View() string {
 		content = m.summary.View(w, m.height)
 	}
 
-	// Wrap the content in a full-screen container with catBase background.
-	// Using Style.Render instead of lipgloss.Place ensures that ALL
-	// whitespace — including JoinVertical centering padding between the
-	// banner, panel, and footer — gets the catBase background.
+	// Wrap the content in a full-screen container.
+	// tea.View.BackgroundColor = catBase sets the terminal background
+	// at the VT level, so we no longer need explicit Background(catBase).
 	if m.width > 0 && m.height > 0 {
 		content = lipgloss.NewStyle().
 			Width(m.width).
 			Height(m.height).
 			AlignHorizontal(lipgloss.Center).
 			AlignVertical(lipgloss.Center).
-			Background(catBase).
 			Render(content)
 	}
 
-	return content
+	v := tea.NewView(content)
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	v.BackgroundColor = catBase
+	return v
 }
 
 // Version is injected from main.
@@ -199,7 +200,7 @@ var Version = "dev"
 // --------------------------------------------------------------------------
 
 func (m AppModel) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "enter" {
+	if msg, ok := msg.(tea.KeyPressMsg); ok && msg.String() == "enter" {
 		mode := m.mainMenu.selected()
 		m.config.Mode = mode
 		switch mode {
@@ -227,20 +228,26 @@ func (m AppModel) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m AppModel) updateOptionsMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "enter" {
-		m.config.SkipUpdate = m.options.optionEnabled("skip_update")
-		m.config.SkipPackages = m.options.optionEnabled("skip_packages")
-		m.config.Verbose = m.options.optionEnabled("verbose")
-		m.config.Runner.Verbose = m.config.Verbose
-		m.config.CleanBackup = m.options.optionEnabled("clean_backup")
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
+		switch msg.String() {
+		case "enter":
+			m.config.SkipUpdate = m.options.optionEnabled("skip_update")
+			m.config.SkipPackages = m.options.optionEnabled("skip_packages")
+			m.config.Verbose = m.options.optionEnabled("verbose")
+			m.config.Runner.Verbose = m.config.Verbose
+			m.config.CleanBackup = m.options.optionEnabled("clean_backup")
 
-		if m.config.Mode == ModeCustomInstall {
-			m.phase = PhaseComponentPicker
-		} else {
-			m.phase = PhaseInstalling
-			return m, m.startInstall()
+			if m.config.Mode == ModeCustomInstall {
+				m.phase = PhaseComponentPicker
+			} else {
+				m.phase = PhaseInstalling
+				return m, m.startInstall()
+			}
+			return m, nil
+		case "esc", "backspace":
+			m.phase = PhaseMainMenu
+			return m, nil
 		}
-		return m, nil
 	}
 	var cmd tea.Cmd
 	m.options, cmd = m.options.Update(msg)
@@ -248,10 +255,16 @@ func (m AppModel) updateOptionsMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m AppModel) updateComponentPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "enter" {
-		m.config.SelectedComponents = m.picker.selectedComponents()
-		m.phase = PhaseInstalling
-		return m, m.startInstall()
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
+		switch msg.String() {
+		case "enter":
+			m.config.SelectedComponents = m.picker.selectedComponents()
+			m.phase = PhaseInstalling
+			return m, m.startInstall()
+		case "esc", "backspace":
+			m.phase = PhaseOptionsMenu
+			return m, nil
+		}
 	}
 	var cmd tea.Cmd
 	m.picker, cmd = m.picker.Update(msg)
@@ -315,9 +328,13 @@ func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.summary.initViewport(msg.Width, msg.Height)
 		}
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "enter", "q":
+		case "enter", "esc", "backspace":
+			m.returnToMainMenu()
+			return m, nil
+		case "q":
+			m.quitting = true
 			return m, tea.Quit
 		}
 	}
@@ -329,6 +346,20 @@ func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	return m, nil
+}
+
+// returnToMainMenu resets transient state and returns to the main menu.
+func (m *AppModel) returnToMainMenu() {
+	m.phase = PhaseMainMenu
+	m.config.DryRun = false
+	m.config.PlanRows = nil
+	m.config.SelectedComponents = nil
+	m.cancelEngine = nil
+	m.eventCh = nil
+	m.progress = newProgressModel()
+	m.summary = newSummaryModel(false)
+	m.options = newOptionsMenu()
+	m.picker = newComponentPicker()
 }
 
 // --------------------------------------------------------------------------

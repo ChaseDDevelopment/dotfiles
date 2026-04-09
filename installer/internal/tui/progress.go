@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // toolStatus tracks the state of a single tool in the grid.
@@ -54,9 +54,6 @@ type progressModel struct {
 
 	// Verbose output lines (read from Runner.RecentLines).
 	recentLines []string
-
-	// Pre-allocated panel style.
-	panelStyle lipgloss.Style
 }
 
 func newProgressModel() progressModel {
@@ -65,7 +62,10 @@ func newProgressModel() progressModel {
 	s.Style = progressActiveStyle
 
 	p := progress.New(
-		progress.WithGradient("#cba6f7", "#74c7ec"),
+		progress.WithColors(
+			lipgloss.Color("#cba6f7"),
+			lipgloss.Color("#74c7ec"),
+		),
 		progress.WithoutPercentage(),
 	)
 
@@ -74,11 +74,6 @@ func newProgressModel() progressModel {
 		progress:     p,
 		toolStatuses: make(map[string]toolStatus),
 		labelByID:    make(map[string]string),
-		panelStyle: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(catMauve).
-			Background(catSurface0).
-			Padding(1, 2),
 	}
 }
 
@@ -167,8 +162,8 @@ func (m progressModel) Update(msg tea.Msg) (progressModel, tea.Cmd) {
 		return m, cmd
 
 	case progress.FrameMsg:
-		mdl, cmd := m.progress.Update(msg)
-		m.progress = mdl.(progress.Model)
+		var cmd tea.Cmd
+		m.progress, cmd = m.progress.Update(msg)
 		return m, cmd
 	}
 	return m, nil
@@ -214,7 +209,7 @@ func (m progressModel) View(width int) string {
 	if m.totalTools > 0 {
 		pct = float64(m.doneCount) / float64(m.totalTools)
 	}
-	m.progress.Width = w - 14
+	m.progress.SetWidth(w - 14)
 	bar := m.progress.ViewAs(pct)
 	pctStr := dimStyle.Render(fmt.Sprintf(" %d%%", int(pct*100)))
 	b.WriteString(bar + pctStr + panelGap("\n\n"))
@@ -242,7 +237,7 @@ func (m progressModel) View(width int) string {
 
 	content := b.String()
 
-	panel := m.panelStyle.Width(w).Render(content)
+	panel := panelStyle.Width(w).Render(content)
 
 	return panel
 }

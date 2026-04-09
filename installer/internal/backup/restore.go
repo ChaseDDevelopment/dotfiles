@@ -37,7 +37,7 @@ func Restore(backupDir string, dryRun bool) error {
 		// Compute backup source using relative path (matches
 		// BackupFile's directory-preserving layout).
 		rel, err := filepath.Rel(home, target)
-		if err != nil {
+		if err != nil || strings.HasPrefix(rel, "..") {
 			continue
 		}
 		source := filepath.Join(backupDir, rel)

@@ -174,10 +174,12 @@ func downloadFile(ctx context.Context, url, dest string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	_, err = io.Copy(f, resp.Body)
-	return err
+	_, copyErr := io.Copy(f, resp.Body)
+	if closeErr := f.Close(); copyErr == nil {
+		copyErr = closeErr
+	}
+	return copyErr
 }
 
 func findBinary(dir, name string) (string, error) {

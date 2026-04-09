@@ -133,9 +133,15 @@ func ApplySymlink(entry SymlinkEntry, rootDir string, bm *backup.Manager, dryRun
 		return fmt.Errorf("source not found: %s", source)
 	}
 
-	// Check if symlink already points correctly.
-	if existing, err := os.Readlink(target); err == nil && existing == source {
-		return nil // already correct
+	// Check if symlink already points correctly (canonicalize
+	// both paths for reliable comparison, matching InspectSymlink).
+	if existing, err := os.Readlink(target); err == nil {
+		canonSource, err1 := filepath.Abs(source)
+		canonExisting, err2 := filepath.Abs(existing)
+		if err1 == nil && err2 == nil &&
+			canonSource == canonExisting {
+			return nil // already correct
+		}
 	}
 
 	if dryRun {
