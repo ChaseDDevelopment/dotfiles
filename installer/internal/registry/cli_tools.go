@@ -1,6 +1,14 @@
 package registry
 
-import "github.com/chaseddevelopment/dotfiles/installer/internal/github"
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+
+	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
+)
 
 func coreTools() []Tool {
 	return []Tool{
@@ -103,11 +111,10 @@ func cliTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "tailspin"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "tailspin"},
-				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
-					Repo: "bensadeh/tailspin", Pattern: github.PatternTargetTriple,
-					Binary: "tspin", StripV: false, LibC: "musl",
-				}},
+				{Method: MethodCustom, CustomFunc: installTailspin},
+				{Method: MethodCargo, Crate: "tailspin"},
 			},
+			CargoCrate: "tailspin",
 		},
 		// delta — syntax-highlighted git diffs
 		{
@@ -115,6 +122,7 @@ func cliTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "git-delta"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "git-delta"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "git-delta"},
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "git-delta"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "dandavison/delta", Pattern: github.PatternVersionPrefixed,
@@ -190,4 +198,49 @@ func cliTools() []Tool {
 			},
 		},
 	}
+}
+
+// installTailspin downloads the tailspin binary from GitHub Releases.
+// Asset naming uses "tailspin-{triple}" (dash separator, project name)
+// which doesn't match any standard URL pattern.
+func installTailspin(ctx context.Context, ic *InstallContext) error {
+	arch := "x86_64"
+	if runtime.GOARCH == "arm64" {
+		arch = "aarch64"
+	}
+	var triple string
+	if runtime.GOOS == "darwin" {
+		triple = arch + "-apple-darwin"
+	} else {
+		triple = arch + "-unknown-linux-musl"
+	}
+	url := fmt.Sprintf(
+		"https://github.com/bensadeh/tailspin/releases/latest/download/tailspin-%s.tar.gz",
+		triple,
+	)
+
+	tmpDir, err := os.MkdirTemp("", "tailspin-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tarPath := filepath.Join(tmpDir, "tailspin.tar.gz")
+	if err := ic.Runner.Run(
+		ctx, "curl", "-fsSL", url, "-o", tarPath,
+	); err != nil {
+		return fmt.Errorf("download tailspin: %w", err)
+	}
+
+	if err := ic.Runner.Run(
+		ctx, "tar", "-xzf", tarPath, "-C", tmpDir,
+	); err != nil {
+		return fmt.Errorf("extract tailspin: %w", err)
+	}
+
+	binPath := filepath.Join(tmpDir, "tspin")
+	return ic.Runner.Run(
+		ctx, "sudo", "install", "-m", "755", binPath,
+		"/usr/local/bin/tspin",
+	)
 }

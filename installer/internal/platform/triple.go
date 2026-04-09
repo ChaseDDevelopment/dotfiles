@@ -36,12 +36,12 @@ func (p *Platform) GoStyle() (string, string) {
 	return os, arch
 }
 
-// TitleStyle returns capitalized OS and raw arch: ("Linux"/"Darwin", "x86_64"/"arm64").
-// Used by lazygit and gum GitHub release URLs.
+// TitleStyle returns lowercase OS and raw arch: ("linux"/"darwin", "x86_64"/"arm64").
+// Used by lazygit GitHub release URLs.
 func (p *Platform) TitleStyle() (string, string) {
-	os := "Linux"
+	os := "linux"
 	if p.OS == MacOS {
-		os = "Darwin"
+		os = "darwin"
 	}
 	arch := "x86_64"
 	if p.Arch == ARM64 {

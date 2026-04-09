@@ -57,7 +57,7 @@ func TestBuildURL(t *testing.T) {
 				Binary: "lazygit", StripV: true,
 			},
 			version: "0.40.0",
-			wantURL: "https://github.com/jesseduffield/lazygit/releases/download/v0.40.0/lazygit_0.40.0_Darwin_arm64.tar.gz",
+			wantURL: "https://github.com/jesseduffield/lazygit/releases/download/v0.40.0/lazygit_0.40.0_darwin_arm64.tar.gz",
 			wantTar: true,
 		},
 	}

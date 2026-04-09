@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 )
 
 func officialInstallerTools() []Tool {
@@ -74,8 +76,17 @@ func installNvm(ctx context.Context, ic *InstallContext) error {
 	// Set NVM_DIR before running the installer so it installs there.
 	ic.Runner.AddEnv("NVM_DIR", nvmDir)
 
+	// Fetch latest nvm version dynamically.
+	nvmTag, err := github.LatestVersion("nvm-sh/nvm", false)
+	if err != nil {
+		nvmTag = "v0.40.4" // fallback
+	}
+	nvmURL := fmt.Sprintf(
+		"https://raw.githubusercontent.com/nvm-sh/nvm/%s/install.sh",
+		nvmTag,
+	)
 	if err := ic.Runner.RunShell(ctx,
-		"curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
+		fmt.Sprintf("curl -o- %s | bash", nvmURL),
 	); err != nil {
 		return fmt.Errorf("install nvm: %w", err)
 	}

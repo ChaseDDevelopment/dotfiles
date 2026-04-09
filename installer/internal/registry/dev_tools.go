@@ -76,10 +76,10 @@ func devTools() []Tool {
 		// tree-sitter CLI
 		{
 			Name: "tree-sitter-cli", Command: "tree-sitter", Description: "Tree-sitter CLI",
-			DependsOn: []string{"cargo"}, // cargo fallback on apt/dnf
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "tree-sitter-cli"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "tree-sitter-cli"},
+				{Method: MethodCustom, CustomFunc: installTreeSitterCLI},
 				{Method: MethodCargo, Crate: "tree-sitter-cli"},
 			},
 			CargoCrate: "tree-sitter-cli",
@@ -264,5 +264,50 @@ func installYaziApt(ctx context.Context, ic *InstallContext) error {
 
 	return ic.Runner.Run(
 		ctx, "sudo", "dpkg", "-i", debPath,
+	)
+}
+
+// installTreeSitterCLI downloads the tree-sitter CLI binary from
+// GitHub Releases. Assets use non-standard naming:
+// tree-sitter-cli-{os}-{arch}.zip (os=macos/linux, arch=x64/arm64).
+func installTreeSitterCLI(ctx context.Context, ic *InstallContext) error {
+	osName := "linux"
+	if runtime.GOOS == "darwin" {
+		osName = "macos"
+	}
+	arch := "x64"
+	if runtime.GOARCH == "arm64" {
+		arch = "arm64"
+	}
+
+	zipName := fmt.Sprintf("tree-sitter-cli-%s-%s.zip", osName, arch)
+	url := fmt.Sprintf(
+		"https://github.com/tree-sitter/tree-sitter/releases/latest/download/%s",
+		zipName,
+	)
+
+	tmpDir, err := os.MkdirTemp("", "tree-sitter-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	zipPath := filepath.Join(tmpDir, zipName)
+	if err := ic.Runner.Run(
+		ctx, "curl", "-fsSL", url, "-o", zipPath,
+	); err != nil {
+		return fmt.Errorf("download tree-sitter-cli: %w", err)
+	}
+
+	if err := ic.Runner.Run(
+		ctx, "unzip", "-o", zipPath, "-d", tmpDir,
+	); err != nil {
+		return fmt.Errorf("extract tree-sitter-cli: %w", err)
+	}
+
+	binPath := filepath.Join(tmpDir, "tree-sitter")
+	return ic.Runner.Run(
+		ctx, "sudo", "install", "-m", "755", binPath,
+		"/usr/local/bin/tree-sitter",
 	)
 }
