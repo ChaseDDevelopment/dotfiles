@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 )
 
 func rustToolchain() []Tool {
@@ -221,13 +223,46 @@ func installNeovimApt(ctx context.Context, ic *InstallContext) error {
 }
 
 func installYaziApt(ctx context.Context, ic *InstallContext) error {
-	// Install companion packages first (best-effort — log failures).
-	deps := []string{"ffmpeg", "p7zip-full", "jq", "poppler-utils", "resvg", "imagemagick"}
-	for _, dep := range deps {
-		if err := ic.PkgMgr.Install(ctx, dep); err != nil {
-			ic.Runner.Log.Write(fmt.Sprintf("WARNING: optional dep %s failed: %v", dep, err))
-		}
+	// Install all companion packages in a single command.
+	deps := []string{"ffmpeg", "p7zip-full", "jq", "poppler-utils", "imagemagick"}
+	if err := ic.PkgMgr.Install(ctx, deps...); err != nil {
+		ic.Runner.Log.Write(fmt.Sprintf(
+			"WARNING: optional deps install failed: %v", err,
+		))
 	}
-	// Build yazi from source via cargo.
-	return ic.Runner.Run(ctx, "cargo", "install", "--force", "yazi-build")
+
+	// Download prebuilt deb from GitHub Releases.
+	version, err := github.LatestVersion("sxyazi/yazi", true)
+	if err != nil {
+		return fmt.Errorf("fetch yazi version: %w", err)
+	}
+
+	arch := "x86_64"
+	if runtime.GOARCH == "arm64" {
+		arch = "aarch64"
+	}
+	debName := fmt.Sprintf(
+		"yazi-%s-unknown-linux-gnu.deb", arch,
+	)
+	url := fmt.Sprintf(
+		"https://github.com/sxyazi/yazi/releases/download/v%s/%s",
+		version, debName,
+	)
+
+	tmpDir, err := os.MkdirTemp("", "yazi-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	debPath := filepath.Join(tmpDir, debName)
+	if err := ic.Runner.Run(
+		ctx, "curl", "-fsSL", url, "-o", debPath,
+	); err != nil {
+		return fmt.Errorf("download yazi deb: %w", err)
+	}
+
+	return ic.Runner.Run(
+		ctx, "sudo", "dpkg", "-i", debPath,
+	)
 }

@@ -141,8 +141,8 @@ func cliTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "xh"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
-					Repo: "ducaale/xh", Pattern: github.PatternTargetTriple,
-					Binary: "xh", StripV: true, LibC: "musl",
+					Repo: "ducaale/xh", Pattern: github.PatternVersionPrefixed,
+					Binary: "xh", StripV: false, LibC: "musl",
 				}},
 				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "xh"},
 			},

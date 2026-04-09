@@ -290,6 +290,14 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = PhaseSummary
 			return m, drainCmd(m.eventCh)
 		}
+		// Transition to summary if all tasks are finished —
+		// don't wait solely for AllDoneMsg which can be missed.
+		if m.progress.allFinished() {
+			m.summary.steps = m.progress.steps
+			m.summary.endTime = time.Now()
+			m.phase = PhaseSummary
+			return m, drainCmd(m.eventCh)
+		}
 		return m, listenCmd(m.eventCh)
 
 	case engine.TaskSkippedMsg:
@@ -549,6 +557,14 @@ func resourcesForTool(t *registry.Tool, mgrName string) []engine.Resource {
 			}
 		case registry.MethodCargo:
 			return []engine.Resource{engine.ResCargo}
+		case registry.MethodCustom:
+			// Custom functions restricted to apt likely use the
+			// package manager internally and need the apt lock.
+			for _, m := range s.Managers {
+				if m == "apt" && mgrName == "apt" {
+					return []engine.Resource{engine.ResApt}
+				}
+			}
 		}
 		// First applicable strategy determines the resource.
 		return nil

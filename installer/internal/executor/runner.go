@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -111,7 +112,9 @@ func (r *Runner) RunWithOutput(
 		for _, line := range strings.Split(
 			strings.TrimRight(output, "\n"), "\n",
 		) {
-			r.EmitVerbose(line)
+			if cleaned := cleanLine(line); cleaned != "" {
+				r.EmitVerbose(cleaned)
+			}
 		}
 	}
 
@@ -190,7 +193,9 @@ func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string)
 		for _, line := range strings.Split(
 			strings.TrimRight(output, "\n"), "\n",
 		) {
-			r.EmitVerbose(line)
+			if cleaned := cleanLine(line); cleaned != "" {
+				r.EmitVerbose(cleaned)
+			}
 		}
 	}
 
@@ -225,6 +230,20 @@ func LastLines(output string, n int) string {
 		return strings.Join(lines, "\n")
 	}
 	return strings.Join(lines[len(lines)-n:], "\n")
+}
+
+// ansiRe matches ANSI escape sequences (SGR, cursor, erase, etc.).
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// cleanLine simulates carriage-return overwriting and strips
+// ANSI escape sequences so verbose output is readable in the TUI.
+func cleanLine(s string) string {
+	// Keep only the text after the last \r (carriage return).
+	if i := strings.LastIndex(s, "\r"); i >= 0 {
+		s = s[i+1:]
+	}
+	s = ansiRe.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
 }
 
 // logAdapter wraps LogFile to implement io.Writer.

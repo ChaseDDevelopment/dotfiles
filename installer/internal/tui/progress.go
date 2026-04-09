@@ -56,6 +56,20 @@ type progressModel struct {
 	recentLines []string
 }
 
+// allFinished reports whether every queued tool has reached a
+// terminal status (done, failed, or skipped).
+func (m *progressModel) allFinished() bool {
+	if m.totalTools == 0 {
+		return false
+	}
+	for _, s := range m.toolStatuses {
+		if s == statusQueued || s == statusActive {
+			return false
+		}
+	}
+	return true
+}
+
 func newProgressModel() progressModel {
 	s := spinner.New()
 	s.Spinner = spinner.Pulse
