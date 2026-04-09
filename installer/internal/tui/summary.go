@@ -58,38 +58,88 @@ func (m summaryModel) completionView(width int) string {
 	}
 	b.WriteString(panelGap("\n\n"))
 
-	// Stats row.
-	succeeded := 0
+	// Categorize results.
+	installed := 0
+	configured := 0
 	failed := 0
 	for _, s := range m.steps {
-		if s.success {
-			succeeded++
-		} else {
+		if !s.success {
 			failed++
+		} else if s.action == "install" {
+			installed++
+		} else {
+			configured++
 		}
 	}
 
 	elapsed := m.endTime.Sub(m.startTime).Round(100 * time.Millisecond)
-	dot := statsDividerStyle.Render(" · ")
-
-	totalTools := len(m.steps) + m.alreadyInstalled
-	statsLine := statsStyle.Render(fmt.Sprintf("%d tools", totalTools)) + dot +
-		statsStyle.Render(elapsed.String())
+	statsLine := statsStyle.Render(elapsed.String())
 	b.WriteString(centerWrap.Render(statsLine))
 	b.WriteString(panelGap("\n\n"))
 
-	// Success/failure/skipped counts.
-	counts := successStyle.Render(fmt.Sprintf("✓ %d succeeded", succeeded))
+	// Categorized counts.
+	var parts []string
+	if installed > 0 {
+		parts = append(parts, successStyle.Render(
+			fmt.Sprintf("✓ %d installed", installed)))
+	}
+	if configured > 0 {
+		parts = append(parts, successStyle.Render(
+			fmt.Sprintf("✓ %d configured", configured)))
+	}
 	if failed > 0 {
-		counts += panelGap("     ") + errorStyle.Render(fmt.Sprintf("✗ %d failed", failed))
+		parts = append(parts, errorStyle.Render(
+			fmt.Sprintf("✗ %d failed", failed)))
 	}
 	if m.alreadyInstalled > 0 {
-		counts += panelGap("     ") + dimStyle.Render(fmt.Sprintf("● %d already installed", m.alreadyInstalled))
+		parts = append(parts, dimStyle.Render(
+			fmt.Sprintf("● %d already installed", m.alreadyInstalled)))
 	}
-	b.WriteString(centerWrap.Render(counts))
+	if len(parts) == 0 {
+		parts = append(parts, dimStyle.Render("No changes needed"))
+	}
+	b.WriteString(centerWrap.Render(
+		strings.Join(parts, panelGap("   "))))
 
-	// Quick start section — inside the panel.
-	b.WriteString(panelGap("\n\n"))
+	// Results table — show what actually happened.
+	if len(m.steps) > 0 {
+		b.WriteString(panelGap("\n\n"))
+		b.WriteString(stepStyle.Render("  Results"))
+		b.WriteString(panelGap("\n"))
+		b.WriteString(thinRule(w))
+		b.WriteString(panelGap("\n"))
+
+		const (
+			compW   = 20
+			actionW = 12
+		)
+		statusW := w - 10 - compW - actionW
+		if statusW < 10 {
+			statusW = 10
+		}
+
+		for _, s := range m.steps {
+			var statusCell string
+			switch {
+			case !s.success:
+				statusCell = errorStyle.Width(statusW).Render("failed")
+			case s.action == "install":
+				statusCell = successStyle.Width(statusW).Render("installed")
+			case s.action == "configure":
+				statusCell = successStyle.Width(statusW).Render("configured")
+			default:
+				statusCell = dimStyle.Width(statusW).Render(s.status)
+			}
+			b.WriteString(panelGap("  "))
+			b.WriteString(tableCellStyle.Width(compW).Render(s.label))
+			b.WriteString(tableCellStyle.Width(actionW).Render(s.action))
+			b.WriteString(statusCell)
+			b.WriteString(panelGap("\n"))
+		}
+	}
+
+	// Quick start section.
+	b.WriteString(panelGap("\n"))
 	b.WriteString(stepStyle.Render("  Quick Start"))
 	b.WriteString(panelGap("\n"))
 	b.WriteString(thinRule(w))

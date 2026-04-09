@@ -24,6 +24,8 @@ const (
 // stepResult tracks the outcome of one install step.
 type stepResult struct {
 	label   string
+	action  string // "install", "configure", "cleanup"
+	status  string // "installed", "configured", "no changes", "failed"
 	success bool
 	err     error
 }
@@ -110,12 +112,31 @@ func (m *progressModel) markActive(id, label string) {
 // markDone is called when an engine task finishes.
 func (m *progressModel) markDone(id string, err error) {
 	name := m.nameForID(id)
+	action := "install"
+	if strings.HasPrefix(id, "setup-") {
+		action = "configure"
+	} else if strings.HasPrefix(id, "cleanup-") {
+		action = "cleanup"
+	}
+
 	if err != nil {
 		m.toolStatuses[name] = statusFailed
-		m.steps = append(m.steps, stepResult{label: name, success: false, err: err})
+		m.steps = append(m.steps, stepResult{
+			label: name, action: action,
+			status: "failed", success: false, err: err,
+		})
 	} else {
 		m.toolStatuses[name] = statusDone
-		m.steps = append(m.steps, stepResult{label: name, success: true})
+		status := "installed"
+		if action == "configure" {
+			status = "configured"
+		} else if action == "cleanup" {
+			status = "cleaned"
+		}
+		m.steps = append(m.steps, stepResult{
+			label: name, action: action,
+			status: status, success: true,
+		})
 	}
 	m.doneCount++
 	m.removeActive(id)
