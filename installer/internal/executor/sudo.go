@@ -12,6 +12,12 @@ import (
 // refreshes the sudo credential cache.
 const sudoKeepaliveInterval = 4 * time.Minute
 
+// HasSudo reports whether the sudo command exists on PATH.
+func HasSudo() bool {
+	_, err := exec.LookPath("sudo")
+	return err == nil
+}
+
 // NeedsSudo reports whether sudo is available and credentials
 // are not yet cached (i.e. a password prompt would be required).
 func NeedsSudo() bool {

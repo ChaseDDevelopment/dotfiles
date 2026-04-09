@@ -53,9 +53,15 @@ func main() {
 	// Pre-authenticate sudo before the TUI takes ownership of
 	// stdin. The keepalive goroutine refreshes the credential
 	// cache so long-running installs don't hit timeouts.
-	if !*dryRun && executor.NeedsSudo() {
-		if err := executor.PreAuth(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	if !*dryRun {
+		if executor.NeedsSudo() {
+			if err := executor.PreAuth(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			}
+		} else if executor.HasSudo() {
+			fmt.Fprintln(os.Stderr,
+				"[sudo] Credentials already available.",
+			)
 		}
 	}
 	sudoCtx, cancelSudo := context.WithCancel(

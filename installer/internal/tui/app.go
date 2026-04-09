@@ -49,6 +49,7 @@ type AppConfig struct {
 	SkipUpdate         bool
 	Verbose            bool
 	CleanBackup        bool
+	ForceReinstall     bool
 	SelectedComponents []string
 	Platform           *platform.Platform
 	PkgMgr             pkgmgr.PackageManager
@@ -236,6 +237,7 @@ func (m AppModel) updateOptionsMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config.Verbose = m.options.optionEnabled("verbose")
 			m.config.Runner.Verbose = m.config.Verbose
 			m.config.CleanBackup = m.options.optionEnabled("clean_backup")
+			m.config.ForceReinstall = m.options.optionEnabled("force_reinstall")
 
 			if m.config.Mode == ModeCustomInstall {
 				m.phase = PhaseComponentPicker
@@ -451,7 +453,8 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 			if !registry.ShouldInstall(&t, plat) {
 				continue
 			}
-			if registry.IsInstalled(&t) {
+			if !m.config.ForceReinstall && registry.IsInstalled(&t) {
+				m.summary.alreadyInstalled++
 				m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 					Component: t.Name, Action: "Package",
 					Status: "already installed",

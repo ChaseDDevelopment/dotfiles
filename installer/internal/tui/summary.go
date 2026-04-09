@@ -18,14 +18,15 @@ type PlanRow struct {
 
 // summaryModel displays the completion screen or dry-run plan.
 type summaryModel struct {
-	rows            []PlanRow
-	steps           []stepResult
-	dryRun          bool
-	criticalFailure bool // true if a critical tool failed
-	startTime       time.Time
-	endTime         time.Time
-	viewport        viewport.Model
-	viewportReady   bool
+	rows             []PlanRow
+	steps            []stepResult
+	dryRun           bool
+	criticalFailure  bool // true if a critical tool failed
+	alreadyInstalled int  // tools skipped because already present
+	startTime        time.Time
+	endTime          time.Time
+	viewport         viewport.Model
+	viewportReady    bool
 }
 
 func newSummaryModel(dryRun bool) summaryModel {
@@ -71,15 +72,19 @@ func (m summaryModel) completionView(width int) string {
 	elapsed := m.endTime.Sub(m.startTime).Round(100 * time.Millisecond)
 	dot := statsDividerStyle.Render(" · ")
 
-	statsLine := statsStyle.Render(fmt.Sprintf("%d steps", len(m.steps))) + dot +
+	totalTools := len(m.steps) + m.alreadyInstalled
+	statsLine := statsStyle.Render(fmt.Sprintf("%d tools", totalTools)) + dot +
 		statsStyle.Render(elapsed.String())
 	b.WriteString(centerWrap.Render(statsLine))
 	b.WriteString(panelGap("\n\n"))
 
-	// Success/failure counts.
+	// Success/failure/skipped counts.
 	counts := successStyle.Render(fmt.Sprintf("✓ %d succeeded", succeeded))
 	if failed > 0 {
 		counts += panelGap("     ") + errorStyle.Render(fmt.Sprintf("✗ %d failed", failed))
+	}
+	if m.alreadyInstalled > 0 {
+		counts += panelGap("     ") + dimStyle.Render(fmt.Sprintf("● %d already installed", m.alreadyInstalled))
 	}
 	b.WriteString(centerWrap.Render(counts))
 

@@ -128,6 +128,7 @@ func newOptionsMenu() optionsMenuModel {
 		options: []toggleOption{
 			{key: "skip_update", label: "Skip system update"},
 			{key: "skip_packages", label: "Skip packages"},
+			{key: "force_reinstall", label: "Force reinstall"},
 			{key: "verbose", label: "Verbose output"},
 			{key: "clean_backup", label: "Clean backup after"},
 		},
