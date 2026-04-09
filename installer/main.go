@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -47,6 +48,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Pre-authenticate sudo before the TUI takes ownership of
+	// stdin. The keepalive goroutine refreshes the credential
+	// cache so long-running installs don't hit timeouts.
+	if !*dryRun && executor.NeedsSudo() {
+		if err := executor.PreAuth(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		}
+	}
+	sudoCtx, cancelSudo := context.WithCancel(
+		context.Background(),
+	)
+	defer cancelSudo()
+	stopSudo := executor.StartKeepalive(sudoCtx)
+	defer stopSudo()
+
 	logFile, err := executor.NewLogFile(filepath.Join(rootDir, "install.log"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -55,6 +71,14 @@ func main() {
 	defer logFile.Close()
 
 	runner := executor.NewRunner(logFile, *dryRun)
+
+	// Open /dev/tty so child processes can identify the
+	// controlling terminal. sudo needs this to match cached
+	// credentials when tty_tickets is enabled (default).
+	if ttyFile, err := os.Open("/dev/tty"); err == nil {
+		runner.Stdin = ttyFile
+		defer ttyFile.Close()
+	}
 
 	mgr, err := pkgmgr.New(plat, runner)
 	if err != nil {

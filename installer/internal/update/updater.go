@@ -57,8 +57,15 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 			if !platform.HasCommand("starship") {
 				return nil
 			}
-			return runner.RunShell(ctx,
-				`curl -sS https://starship.rs/install.sh -o /tmp/starship-install.sh && sh /tmp/starship-install.sh --yes && rm -f /tmp/starship-install.sh`)
+			switch mgrName {
+			case "brew":
+				return runner.Run(ctx, "brew", "upgrade", "starship")
+			case "pacman":
+				return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "starship")
+			default:
+				return runner.RunShell(ctx,
+					`curl -sS https://starship.rs/install.sh -o /tmp/starship-install.sh && sh /tmp/starship-install.sh --yes && rm -f /tmp/starship-install.sh`)
+			}
 		}},
 		{"Atuin", func(ctx context.Context) error {
 			return updateAtuin(ctx, runner, mgrName)

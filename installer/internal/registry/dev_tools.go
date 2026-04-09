@@ -127,6 +127,7 @@ func devTools() []Tool {
 		{
 			Name: "starship", Command: "starship", Description: "Cross-shell prompt",
 			Strategies: []InstallStrategy{
+				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "starship"},
 				{Method: MethodScript, Script: &ScriptConfig{
 					URL:  "https://starship.rs/install.sh",
 					Args: []string{"--yes"},

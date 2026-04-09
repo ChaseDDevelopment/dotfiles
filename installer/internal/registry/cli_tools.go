@@ -91,7 +91,8 @@ func cliTools() []Tool {
 			Name: "zoxide", Command: "zoxide", Description: "Smarter cd command",
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "zoxide"},
-				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodScript, Script: &ScriptConfig{
+				{Managers: []string{"apt", "dnf"}, Method: MethodPackageManager, Package: "zoxide"},
+				{Method: MethodScript, Script: &ScriptConfig{
 					URL: "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh",
 				}},
 			},

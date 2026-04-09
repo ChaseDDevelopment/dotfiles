@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -15,6 +16,10 @@ type Runner struct {
 	Log     *LogFile
 	DryRun  bool
 	Verbose bool
+	// Stdin is passed to child processes so sudo can identify
+	// the controlling TTY for credential cache lookups
+	// (tty_tickets). Typically set to an open fd on /dev/tty.
+	Stdin *os.File
 	// Env holds additional environment variables for subprocess execution.
 	// Each entry is "KEY=VALUE".
 	Env []string
@@ -81,6 +86,9 @@ func (r *Runner) RunWithOutput(
 	r.EmitVerbose("$ " + cmdStr)
 
 	cmd := exec.CommandContext(ctx, name, args...)
+	if r.Stdin != nil {
+		cmd.Stdin = r.Stdin
+	}
 	r.mu.Lock()
 	envCopy := make([]string, len(r.Env))
 	copy(envCopy, r.Env)
@@ -158,6 +166,9 @@ func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string)
 
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if r.Stdin != nil {
+		cmd.Stdin = r.Stdin
+	}
 	r.mu.Lock()
 	envCopy := make([]string, len(r.Env))
 	copy(envCopy, r.Env)
