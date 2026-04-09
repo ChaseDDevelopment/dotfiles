@@ -22,6 +22,8 @@ import (
 var Version = "dev"
 
 func main() {
+	augmentPath()
+
 	dryRun := flag.Bool("dry-run", false, "Preview changes without making them")
 	version := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
@@ -154,6 +156,28 @@ func findRootDir() (string, error) {
 		"cannot find dotfiles root (expected a directory containing configs/). " +
 			"Set DOTFILES_DIR or run from within the dotfiles repo",
 	)
+}
+
+// augmentPath prepends common tool install directories to PATH so
+// exec.LookPath and exec.CommandContext can find binaries that live
+// outside the default system PATH (e.g., ~/.cargo/bin, ~/.local/bin).
+func augmentPath() {
+	home := os.Getenv("HOME")
+	dirs := []string{
+		filepath.Join(home, ".cargo", "bin"),
+		filepath.Join(home, ".local", "bin"),
+		filepath.Join(home, ".bun", "bin"),
+		filepath.Join(home, ".atuin", "bin"),
+		filepath.Join(home, ".dotnet"),
+		"/usr/local/go/bin",
+	}
+	path := os.Getenv("PATH")
+	for _, d := range dirs {
+		if _, err := os.Stat(d); err == nil {
+			path = d + string(filepath.ListSeparator) + path
+		}
+	}
+	os.Setenv("PATH", path)
 }
 
 func hasConfigs(dir string) bool {

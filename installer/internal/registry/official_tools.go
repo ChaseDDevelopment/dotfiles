@@ -106,9 +106,12 @@ func installAtuin(ctx context.Context, ic *InstallContext) error {
 	); err != nil {
 		return fmt.Errorf("install atuin: %w", err)
 	}
-	// Add atuin to PATH for the current session.
+	// Add atuin to PATH for the current session so subsequent
+	// tasks and exec.LookPath can find the binary.
 	atunBin := filepath.Join(os.Getenv("HOME"), ".atuin", "bin")
-	ic.Runner.AddEnv("PATH", atunBin+":"+os.Getenv("PATH"))
+	newPath := atunBin + ":" + os.Getenv("PATH")
+	os.Setenv("PATH", newPath)
+	ic.Runner.AddEnv("PATH", newPath)
 	return nil
 }
 
