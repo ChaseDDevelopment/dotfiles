@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 
@@ -264,11 +265,19 @@ sudo apt install gh -y`
 }
 
 func isNerdFontInstalled() bool {
+	// macOS: check brew cask (authoritative — this is how we install it).
+	if runtime.GOOS == "darwin" {
+		if err := exec.Command("brew", "list", "--cask",
+			"font-jetbrains-mono-nerd-font").Run(); err == nil {
+			return true
+		}
+	}
+	// Check font directories for JetBrains Nerd Font files.
 	home := os.Getenv("HOME")
-	// macOS: check ~/Library/Fonts
 	for _, dir := range []string{
 		filepath.Join(home, "Library", "Fonts"),
 		filepath.Join(home, ".local", "share", "fonts"),
+		filepath.Join(home, ".local", "share", "fonts", "NerdFonts"),
 		"/usr/local/share/fonts",
 		"/usr/share/fonts",
 	} {
