@@ -118,27 +118,47 @@ zstyle ':fzf-tab:*' switch-group '<' '>'
 zstyle ':fzf-tab:*' fzf-command fzf
 
 # ----------------------------------------------------------------------------
-# Tool Integrations (conditional loading)
+# Tool Integrations (cached init for fast startup)
 # ----------------------------------------------------------------------------
 
-# SSH keychain (macOS only - load saved keys from Keychain)
-if [[ "$OSTYPE" == "darwin"* ]] && ! ssh-add -l &>/dev/null; then
+# Cache eval-based tool inits: regenerate only when binary changes
+_cached_init() {
+    local name="$1" binary="$2"
+    shift 2
+    local cache="${XDG_CACHE_HOME}/zsh/${name}.zsh"
+    [[ -d "${cache:h}" ]] || mkdir -p "${cache:h}"
+    if [[ ! -f "$cache" ]] || [[ "$binary" -nt "$cache" ]]; then
+        "$@" > "$cache" 2>/dev/null
+    fi
+    source "$cache"
+}
+
+# SSH keychain (macOS only - deferred until after first prompt)
+if (( $+functions[zsh-defer] )); then
+    zsh-defer -c '[[ "$OSTYPE" == "darwin"* ]] && ! ssh-add -l &>/dev/null && ssh-add --apple-load-keychain 2>/dev/null'
+elif [[ "$OSTYPE" == "darwin"* ]] && ! ssh-add -l &>/dev/null; then
     ssh-add --apple-load-keychain 2>/dev/null
 fi
 
 # Zoxide (smart cd)
-(( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
+if (( $+commands[zoxide] )); then
+    _cached_init "zoxide" "${commands[zoxide]}" zoxide init zsh
+fi
 
 # Atuin (better history)
-(( $+commands[atuin] )) && eval "$(atuin init zsh --disable-up-arrow)"
+if (( $+commands[atuin] )); then
+    _cached_init "atuin" "${commands[atuin]}" atuin init zsh --disable-up-arrow
+fi
 
 # direnv (per-project env vars)
-(( $+commands[direnv] )) && eval "$(direnv hook zsh)"
+if (( $+commands[direnv] )); then
+    _cached_init "direnv" "${commands[direnv]}" direnv hook zsh
+fi
 
 # fzf - handle both old (<0.48) and new (>=0.48) versions
 if (( $+commands[fzf] )); then
     if fzf --zsh &>/dev/null; then
-        eval "$(fzf --zsh)"
+        _cached_init "fzf" "${commands[fzf]}" fzf --zsh
     elif [[ -f ~/.fzf.zsh ]]; then
         source ~/.fzf.zsh
     elif [[ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]]; then
@@ -188,7 +208,9 @@ done
 # ----------------------------------------------------------------------------
 # Starship Prompt (MUST be last to properly hook into prompt)
 # ----------------------------------------------------------------------------
-(( $+commands[starship] )) && eval "$(starship init zsh)"
+if (( $+commands[starship] )); then
+    _cached_init "starship" "${commands[starship]}" starship init zsh
+fi
 
 # ----------------------------------------------------------------------------
 # Terminal State Reset (fixes prompt hang after interactive programs)
@@ -211,5 +233,4 @@ TRAPINT() {
 # ----------------------------------------------------------------------------
 # zprof
 
-# bun completions
-[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+# bun completions (loaded in tools/bun.zsh, not duplicated here)

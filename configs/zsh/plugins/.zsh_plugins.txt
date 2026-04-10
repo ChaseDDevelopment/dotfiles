@@ -9,8 +9,8 @@ ohmyzsh/ohmyzsh path:lib/key-bindings.zsh
 # Useful OMZ plugins (lightweight ones only)
 # NOTE: git plugin removed - conflicts with coreutils (grm='git rm' vs GNU rm)
 # Custom git aliases in aliases/git.zsh instead
-ohmyzsh/ohmyzsh path:plugins/docker
-ohmyzsh/ohmyzsh path:plugins/kubectl
+ohmyzsh/ohmyzsh path:plugins/docker kind:defer
+ohmyzsh/ohmyzsh path:plugins/kubectl kind:defer
 
 # fzf-tab (must load after compinit, before autosuggestions)
 Aloxaf/fzf-tab
@@ -20,7 +20,7 @@ zsh-users/zsh-autosuggestions
 zsh-users/zsh-history-substring-search
 
 # Git enhancements
-wfxr/forgit
+wfxr/forgit kind:defer
 
 # Abbreviations (fish-style)
 olets/zsh-abbr kind:defer

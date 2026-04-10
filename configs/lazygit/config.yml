@@ -1,4 +1,11 @@
 # Catppuccin Mocha theme for lazygit
+git:
+  paging:
+    colorArg: always
+    pager: delta --dark --paging=never
+  autoFetch: true
+os:
+  editPreset: "nvim"
 gui:
   nerdFontsVersion: "3"
   theme:

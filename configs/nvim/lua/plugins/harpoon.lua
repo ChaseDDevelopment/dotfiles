@@ -1,1 +1,2 @@
-require("harpoon").setup()
+local harpoon = require("harpoon")
+harpoon:setup()

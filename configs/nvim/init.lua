@@ -23,7 +23,7 @@ vim.pack.add({
 	"https://github.com/nvim-mini/mini.animate",
 	"https://github.com/stevearc/aerial.nvim",
 	"https://github.com/nvim-lua/plenary.nvim",
-	"https://github.com/ThePrimeagen/harpoon",
+	{ src = "https://github.com/ThePrimeagen/harpoon", version = "harpoon2" },
 	"https://github.com/MunifTanjim/nui.nvim",
 	"https://github.com/folke/noice.nvim",
 	"https://github.com/nvim-tree/nvim-web-devicons",

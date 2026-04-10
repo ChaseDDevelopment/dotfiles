@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # Capture the last command's output and copy to clipboard via OSC 52.
 # Finds prompt boundaries by grepping for ❯ in capture-pane output.
 

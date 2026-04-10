@@ -63,12 +63,18 @@
   vim.keymap.set('n', '<leader>o', '<cmd>AerialToggle!<CR>', { desc = 'Code outline' })
 
   -- Harpoon (quick file nav)
-  vim.keymap.set('n', '<leader>ha', function() require('harpoon.mark').add_file() end, { desc = 'Add file' })
-  vim.keymap.set('n', '<leader>hh', function() require('harpoon.ui').toggle_quick_menu() end, { desc = 'Harpoon menu' })
-  vim.keymap.set('n', '<leader>1', function() require('harpoon.ui').nav_file(1) end, { desc = 'Harpoon 1' })
-  vim.keymap.set('n', '<leader>2', function() require('harpoon.ui').nav_file(2) end, { desc = 'Harpoon 2' })
-  vim.keymap.set('n', '<leader>3', function() require('harpoon.ui').nav_file(3) end, { desc = 'Harpoon 3' })
-  vim.keymap.set('n', '<leader>4', function() require('harpoon.ui').nav_file(4) end, { desc = 'Harpoon 4' })
+  local harpoon = require('harpoon')
+  vim.keymap.set('n', '<leader>ha', function() harpoon:list():add() end, { desc = 'Add file' })
+  vim.keymap.set('n', '<leader>hh', function() harpoon.ui:toggle_quick_menu(harpoon:list()) end, { desc = 'Harpoon menu' })
+  vim.keymap.set('n', '<leader>1', function() harpoon:list():select(1) end, { desc = 'Harpoon 1' })
+  vim.keymap.set('n', '<leader>2', function() harpoon:list():select(2) end, { desc = 'Harpoon 2' })
+  vim.keymap.set('n', '<leader>3', function() harpoon:list():select(3) end, { desc = 'Harpoon 3' })
+  vim.keymap.set('n', '<leader>4', function() harpoon:list():select(4) end, { desc = 'Harpoon 4' })
+  vim.keymap.set('n', '<leader>hp', function() harpoon:list():prev() end, { desc = 'Harpoon prev' })
+  vim.keymap.set('n', '<leader>hn', function() harpoon:list():next() end, { desc = 'Harpoon next' })
+
+  -- Git
+  vim.keymap.set('n', '<leader>gb', function() require('gitsigns').blame_line({ full = true }) end, { desc = 'Blame line' })
 
   -- Diffview
   vim.keymap.set('n', '<leader>gd', '<cmd>DiffviewOpen<cr>', { desc = 'Diff view' })

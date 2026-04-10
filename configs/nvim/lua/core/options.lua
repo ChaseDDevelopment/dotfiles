@@ -6,6 +6,33 @@ vim.o.clipboard = 'unnamedplus'
 vim.o.number = true
 vim.o.relativenumber = true
 
+-- Search
+vim.o.ignorecase = true
+vim.o.smartcase = true
+
+-- UI
+vim.o.signcolumn = 'yes'
+vim.o.cursorline = true
+vim.o.scrolloff = 8
+vim.o.sidescrolloff = 8
+vim.o.splitbelow = true
+vim.o.splitright = true
+vim.o.showmode = false
+vim.o.termguicolors = true
+
+-- Editing
+vim.o.tabstop = 4
+vim.o.shiftwidth = 4
+vim.o.expandtab = true
+vim.o.smartindent = true
+vim.o.wrap = false
+vim.o.updatetime = 250
+vim.o.timeoutlen = 300
+
+-- Persistence
+vim.o.undofile = true
+vim.o.swapfile = false
+
 vim.diagnostic.config({
 	virtual_text = { spacing = 4, prefix = "●" },
 	signs = {

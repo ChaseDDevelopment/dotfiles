@@ -19,17 +19,24 @@ export LC_ALL="en_US.UTF-8"
 # Claude Code
 export CLAUDE_CODE_NO_FLICKER=1
 
-# Homebrew (cross-platform detection)
+# Homebrew (cross-platform detection with cached shellenv)
+_brew_bin=""
 if [[ -f "/opt/homebrew/bin/brew" ]]; then
-    # macOS Apple Silicon
-    eval "$(/opt/homebrew/bin/brew shellenv)"
+    _brew_bin="/opt/homebrew/bin/brew"
 elif [[ -f "/usr/local/bin/brew" ]]; then
-    # macOS Intel
-    eval "$(/usr/local/bin/brew shellenv)"
+    _brew_bin="/usr/local/bin/brew"
 elif [[ -f "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
-    # Linux Homebrew
-    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+    _brew_bin="/home/linuxbrew/.linuxbrew/bin/brew"
 fi
+if [[ -n "$_brew_bin" ]]; then
+    _brew_cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/brew_shellenv.zsh"
+    [[ -d "${_brew_cache:h}" ]] || mkdir -p "${_brew_cache:h}"
+    if [[ ! -f "$_brew_cache" ]] || [[ "$_brew_bin" -nt "$_brew_cache" ]]; then
+        "$_brew_bin" shellenv > "$_brew_cache"
+    fi
+    source "$_brew_cache"
+fi
+unset _brew_bin _brew_cache
 
 # Path additions
 typeset -U path
@@ -48,8 +55,7 @@ if [[ -d "${HOME}/.dotnet" ]]; then
     export PATH="${DOTNET_ROOT}:${PATH}"
 fi
 
-# Cargo/Rust environment
-[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+# Cargo bin is already in PATH above, no need to source .cargo/env
 
 # Cross-platform clipboard detection for fzf
 if [[ "$OSTYPE" == "darwin"* ]]; then

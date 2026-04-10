@@ -20,7 +20,9 @@ $kotlin\
 $haskell\
 $python\
 [](fg:green bg:sapphire)\
+$docker_context\
 $conda\
+$direnv\
 [](fg:sapphire bg:lavender)\
 $time\
 [ ](fg:lavender)\
@@ -145,7 +147,7 @@ style = "bg:lavender"
 format = '[[  $time ](fg:crust bg:lavender)]($style)'
 
 [line_break]
-disabled = true
+disabled = false
 
 [character]
 disabled = false

@@ -36,11 +36,21 @@
     dark = true
     line-numbers = true
     hyperlinks = true
+    syntax-theme = Catppuccin Mocha
 
 [alias]
     unstage = restore --staged
     amend = commit --amend --no-edit
     graph = log --graph --all --decorate --oneline
+    wip = commit -am "WIP"
+    unwip = reset HEAD~1 --mixed
+    undo = reset --soft HEAD~1
+    recent = branch --sort=-committerdate --format='%(committerdate:relative)%09%(refname:short)'
+    today = log --since=midnight --oneline
+    lg = log --graph --pretty=format:'%C(auto)%h%d %s %C(dim)%an %ar'
+
+[branch]
+    sort = -committerdate
 
 [merge]
     conflictstyle = zdiff3

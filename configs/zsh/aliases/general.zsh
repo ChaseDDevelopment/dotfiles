@@ -85,5 +85,10 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../..'
 
+# Modern du replacement
+if (( $+commands[dust] )); then
+    alias du='dust'
+fi
+
 # Docker compose shorthand
 alias dc='docker compose'
