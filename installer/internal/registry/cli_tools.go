@@ -216,11 +216,16 @@ func cliTools() []Tool {
 		{
 			Name: "ghostty", Command: "ghostty",
 			Description: "GPU-accelerated terminal",
-			OSFilter:    []string{"darwin"},
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodCustom,
 					CustomFunc: func(ctx context.Context, ic *InstallContext) error {
 						return ic.Runner.Run(ctx, "brew", "install", "--cask", "ghostty")
+					},
+				},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "ghostty"},
+				{Managers: []string{"dnf"}, Method: MethodCustom,
+					CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+						return ic.Runner.Run(ctx, "sudo", "dnf", "install", "-y", "ghostty")
 					},
 				},
 			},
@@ -233,6 +238,89 @@ func cliTools() []Tool {
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "github-cli"},
 				{Managers: []string{"apt"}, Method: MethodCustom, CustomFunc: installGhCLI},
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "gh"},
+			},
+		},
+		// jq — JSON processor
+		{
+			Name: "jq", Command: "jq", Description: "JSON processor",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "jq"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "jq"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "jq"},
+			},
+		},
+		// dust — modern disk usage analyzer
+		{
+			Name: "dust", Command: "dust", Description: "Modern disk usage analyzer",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "dust"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "dust"},
+				{Method: MethodCargo, Crate: "du-dust"},
+			},
+			CargoCrate: "du-dust",
+		},
+		// btop — system monitor
+		{
+			Name: "btop", Command: "btop", Description: "System monitor",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "btop"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "btop"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "btop"},
+			},
+		},
+		// hyperfine — CLI benchmarking tool
+		{
+			Name: "hyperfine", Command: "hyperfine", Description: "CLI benchmarking tool",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "hyperfine"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "hyperfine"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "hyperfine"},
+				{Method: MethodCargo, Crate: "hyperfine"},
+			},
+			CargoCrate: "hyperfine",
+		},
+		// nala — prettier apt frontend
+		{
+			Name: "nala", Command: "nala", Description: "Prettier apt frontend",
+			OSFilter: []string{"linux"},
+			Strategies: []InstallStrategy{
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "nala"},
+			},
+		},
+		// ffmpeg — media processor
+		{
+			Name: "ffmpeg", Command: "ffmpeg", Description: "Media processor",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "ffmpeg"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "ffmpeg"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "ffmpeg"},
+			},
+		},
+		// imagemagick — image processor
+		{
+			Name: "imagemagick", Command: "magick", Description: "Image processor",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "imagemagick"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "imagemagick"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "imagemagick"},
+			},
+		},
+		// poppler — PDF rendering tools
+		{
+			Name: "poppler", Command: "pdftotext", Description: "PDF rendering tools",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "poppler"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "poppler-utils"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "poppler"},
+			},
+		},
+		// 7zip — archive tool
+		{
+			Name: "7zip", Command: "7zz", Description: "Archive tool",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "sevenzip"},
+				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "7zip"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "7zip"},
 			},
 		},
 		// Nerd Font — required for icons in eza, starship, tmux, yazi

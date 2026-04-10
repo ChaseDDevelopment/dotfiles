@@ -25,10 +25,36 @@ type summaryModel struct {
 	endTime          time.Time
 	viewport         viewport.Model
 	viewportReady    bool
+
+	// Per-tool timing: tracked from TaskStartedMsg to TaskDoneMsg.
+	startTimes map[string]time.Time
+	durations  map[string]time.Duration
 }
 
 func newSummaryModel(dryRun bool) summaryModel {
-	return summaryModel{dryRun: dryRun}
+	return summaryModel{
+		dryRun:     dryRun,
+		startTimes: make(map[string]time.Time),
+		durations:  make(map[string]time.Duration),
+	}
+}
+
+// formatDuration returns a compact human-readable duration string.
+func formatDuration(d time.Duration) string {
+	switch {
+	case d < time.Second:
+		ms := d.Milliseconds()
+		if ms == 0 {
+			return "<1ms"
+		}
+		return fmt.Sprintf("%dms", ms)
+	case d < time.Minute:
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	default:
+		m := int(d.Minutes())
+		s := int(d.Seconds()) % 60
+		return fmt.Sprintf("%dm%ds", m, s)
+	}
 }
 
 func (m summaryModel) View(width, height int) string {
@@ -120,10 +146,11 @@ func (m summaryModel) completionView(width, height int) string {
 		b.WriteString(panelGap("\n"))
 
 		const (
-			compW   = 20
-			actionW = 12
+			compW     = 20
+			actionW   = 12
+			durationW = 8
 		)
-		statusW := w - 10 - compW - actionW
+		statusW := w - 10 - compW - actionW - durationW
 		if statusW < 10 {
 			statusW = 10
 		}
@@ -149,10 +176,18 @@ func (m summaryModel) completionView(width, height int) string {
 			default:
 				statusCell = dimStyle.Width(statusW).Render(s.status)
 			}
+			durationCell := ""
+			if d, ok := m.durations[s.label]; ok {
+				durationCell = dimStyle.Width(durationW).
+					Render(formatDuration(d))
+			} else {
+				durationCell = dimStyle.Width(durationW).Render("")
+			}
 			row := panelGap("  ") +
 				tableCellStyle.Width(compW).Render(s.label) +
 				tableCellStyle.Width(actionW).Render(s.action) +
-				statusCell + panelGap("\n")
+				statusCell +
+				durationCell + panelGap("\n")
 			tableBody.WriteString(row)
 		}
 	}
@@ -454,10 +489,11 @@ func (m *summaryModel) initDoctorViewport(width, height int) {
 func (m summaryModel) doctorTableRows(width int) string {
 	w := contentWidth(width)
 	const (
-		compW   = 20
-		actionW = 12
+		compW     = 20
+		actionW   = 12
+		durationW = 8
 	)
-	statusW := w - 10 - compW - actionW
+	statusW := w - 10 - compW - actionW - durationW
 	if statusW < 10 {
 		statusW = 10
 	}
@@ -484,10 +520,18 @@ func (m summaryModel) doctorTableRows(width int) string {
 		default:
 			statusCell = dimStyle.Width(statusW).Render(s.status)
 		}
+		durationCell := ""
+		if d, ok := m.durations[s.label]; ok {
+			durationCell = dimStyle.Width(durationW).
+				Render(formatDuration(d))
+		} else {
+			durationCell = dimStyle.Width(durationW).Render("")
+		}
 		b.WriteString(panelGap("  "))
 		b.WriteString(tableCellStyle.Width(compW).Render(s.label))
 		b.WriteString(tableCellStyle.Width(actionW).Render(s.action))
 		b.WriteString(statusCell)
+		b.WriteString(durationCell)
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
