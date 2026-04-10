@@ -54,11 +54,13 @@ func PreAuth() error {
 // StartKeepalive spawns a background goroutine that refreshes
 // the sudo credential cache at regular intervals. It stops when
 // ctx is cancelled. Call the returned function to stop early.
-func StartKeepalive(ctx context.Context) func() {
+// When log is non-nil, credential expiry is logged.
+func StartKeepalive(ctx context.Context, log *LogFile) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		ticker := time.NewTicker(sudoKeepaliveInterval)
 		defer ticker.Stop()
+		failures := 0
 		for {
 			select {
 			case <-ctx.Done():
@@ -71,9 +73,25 @@ func StartKeepalive(ctx context.Context) func() {
 				cmd.Stdout = nil
 				cmd.Stderr = nil
 				if cmd.Run() != nil {
-					// Cache expired and can't be silently
-					// refreshed — stop trying.
-					return
+					failures++
+					if log != nil {
+						log.Write(fmt.Sprintf(
+							"WARNING: sudo keepalive failed "+
+								"(attempt %d) — credentials "+
+								"may have expired", failures,
+						))
+					}
+					if failures >= 3 {
+						if log != nil {
+							log.Write(
+								"ERROR: sudo keepalive " +
+									"giving up after 3 failures",
+							)
+						}
+						return
+					}
+				} else {
+					failures = 0
 				}
 			}
 		}

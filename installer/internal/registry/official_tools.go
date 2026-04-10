@@ -64,13 +64,15 @@ func officialInstallerTools() []Tool {
 func installNvm(ctx context.Context, ic *InstallContext) error {
 	nvmDir := filepath.Join(os.Getenv("HOME"), ".config", "nvm")
 
-	// Check if already installed.
-	if _, err := os.Stat(nvmDir); err == nil {
-		return nil
-	}
-	altDir := filepath.Join(os.Getenv("HOME"), ".nvm")
-	if _, err := os.Stat(altDir); err == nil {
-		return nil
+	// Skip if already installed (unless force reinstall).
+	if !ic.ForceReinstall {
+		if _, err := os.Stat(nvmDir); err == nil {
+			return nil
+		}
+		altDir := filepath.Join(os.Getenv("HOME"), ".nvm")
+		if _, err := os.Stat(altDir); err == nil {
+			return nil
+		}
 	}
 
 	// Set NVM_DIR before running the installer so it installs there.
@@ -110,7 +112,6 @@ func installAtuin(ctx context.Context, ic *InstallContext) error {
 	// tasks and exec.LookPath can find the binary.
 	atunBin := filepath.Join(os.Getenv("HOME"), ".atuin", "bin")
 	newPath := atunBin + ":" + os.Getenv("PATH")
-	os.Setenv("PATH", newPath)
 	ic.Runner.AddEnv("PATH", newPath)
 	return nil
 }
@@ -118,9 +119,13 @@ func installAtuin(ctx context.Context, ic *InstallContext) error {
 func installTPM(ctx context.Context, ic *InstallContext) error {
 	tpmDir := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins", "tpm")
 
-	// Check if already installed.
-	if _, err := os.Stat(tpmDir); err == nil {
-		return nil
+	// Skip if already installed (unless force reinstall).
+	if !ic.ForceReinstall {
+		if _, err := os.Stat(tpmDir); err == nil {
+			return nil
+		}
+	} else {
+		os.RemoveAll(tpmDir)
 	}
 
 	return ic.Runner.Run(ctx, "git", "clone",

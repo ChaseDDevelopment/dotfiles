@@ -21,9 +21,10 @@ type summaryModel struct {
 	rows             []PlanRow
 	steps            []stepResult
 	dryRun           bool
-	criticalFailure  bool // true if a critical tool failed
-	alreadyInstalled  int // tools skipped because already present
-	alreadyConfigured int // components skipped because configs match
+	criticalFailure  bool   // true if a critical tool failed
+	logPath          string // path to install.log for display
+	alreadyInstalled  int   // tools skipped because already present
+	alreadyConfigured int   // components skipped because configs match
 	startTime        time.Time
 	endTime          time.Time
 	viewport         viewport.Model
@@ -129,7 +130,16 @@ func (m summaryModel) completionView(width int) string {
 			var statusCell string
 			switch {
 			case !s.success:
-				statusCell = errorStyle.Width(statusW).Render("failed")
+				detail := "failed"
+				if s.err != nil {
+					msg := s.err.Error()
+					maxLen := statusW - 2
+					if maxLen > 0 && len(msg) > maxLen {
+						msg = msg[:maxLen-1] + "…"
+					}
+					detail = msg
+				}
+				statusCell = errorStyle.Width(statusW).Render(detail)
 			case s.action == "install":
 				statusCell = successStyle.Width(statusW).Render("installed")
 			case s.action == "configure":
@@ -143,6 +153,14 @@ func (m summaryModel) completionView(width int) string {
 			b.WriteString(statusCell)
 			b.WriteString(panelGap("\n"))
 		}
+	}
+
+	// Log file path.
+	if m.logPath != "" && failed > 0 {
+		b.WriteString(panelGap("\n"))
+		b.WriteString(dimStyle.Render(
+			fmt.Sprintf("  Log: %s", m.logPath)))
+		b.WriteString(panelGap("\n"))
 	}
 
 	// Quick start section.
@@ -207,10 +225,14 @@ func (m summaryModel) dryRunTableRows(w int) string {
 	var b strings.Builder
 	for _, row := range m.rows {
 		var statusCell string
-		switch row.Status {
-		case "would install", "would configure", "would replace":
+		switch {
+		case row.Status == "would install",
+			row.Status == "would configure",
+			row.Status == "would replace",
+			strings.HasPrefix(row.Status, "outdated"):
 			statusCell = warnStyle.Width(statusW).Render(row.Status)
-		case "already installed", "already configured":
+		case row.Status == "already installed",
+			row.Status == "already configured":
 			statusCell = successStyle.Width(statusW).Render(row.Status)
 		default:
 			statusCell = dimStyle.Width(statusW).Render(row.Status)
