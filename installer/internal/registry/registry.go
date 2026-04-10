@@ -45,14 +45,50 @@ func ShouldInstall(t *Tool, p *platform.Platform) bool {
 	return false
 }
 
-// IsInstalled checks if a tool is already present on the system.
-// Uses IsInstalledFunc if set, otherwise falls back to exec.LookPath.
+// ToolStatus represents the result of checking a tool's install state.
+type ToolStatus int
+
+const (
+	// StatusNotInstalled means the tool binary is not found.
+	StatusNotInstalled ToolStatus = iota
+	// StatusInstalled means the tool is present and meets version
+	// requirements.
+	StatusInstalled
+	// StatusOutdated means the binary exists but the version is
+	// below MinVersion.
+	StatusOutdated
+)
+
+// IsInstalled checks if a tool is already present on the system
+// and meets version requirements.
 func IsInstalled(t *Tool) bool {
+	return CheckInstalled(t) == StatusInstalled
+}
+
+// CheckInstalled returns the detailed installation status of a
+// tool, distinguishing between not installed, installed, and
+// outdated.
+func CheckInstalled(t *Tool) ToolStatus {
 	if t.IsInstalledFunc != nil {
-		return t.IsInstalledFunc()
+		if !t.IsInstalledFunc() {
+			return StatusNotInstalled
+		}
+		if t.MinVersion != "" && t.Command != "" {
+			if _, err := exec.LookPath(t.Command); err == nil {
+				if !CheckVersion(t) {
+					return StatusOutdated
+				}
+			}
+		}
+		return StatusInstalled
 	}
-	_, err := exec.LookPath(t.Command)
-	return err == nil
+	if _, err := exec.LookPath(t.Command); err != nil {
+		return StatusNotInstalled
+	}
+	if !CheckVersion(t) {
+		return StatusOutdated
+	}
+	return StatusInstalled
 }
 
 // ExecuteInstall tries each strategy in order until one succeeds.
@@ -97,12 +133,16 @@ func executeStrategy(ctx context.Context, s *InstallStrategy, ic *InstallContext
 		if s.GitHub == nil {
 			return fmt.Errorf("missing GitHub config")
 		}
-		version, err := github.LatestVersion(s.GitHub.Repo, s.GitHub.StripV)
-		if err != nil {
-			return err
+		version := s.GitHub.PinVersion
+		if version == "" {
+			var err error
+			version, err = github.LatestVersion(s.GitHub.Repo, s.GitHub.StripV)
+			if err != nil {
+				return err
+			}
 		}
 		url, isTarball := github.BuildURL(s.GitHub, p, version)
-		return github.DownloadAndInstall(ctx, url, s.GitHub.Binary, isTarball)
+		return github.DownloadAndInstall(ctx, url, s.GitHub.Binary, isTarball, ic.Runner)
 
 	case MethodScript:
 		if s.Script == nil {

@@ -30,7 +30,8 @@ func devTools() []Tool {
 		// Neovim
 		{
 			Name: "neovim", Command: "nvim", Description: "Hyperextensible text editor",
-			Critical: true,
+			Critical:   true,
+			MinVersion: "0.12.0",
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodCustom,
 					CustomFunc: func(ctx context.Context, ic *InstallContext) error {

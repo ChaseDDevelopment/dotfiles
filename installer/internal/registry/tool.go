@@ -54,6 +54,15 @@ type Tool struct {
 	// DependsOn lists tool Command names that must be installed before
 	// this tool. Used by the parallel install engine for DAG ordering.
 	DependsOn []string
+
+	// MinVersion is the minimum required version (e.g. "0.12.0").
+	// When set, the installer treats the tool as "not installed" if
+	// the detected version is older than this threshold.
+	MinVersion string
+
+	// VersionArgs overrides the default ["--version"] arguments used
+	// to query the tool's version.
+	VersionArgs []string
 }
 
 // InstallStrategy describes one way to install a tool.
@@ -118,8 +127,9 @@ type PostAction struct {
 
 // InstallContext provides shared state to install strategies.
 type InstallContext struct {
-	Runner *executor.Runner
-	PkgMgr pkgmgr.PackageManager
+	Runner         *executor.Runner
+	PkgMgr         pkgmgr.PackageManager
+	ForceReinstall bool
 }
 
 // AppliesTo returns true if this strategy is valid for the given
