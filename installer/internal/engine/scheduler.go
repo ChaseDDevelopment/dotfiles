@@ -107,6 +107,7 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
 		// Resource semaphores — one slot per resource type.
 		resSems := map[Resource]chan struct{}{
 			ResApt:   make(chan struct{}, 1),
+			ResBrew:  make(chan struct{}, 1),
 			ResCargo: make(chan struct{}, 1),
 		}
 

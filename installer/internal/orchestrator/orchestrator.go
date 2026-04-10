@@ -192,10 +192,24 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			Component: comp.Name, Action: "Setup", Status: status,
 		})
 		taskID := "setup-" + comp.Name
+
+		// Each setup task only depends on its own required tool
+		// (if that tool is being installed). This prevents an
+		// unrelated tool failure from skipping all setups.
+		var setupDeps []string
+		if comp.RequiredCmd != "" {
+			for _, tid := range toolIDs {
+				if tid == comp.RequiredCmd {
+					setupDeps = append(setupDeps, tid)
+					break
+				}
+			}
+		}
+
 		tasks = append(tasks, engine.Task{
 			ID:        taskID,
 			Label:     fmt.Sprintf("Setting up %s", comp.Name),
-			DependsOn: toolIDs,
+			DependsOn: setupDeps,
 			Run: func(ctx context.Context) error {
 				sc := &config.SetupContext{
 					Runner:   runner,
@@ -409,12 +423,18 @@ func resourcesForTool(
 			if mgrName == "apt" {
 				return []engine.Resource{engine.ResApt}
 			}
+			if mgrName == "brew" {
+				return []engine.Resource{engine.ResBrew}
+			}
 		case registry.MethodCargo:
 			return []engine.Resource{engine.ResCargo}
 		case registry.MethodCustom:
 			for _, m := range s.Managers {
 				if m == "apt" && mgrName == "apt" {
 					return []engine.Resource{engine.ResApt}
+				}
+				if m == "brew" && mgrName == "brew" {
+					return []engine.Resource{engine.ResBrew}
 				}
 			}
 		}

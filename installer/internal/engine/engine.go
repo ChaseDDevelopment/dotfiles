@@ -12,6 +12,7 @@ type Resource string
 
 const (
 	ResApt   Resource = "apt"
+	ResBrew  Resource = "brew"
 	ResCargo Resource = "cargo"
 )
 

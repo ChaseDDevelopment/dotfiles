@@ -344,7 +344,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.failedTaskLabel = m.progress.nameForID(msg.ID)
 			m.failedTaskErr = msg.Err
 			m.phase = PhaseFailurePrompt
-			return m, nil
+			return m, listenCmd(m.eventCh)
 		}
 		// Transition to summary if all tasks are finished —
 		// don't wait solely for AllDoneMsg which can be missed.
@@ -380,7 +380,27 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyPressMsg); ok {
+	// Process engine events while showing the prompt so progress
+	// state stays current and events are not silently discarded.
+	switch msg := msg.(type) {
+	case engine.TaskStartedMsg:
+		m.progress.markActive(msg.ID, msg.Label)
+		return m, listenCmd(m.eventCh)
+	case engine.TaskDoneMsg:
+		m.progress.markDone(msg.ID, msg.Err)
+		if msg.Err == nil {
+			m.saveState()
+		}
+		return m, listenCmd(m.eventCh)
+	case engine.TaskSkippedMsg:
+		m.progress.markSkipped(msg.ID, msg.Label, msg.Reason)
+		return m, listenCmd(m.eventCh)
+	case engine.AllDoneMsg:
+		// Engine finished while user is deciding — just note it.
+		m.progress.done = true
+		return m, nil
+
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "c", "s": // continue / skip
 			// Return to installing phase without cancelling engine.
