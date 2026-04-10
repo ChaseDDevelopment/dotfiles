@@ -141,7 +141,7 @@ func runPostInstall(ctx context.Context, name string, sc *SetupContext) error {
 	case "Yazi":
 		return setupYazi(ctx, sc)
 	case "Ghostty":
-		return setupGhostty(sc)
+		return setupGhostty(ctx, sc)
 	case "Git":
 		return setupGit(ctx, sc)
 	}
@@ -322,7 +322,7 @@ func setupYazi(ctx context.Context, sc *SetupContext) error {
 	return nil
 }
 
-func setupGhostty(sc *SetupContext) error {
+func setupGhostty(_ context.Context, sc *SetupContext) error {
 	if !sc.Platform.IsDesktopEnvironment() {
 		sc.Runner.EmitVerbose(
 			"Skipping Ghostty: no desktop environment",

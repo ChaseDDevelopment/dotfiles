@@ -155,6 +155,15 @@ func contentWidth(termWidth int) int {
 	return w
 }
 
+// footerBlock renders a centered footer beneath a panel of the given
+// content width.
+func footerBlock(cw int, hints ...string) string {
+	return lipgloss.NewStyle().
+		Width(panelOuterWidth(cw)).
+		AlignHorizontal(lipgloss.Center).
+		Render(renderFooter(hints...))
+}
+
 // thinRule renders a dim horizontal line.
 func thinRule(width int) string {
 	w := width - 4

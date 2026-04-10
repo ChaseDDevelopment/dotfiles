@@ -119,7 +119,6 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 				Status: planStatus,
 			})
 
-			t := t
 			taskID := t.Command
 
 			var deps []string
@@ -164,7 +163,6 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 	bm := backup.NewManager(bc.DryRun)
 	var setupIDs []string
 	for _, comp := range config.AllComponents() {
-		comp := comp
 		if !bc.isComponentSelected(comp.Name) {
 			continue
 		}
@@ -317,7 +315,6 @@ func BuildRestoreTasks(bc *BuildConfig) BuildResult {
 func BuildUninstallTasks(bc *BuildConfig) BuildResult {
 	var tasks []engine.Task
 	for _, comp := range config.AllComponents() {
-		comp := comp
 		if !bc.isComponentSelected(comp.Name) {
 			continue
 		}
