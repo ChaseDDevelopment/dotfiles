@@ -59,19 +59,25 @@
   -- New file
   vim.keymap.set('n', '<leader>fn', '<cmd>enew<cr>', { desc = 'New file' })
 
+  -- Plugin management
+  vim.keymap.set('n', '<leader>pu', function() vim.pack.update() end, { desc = 'Update plugins' })
+
   -- Aerial (code outline)
   vim.keymap.set('n', '<leader>o', '<cmd>AerialToggle!<CR>', { desc = 'Code outline' })
 
-  -- Harpoon (quick file nav)
-  local harpoon = require('harpoon')
-  vim.keymap.set('n', '<leader>ha', function() harpoon:list():add() end, { desc = 'Add file' })
-  vim.keymap.set('n', '<leader>hh', function() harpoon.ui:toggle_quick_menu(harpoon:list()) end, { desc = 'Harpoon menu' })
-  vim.keymap.set('n', '<leader>1', function() harpoon:list():select(1) end, { desc = 'Harpoon 1' })
-  vim.keymap.set('n', '<leader>2', function() harpoon:list():select(2) end, { desc = 'Harpoon 2' })
-  vim.keymap.set('n', '<leader>3', function() harpoon:list():select(3) end, { desc = 'Harpoon 3' })
-  vim.keymap.set('n', '<leader>4', function() harpoon:list():select(4) end, { desc = 'Harpoon 4' })
-  vim.keymap.set('n', '<leader>hp', function() harpoon:list():prev() end, { desc = 'Harpoon prev' })
-  vim.keymap.set('n', '<leader>hn', function() harpoon:list():next() end, { desc = 'Harpoon next' })
+  -- Harpoon (quick file nav -- lazy require to avoid startup error)
+  vim.keymap.set('n', '<leader>ha', function() require('harpoon'):list():add() end, { desc = 'Add file' })
+  vim.keymap.set('n', '<leader>hh', function()
+    local harpoon = require('harpoon')
+    harpoon.ui:toggle_quick_menu(harpoon:list())
+  end, { desc = 'Harpoon menu' })
+  vim.keymap.set('n', '<leader>1', function() require('harpoon'):list():select(1) end, { desc = 'Harpoon 1' })
+  vim.keymap.set('n', '<leader>2', function() require('harpoon'):list():select(2) end, { desc = 'Harpoon 2' })
+  vim.keymap.set('n', '<leader>3', function() require('harpoon'):list():select(3) end, { desc = 'Harpoon 3' })
+  vim.keymap.set('n', '<leader>4', function() require('harpoon'):list():select(4) end, { desc = 'Harpoon 4' })
+  vim.keymap.set('n', '<leader>5', function() require('harpoon'):list():select(5) end, { desc = 'Harpoon 5' })
+  vim.keymap.set('n', '<leader>hp', function() require('harpoon'):list():prev() end, { desc = 'Harpoon prev' })
+  vim.keymap.set('n', '<leader>hn', function() require('harpoon'):list():next() end, { desc = 'Harpoon next' })
 
   -- Git
   vim.keymap.set('n', '<leader>gb', function() require('gitsigns').blame_line({ full = true }) end, { desc = 'Blame line' })

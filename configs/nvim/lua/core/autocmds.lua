@@ -16,6 +16,61 @@ vim.api.nvim_create_autocmd('PackChanged', {
 	end,
 })
 
+-- Check for plugin updates in background (non-blocking git fetch)
+vim.api.nvim_create_autocmd('UIEnter', {
+	once = true,
+	callback = function()
+		vim.defer_fn(function()
+			local pack_dir = vim.fn.stdpath('data') .. '/site/pack/core/opt'
+			local plugins = vim.fn.readdir(pack_dir)
+			local pending = #plugins
+			local updatable = {}
+
+			if pending == 0 then return end
+
+			for _, name in ipairs(plugins) do
+				local dir = pack_dir .. '/' .. name
+				if vim.fn.isdirectory(dir .. '/.git') == 1 then
+					vim.system({ 'git', 'fetch', '--quiet' }, { cwd = dir }, function(fetch_result)
+						if fetch_result.code == 0 then
+							vim.system(
+								{ 'git', 'rev-list', '--count', 'HEAD..@{u}' },
+								{ cwd = dir, text = true },
+								function(count_result)
+									local count = tonumber(vim.trim(count_result.stdout or '0')) or 0
+									if count > 0 then
+										table.insert(updatable, { name = name, commits = count })
+									end
+									pending = pending - 1
+									if pending == 0 then
+										vim.schedule(function()
+											if #updatable > 0 then
+												local lines = {}
+												for _, p in ipairs(updatable) do
+													table.insert(lines, ('  %s (%d new)'):format(p.name, p.commits))
+												end
+												vim.notify(
+													('%d plugin(s) have updates:\n%s\nRun <leader>pu to update'):format(
+														#updatable, table.concat(lines, '\n')),
+													vim.log.levels.INFO
+												)
+											end
+										end)
+									end
+								end
+							)
+						else
+							pending = pending - 1
+						end
+					end)
+				else
+					pending = pending - 1
+				end
+			end
+		end, 5000)
+	end,
+})
+
 -- Replace netrw: open snacks explorer when nvim is launched with a directory
 vim.api.nvim_create_autocmd('UIEnter', {
 	callback = function()
