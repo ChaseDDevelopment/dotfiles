@@ -100,16 +100,13 @@ func (m mainMenuModel) View(width int) string {
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
 
-	footer := renderFooter("↑/↓ navigate", "enter select", "q quit")
-	footerBlock := lipgloss.NewStyle().
-		Width(panelOuterWidth(w)).
-		AlignHorizontal(lipgloss.Center).
-		Render(footer)
-
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock(w, "↑/↓ navigate", "enter select", "q quit"))
 }
 
 func (m mainMenuModel) selected() InstallMode {
+	if m.cursor >= len(m.items) {
+		return 0
+	}
 	return m.items[m.cursor].mode
 }
 
@@ -198,13 +195,7 @@ func (m optionsMenuModel) View(width int) string {
 	content := b.String()
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
-	footer := renderFooter("space toggle", "enter continue", "esc back")
-	footerBlock := lipgloss.NewStyle().
-		Width(panelOuterWidth(w)).
-		AlignHorizontal(lipgloss.Center).
-		Render(footer)
-
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock(w, "space toggle", "enter continue", "esc back"))
 }
 
 // ---------------------------------------------------------------------------
@@ -290,13 +281,7 @@ func (m componentPickerModel) View(width int) string {
 	content := b.String()
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
-	footer := renderFooter("space toggle", "enter continue", "esc back")
-	footerBlock := lipgloss.NewStyle().
-		Width(panelOuterWidth(w)).
-		AlignHorizontal(lipgloss.Center).
-		Render(footer)
-
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock(w, "space toggle", "enter continue", "esc back"))
 }
 
 func (m componentPickerModel) selectedComponents() []string {
@@ -377,13 +362,7 @@ func (m backupPickerModel) View(width int) string {
 	content := b.String()
 	w := contentWidth(width)
 	panel := panelStyle.Width(w).Render(content)
-	footer := renderFooter("↑/↓ navigate", "enter select", "esc back")
-	footerBlock := lipgloss.NewStyle().
-		Width(panelOuterWidth(w)).
-		AlignHorizontal(lipgloss.Center).
-		Render(footer)
-
-	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock(w, "↑/↓ navigate", "enter select", "esc back"))
 }
 
 func (m backupPickerModel) selected() string {

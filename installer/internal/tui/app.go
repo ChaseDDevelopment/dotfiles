@@ -353,6 +353,9 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.summary.endTime = time.Now()
 			m.phase = PhaseSummary
 			m.saveState()
+			if m.summary.doctorMode && m.width > 0 && m.height > 0 {
+				m.summary.initDoctorViewport(m.width, m.height)
+			}
 			return m, drainCmd(m.eventCh)
 		}
 		return m, listenCmd(m.eventCh)
@@ -366,6 +369,9 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.summary.endTime = time.Now()
 		m.phase = PhaseSummary
 		m.saveState()
+		if m.summary.doctorMode && m.width > 0 && m.height > 0 {
+			m.summary.initDoctorViewport(m.width, m.height)
+		}
 		return m, nil
 
 	default:
@@ -412,6 +418,9 @@ func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.summary.endTime = time.Now()
 				m.phase = PhaseSummary
 				m.saveState()
+				if m.summary.doctorMode && m.width > 0 && m.height > 0 {
+					m.summary.initDoctorViewport(m.width, m.height)
+				}
 				return m, drainCmd(m.eventCh)
 			}
 			return m, listenCmd(m.eventCh)
@@ -423,6 +432,9 @@ func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.summary.endTime = time.Now()
 			m.summary.criticalFailure = true
 			m.phase = PhaseSummary
+			if m.summary.doctorMode && m.width > 0 && m.height > 0 {
+				m.summary.initDoctorViewport(m.width, m.height)
+			}
 			return m, drainCmd(m.eventCh)
 		}
 	}
@@ -473,6 +485,8 @@ func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		if m.summary.dryRun {
 			m.summary.initViewport(msg.Width, msg.Height)
+		} else if m.summary.doctorMode {
+			m.summary.initDoctorViewport(msg.Width, msg.Height)
 		}
 		return m, nil
 	case tea.KeyPressMsg:
@@ -487,7 +501,9 @@ func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Forward to viewport for scroll handling.
-	if m.summary.dryRun && m.summary.viewportReady {
+	useViewport := (m.summary.dryRun || m.summary.doctorMode) &&
+		m.summary.viewportReady
+	if useViewport {
 		var cmd tea.Cmd
 		m.summary.viewport, cmd = m.summary.viewport.Update(msg)
 		return m, cmd
@@ -593,6 +609,7 @@ func (m *AppModel) startInstall() tea.Cmd {
 	case ModeRestore:
 		tasks = m.applyResult(orchestrator.BuildRestoreTasks(bc))
 	case ModeDoctor:
+		m.summary.doctorMode = true
 		tasks = m.applyResult(orchestrator.BuildDoctorTasks(bc))
 	case ModeUninstall:
 		tasks = m.applyResult(orchestrator.BuildUninstallTasks(bc))

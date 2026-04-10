@@ -226,9 +226,9 @@ func RemoveComponentSymlinks(
 			continue // not a symlink
 		}
 		source := resolveSource(rootDir, entry.Source)
-		canonSource, _ := filepath.Abs(source)
-		canonLink, _ := filepath.Abs(link)
-		if canonSource != canonLink {
+		canonSource, err1 := filepath.Abs(source)
+		canonLink, err2 := filepath.Abs(link)
+		if err1 == nil && err2 == nil && canonSource != canonLink {
 			continue // points elsewhere
 		}
 		os.Remove(target)
@@ -293,7 +293,9 @@ func ApplySymlink(
 	}
 
 	// Remove stale target and create symlink.
-	os.RemoveAll(target)
+	if err := os.RemoveAll(target); err != nil {
+		return fmt.Errorf("remove %s: %w", target, err)
+	}
 	if runner != nil {
 		runner.EmitVerbose("Symlink " + target)
 	}

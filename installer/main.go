@@ -23,6 +23,11 @@ import (
 var Version = "dev"
 
 func main() {
+	if os.Getenv("HOME") == "" {
+		fmt.Fprintln(os.Stderr, "Error: $HOME is not set")
+		os.Exit(1)
+	}
+
 	augmentPath()
 
 	dryRun := flag.Bool("dry-run", false, "Preview changes without making them")

@@ -16,6 +16,7 @@ type summaryModel struct {
 	rows             []orchestrator.PlanRow
 	steps            []stepResult
 	dryRun           bool
+	doctorMode       bool   // true when displaying doctor results
 	criticalFailure  bool   // true if a critical tool failed
 	logPath          string // path to install.log for display
 	alreadyInstalled  int   // tools skipped because already present
@@ -34,10 +35,10 @@ func (m summaryModel) View(width, height int) string {
 	if m.dryRun {
 		return m.dryRunView(width, height)
 	}
-	return m.completionView(width)
+	return m.completionView(width, height)
 }
 
-func (m summaryModel) completionView(width int) string {
+func (m summaryModel) completionView(width, height int) string {
 	w := contentWidth(width)
 	var b strings.Builder
 
@@ -48,6 +49,9 @@ func (m summaryModel) completionView(width int) string {
 
 	if m.criticalFailure {
 		header := errorStyle.Render("  ✗  Install Aborted — Critical Tool Failed  ✗")
+		b.WriteString(centerWrap.Render(header))
+	} else if m.doctorMode {
+		header := titleStyle.Render("  ✦  Doctor Results  ✦")
 		b.WriteString(centerWrap.Render(header))
 	} else {
 		header := titleStyle.Render("  ✦  Setup Complete  ✦")
@@ -105,6 +109,9 @@ func (m summaryModel) completionView(width int) string {
 		strings.Join(parts, panelGap("   "))))
 
 	// Results table — show what actually happened.
+	// When in doctor mode, build the table body separately so it can
+	// be placed inside a viewport for scrolling.
+	var tableBody strings.Builder
 	if len(m.steps) > 0 {
 		b.WriteString(panelGap("\n\n"))
 		b.WriteString(stepStyle.Render("  Results"))
@@ -142,12 +149,20 @@ func (m summaryModel) completionView(width int) string {
 			default:
 				statusCell = dimStyle.Width(statusW).Render(s.status)
 			}
-			b.WriteString(panelGap("  "))
-			b.WriteString(tableCellStyle.Width(compW).Render(s.label))
-			b.WriteString(tableCellStyle.Width(actionW).Render(s.action))
-			b.WriteString(statusCell)
-			b.WriteString(panelGap("\n"))
+			row := panelGap("  ") +
+				tableCellStyle.Width(compW).Render(s.label) +
+				tableCellStyle.Width(actionW).Render(s.action) +
+				statusCell + panelGap("\n")
+			tableBody.WriteString(row)
 		}
+	}
+
+	// In doctor mode, use viewport for the results table when it
+	// overflows the available terminal height.
+	if m.doctorMode && m.viewportReady {
+		b.WriteString(m.viewport.View())
+	} else {
+		b.WriteString(tableBody.String())
 	}
 
 	// Log file path.
@@ -159,37 +174,39 @@ func (m summaryModel) completionView(width int) string {
 	}
 
 	// Quick start section — only show items for tools that succeeded.
-	succeeded := make(map[string]bool)
-	for _, s := range m.steps {
-		if s.success {
-			succeeded[strings.ToLower(s.label)] = true
+	if !m.doctorMode {
+		succeeded := make(map[string]bool)
+		for _, s := range m.steps {
+			if s.success {
+				succeeded[strings.ToLower(s.label)] = true
+			}
 		}
-	}
 
-	type quickItem struct {
-		cmd, desc, requires string
-	}
-	allQuick := []quickItem{
-		{"exec zsh", "Reload shell", "zsh"},
-		{"tmux", "Start tmux", "tmux"},
-		{"nvim", "Open Neovim", "neovim"},
-	}
-	var quickItems []quickItem
-	for _, item := range allQuick {
-		if succeeded[item.requires] {
-			quickItems = append(quickItems, item)
+		type quickItem struct {
+			cmd, desc, requires string
 		}
-	}
+		allQuick := []quickItem{
+			{"exec zsh", "Reload shell", "zsh"},
+			{"tmux", "Start tmux", "tmux"},
+			{"nvim", "Open Neovim", "neovim"},
+		}
+		var quickItems []quickItem
+		for _, item := range allQuick {
+			if succeeded[item.requires] {
+				quickItems = append(quickItems, item)
+			}
+		}
 
-	if len(quickItems) > 0 {
-		b.WriteString(panelGap("\n"))
-		b.WriteString(stepStyle.Render("  Quick Start"))
-		b.WriteString(panelGap("\n"))
-		b.WriteString(thinRule(w))
-		b.WriteString(panelGap("\n"))
-		for _, item := range quickItems {
-			b.WriteString(panelGap(" ") + selectedStyle.Render(fmt.Sprintf("%-16s", item.cmd)) +
-				panelGap("  ") + descStyle.Render(item.desc) + panelGap("\n"))
+		if len(quickItems) > 0 {
+			b.WriteString(panelGap("\n"))
+			b.WriteString(stepStyle.Render("  Quick Start"))
+			b.WriteString(panelGap("\n"))
+			b.WriteString(thinRule(w))
+			b.WriteString(panelGap("\n"))
+			for _, item := range quickItems {
+				b.WriteString(panelGap(" ") + selectedStyle.Render(fmt.Sprintf("%-16s", item.cmd)) +
+					panelGap("  ") + descStyle.Render(item.desc) + panelGap("\n"))
+			}
 		}
 	}
 
@@ -206,7 +223,14 @@ func (m summaryModel) completionView(width int) string {
 		Width(w).
 		Render(b.String())
 
-	footer := renderFooter("enter menu", "q quit")
+	// Footer with scroll hint when doctor mode is scrollable.
+	needsScroll := m.doctorMode && m.viewportReady
+	var footer string
+	if needsScroll {
+		footer = renderFooter("↑↓ scroll", "enter menu", "q quit")
+	} else {
+		footer = renderFooter("enter menu", "q quit")
+	}
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).
@@ -390,4 +414,81 @@ func (m *summaryModel) initViewport(width, height int) {
 		Width(innerW).
 		Background(catSurface0)
 	m.viewportReady = true
+}
+
+// initDoctorViewport sets up the viewport for doctor mode results.
+func (m *summaryModel) initDoctorViewport(width, height int) {
+	w := contentWidth(width)
+
+	// Estimate fixed header lines: title + blank + stats + blank +
+	// counts + blank + "Results" + rule = ~8, plus panel chrome.
+	const fixedHeaderLines = 8
+	panelChrome := 2 + 2 // border (top+bottom) + padding (top+bottom)
+	footerLines := 2
+	availableRows := height - panelChrome - footerLines - fixedHeaderLines
+	if availableRows < 5 {
+		availableRows = 5
+	}
+
+	// Only set up viewport if results overflow.
+	if len(m.steps) <= availableRows {
+		m.viewportReady = false
+		return
+	}
+
+	innerW := w - 4 - 2 // padding(1,2)*2=4 + border=2
+
+	m.viewport = viewport.New(
+		viewport.WithWidth(innerW),
+		viewport.WithHeight(availableRows),
+	)
+	m.viewport.SetContent(m.doctorTableRows(w))
+	m.viewport.Style = lipgloss.NewStyle().
+		Width(innerW).
+		Background(catSurface0)
+	m.viewportReady = true
+}
+
+// doctorTableRows renders the doctor results table body for viewport
+// content, matching the same format as completionView's table.
+func (m summaryModel) doctorTableRows(width int) string {
+	w := contentWidth(width)
+	const (
+		compW   = 20
+		actionW = 12
+	)
+	statusW := w - 10 - compW - actionW
+	if statusW < 10 {
+		statusW = 10
+	}
+
+	var b strings.Builder
+	for _, s := range m.steps {
+		var statusCell string
+		switch {
+		case !s.success:
+			detail := "failed"
+			if s.err != nil {
+				msg := s.err.Error()
+				maxLen := statusW - 2
+				if maxLen > 0 && len(msg) > maxLen {
+					msg = msg[:maxLen-1] + "…"
+				}
+				detail = msg
+			}
+			statusCell = errorStyle.Width(statusW).Render(detail)
+		case s.action == "install":
+			statusCell = successStyle.Width(statusW).Render("installed")
+		case s.action == "configure":
+			statusCell = successStyle.Width(statusW).Render("configured")
+		default:
+			statusCell = dimStyle.Width(statusW).Render(s.status)
+		}
+		b.WriteString(panelGap("  "))
+		b.WriteString(tableCellStyle.Width(compW).Render(s.label))
+		b.WriteString(tableCellStyle.Width(actionW).Render(s.action))
+		b.WriteString(statusCell)
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
