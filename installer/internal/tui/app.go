@@ -391,6 +391,9 @@ func (m *AppModel) startInstall() tea.Cmd {
 	}
 
 	if m.config.DryRun {
+		now := time.Now()
+		m.summary.startTime = now
+		m.summary.endTime = now
 		m.summary.rows = m.config.PlanRows
 		if m.width > 0 && m.height > 0 {
 			m.summary.initViewport(m.width, m.height)
@@ -409,6 +412,7 @@ func (m *AppModel) startInstall() tea.Cmd {
 
 	if len(tasks) == 0 {
 		m.summary.steps = nil
+		m.summary.endTime = m.startTime
 		m.phase = PhaseSummary
 		return nil
 	}

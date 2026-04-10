@@ -73,10 +73,12 @@ func (m summaryModel) completionView(width int) string {
 		}
 	}
 
-	elapsed := m.endTime.Sub(m.startTime).Round(100 * time.Millisecond)
-	statsLine := statsStyle.Render(elapsed.String())
-	b.WriteString(centerWrap.Render(statsLine))
-	b.WriteString(panelGap("\n\n"))
+	if !m.startTime.IsZero() && !m.endTime.IsZero() {
+		elapsed := m.endTime.Sub(m.startTime).Round(100 * time.Millisecond)
+		statsLine := statsStyle.Render(elapsed.String())
+		b.WriteString(centerWrap.Render(statsLine))
+		b.WriteString(panelGap("\n\n"))
+	}
 
 	// Categorized counts.
 	var parts []string
