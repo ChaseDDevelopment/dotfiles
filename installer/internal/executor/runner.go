@@ -76,7 +76,17 @@ func (r *Runner) RunWithOutput(
 	name string,
 	args ...string,
 ) (string, error) {
-	return r.runCmd(ctx, "", name, args...)
+	return r.runCmd(ctx, "", name, false, args...)
+}
+
+// RunProbe executes a command without logging FAILED on non-zero exit.
+// Use for commands where non-zero exit is an expected outcome.
+func (r *Runner) RunProbe(
+	ctx context.Context,
+	name string,
+	args ...string,
+) (string, error) {
+	return r.runCmd(ctx, "", name, true, args...)
 }
 
 // RunInDir executes a command in the specified working directory.
@@ -85,14 +95,17 @@ func (r *Runner) RunInDir(
 	dir, name string,
 	args ...string,
 ) error {
-	_, err := r.runCmd(ctx, dir, name, args...)
+	_, err := r.runCmd(ctx, dir, name, false, args...)
 	return err
 }
 
 // runCmd is the shared implementation for RunWithOutput and RunInDir.
+// When quiet is true, non-zero exits are not logged as FAILED (useful
+// for probe commands where failure is an expected outcome).
 func (r *Runner) runCmd(
 	ctx context.Context,
 	dir, name string,
+	quiet bool,
 	args ...string,
 ) (string, error) {
 	cmdStr := name + " " + strings.Join(args, " ")
@@ -152,9 +165,11 @@ func (r *Runner) runCmd(
 	}
 
 	if err != nil {
-		r.Log.Write(fmt.Sprintf(
-			"FAILED: %s (exit: %v)", cmdStr, err,
-		))
+		if !quiet {
+			r.Log.Write(fmt.Sprintf(
+				"FAILED: %s (exit: %v)", cmdStr, err,
+			))
+		}
 		return output, fmt.Errorf("%s: %w", cmdStr, err)
 	}
 

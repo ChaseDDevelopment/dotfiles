@@ -216,6 +216,7 @@ func cliTools() []Tool {
 		{
 			Name: "ghostty", Command: "ghostty",
 			Description: "GPU-accelerated terminal",
+			DesktopOnly: true,
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodCustom,
 					CustomFunc: func(ctx context.Context, ic *InstallContext) error {

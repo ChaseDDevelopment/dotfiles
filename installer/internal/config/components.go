@@ -258,7 +258,7 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 	}
 
 	// Reload tmux config if running (best-effort).
-	if err := sc.Runner.Run(ctx, "pgrep", "-x", "tmux"); err == nil {
+	if _, err := sc.Runner.RunProbe(ctx, "pgrep", "-x", "tmux"); err == nil {
 		tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
 		bestEffort(sc, "tmux config reload failed", func() error {
 			return sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf)
@@ -349,10 +349,10 @@ func setupGit(ctx context.Context, sc *SetupContext) error {
 
 	// Warn if git identity is not configured.
 	if platform.HasCommand("git") {
-		name, _ := sc.Runner.RunWithOutput(
+		name, _ := sc.Runner.RunProbe(
 			ctx, "git", "config", "--global", "user.name",
 		)
-		email, _ := sc.Runner.RunWithOutput(
+		email, _ := sc.Runner.RunProbe(
 			ctx, "git", "config", "--global", "user.email",
 		)
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(email) == "" {

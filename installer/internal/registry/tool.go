@@ -56,6 +56,10 @@ type Tool struct {
 	// this tool. Used by the parallel install engine for DAG ordering.
 	DependsOn []string
 
+	// DesktopOnly skips this tool on headless servers (no DISPLAY or
+	// WAYLAND_DISPLAY). Always true on macOS.
+	DesktopOnly bool
+
 	// MinVersion is the minimum required version (e.g. "0.12.0").
 	// When set, the installer treats the tool as "not installed" if
 	// the detected version is older than this threshold.

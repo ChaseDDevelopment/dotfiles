@@ -48,6 +48,9 @@ func Lookup(command string) *Tool {
 
 // ShouldInstall checks whether a tool applies to the current platform.
 func ShouldInstall(t *Tool, p *platform.Platform) bool {
+	if t.DesktopOnly && !p.IsDesktopEnvironment() {
+		return false
+	}
 	if len(t.OSFilter) == 0 {
 		return true
 	}
@@ -214,7 +217,7 @@ func executeScript(
 
 	shell := cfg.Shell
 	if shell == "" {
-		shell = "sh"
+		shell = "bash" // dash on Debian/Ubuntu can't handle bash syntax
 	}
 	args := append([]string{tmpFile}, cfg.Args...)
 	return ic.Runner.Run(ctx, shell, args...)
