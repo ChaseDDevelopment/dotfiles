@@ -10,6 +10,7 @@ import (
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/registry"
 )
 
 // Step describes a single update operation.
@@ -92,10 +93,22 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 	}
 }
 
-// cargoTools maps command -> crate for cargo-installed tools.
-var cargoTools = [][2]string{
-	{"eza", "eza"},
-	{"tree-sitter", "tree-sitter-cli"},
+// SelfUpdateStep returns an update step that checks for and
+// installs a newer dotsetup binary. Returns nil if the current
+// version is "dev".
+func SelfUpdateStep(
+	runner *executor.Runner,
+	currentVersion string,
+) *Step {
+	if currentVersion == "dev" || currentVersion == "" {
+		return nil
+	}
+	return &Step{
+		Name: "dotsetup self-update",
+		Fn: func(ctx context.Context) error {
+			return SelfUpdate(ctx, runner, currentVersion)
+		},
+	}
 }
 
 func updateCargoBinaries(
@@ -107,19 +120,24 @@ func updateCargoBinaries(
 		return nil
 	}
 	var errs []error
-	for _, pair := range cargoTools {
-		cmd, crate := pair[0], pair[1]
-		if platform.HasCommand(cmd) {
-			if err := runner.Run(
-				ctx, "cargo", "install", crate,
-			); err != nil {
-				errs = append(errs, fmt.Errorf(
-					"cargo install %s: %w", crate, err,
-				))
-			}
+	// Derive the cargo tool list from the registry instead of
+	// maintaining a separate hardcoded list.
+	for _, t := range registry.AllTools() {
+		if t.CargoCrate == "" {
+			continue
+		}
+		if !platform.HasCommand(t.Command) {
+			continue
+		}
+		if err := runner.Run(
+			ctx, "cargo", "install", t.CargoCrate,
+		); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"cargo install %s: %w", t.CargoCrate, err,
+			))
 		}
 	}
-	// yazi via cargo only if not brew/pacman installed
+	// yazi via cargo only if not brew/pacman installed.
 	if platform.HasCommand("yazi") &&
 		mgrName != "brew" && mgrName != "pacman" {
 		if err := runner.Run(

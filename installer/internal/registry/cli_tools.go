@@ -12,6 +12,20 @@ import (
 
 func coreTools() []Tool {
 	return []Tool{
+		// Homebrew — must come first so brew is available for
+		// subsequent tools on fresh macOS machines.
+		{
+			Name: "homebrew", Command: "brew",
+			Description: "macOS package manager",
+			Critical:    true,
+			OSFilter:    []string{"darwin"},
+			Strategies: []InstallStrategy{
+				{Method: MethodScript, Script: &ScriptConfig{
+					URL:   "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
+					Shell: "bash",
+				}},
+			},
+		},
 		{Name: "git", Command: "git", Critical: true, Strategies: []InstallStrategy{
 			{Method: MethodPackageManager, Package: "git"},
 		}},
@@ -197,7 +211,109 @@ func cliTools() []Tool {
 				{Method: MethodPackageManager, Package: "wl-clipboard"},
 			},
 		},
+		// Ghostty — GPU-accelerated terminal
+		{
+			Name: "ghostty", Command: "ghostty",
+			Description: "GPU-accelerated terminal",
+			OSFilter:    []string{"darwin"},
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodCustom,
+					CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+						return ic.Runner.Run(ctx, "brew", "install", "--cask", "ghostty")
+					},
+				},
+			},
+		},
+		// gh — GitHub CLI
+		{
+			Name: "gh", Command: "gh", Description: "GitHub CLI",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "gh"},
+				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "github-cli"},
+				{Managers: []string{"apt"}, Method: MethodCustom, CustomFunc: installGhCLI},
+				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "gh"},
+			},
+		},
+		// Nerd Font — required for icons in eza, starship, tmux, yazi
+		{
+			Name: "nerd-font", Command: "nerd-font",
+			Description: "JetBrains Mono Nerd Font",
+			IsInstalledFunc: func() bool {
+				return isNerdFontInstalled()
+			},
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodCustom,
+					CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+						return ic.Runner.Run(ctx, "brew", "install", "--cask", "font-jetbrains-mono-nerd-font")
+					},
+				},
+				{Method: MethodCustom, CustomFunc: installNerdFontLinux},
+			},
+		},
 	}
+}
+
+func installGhCLI(ctx context.Context, ic *InstallContext) error {
+	script := `type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt update
+sudo apt install gh -y`
+	return ic.Runner.RunShell(ctx, script)
+}
+
+func isNerdFontInstalled() bool {
+	home := os.Getenv("HOME")
+	// macOS: check ~/Library/Fonts
+	for _, dir := range []string{
+		filepath.Join(home, "Library", "Fonts"),
+		filepath.Join(home, ".local", "share", "fonts"),
+		"/usr/local/share/fonts",
+		"/usr/share/fonts",
+	} {
+		matches, _ := filepath.Glob(
+			filepath.Join(dir, "*JetBrains*Nerd*"),
+		)
+		if len(matches) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func installNerdFontLinux(ctx context.Context, ic *InstallContext) error {
+	version, err := github.LatestVersion("ryanoasis/nerd-fonts", true)
+	if err != nil {
+		version = "3.3.0"
+	}
+	url := fmt.Sprintf(
+		"https://github.com/ryanoasis/nerd-fonts/releases/download/v%s/JetBrainsMono.tar.xz",
+		version,
+	)
+	home := os.Getenv("HOME")
+	fontDir := filepath.Join(home, ".local", "share", "fonts", "NerdFonts")
+	if err := os.MkdirAll(fontDir, 0o755); err != nil {
+		return fmt.Errorf("create font dir: %w", err)
+	}
+
+	tmpFile := filepath.Join(os.TempDir(), "JetBrainsMono.tar.xz")
+	if err := ic.Runner.Run(
+		ctx, "curl", "-fsSL", url, "-o", tmpFile,
+	); err != nil {
+		return fmt.Errorf("download nerd font: %w", err)
+	}
+	defer os.Remove(tmpFile)
+
+	if err := ic.Runner.Run(
+		ctx, "tar", "-xJf", tmpFile, "-C", fontDir,
+	); err != nil {
+		return fmt.Errorf("extract nerd font: %w", err)
+	}
+
+	// Refresh font cache.
+	_ = ic.Runner.Run(ctx, "fc-cache", "-fv")
+	return nil
 }
 
 // installTailspin downloads the tailspin binary from GitHub Releases.

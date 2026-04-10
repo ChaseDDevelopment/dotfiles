@@ -13,6 +13,7 @@ import (
 	"github.com/chaseddevelopment/dotfiles/installer/internal/engine"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/state"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/registry"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/update"
@@ -25,6 +26,7 @@ const (
 	PhaseMainMenu Phase = iota
 	PhaseOptionsMenu
 	PhaseComponentPicker
+	PhaseBackupPicker
 	PhaseInstalling
 	PhaseSummary
 )
@@ -38,6 +40,8 @@ const (
 	ModeDryRun
 	ModeUpdate
 	ModeRestore
+	ModeDoctor
+	ModeUninstall
 	ModeExit
 )
 
@@ -56,6 +60,8 @@ type AppConfig struct {
 	RootDir            string
 	LogFile            *executor.LogFile
 	Runner             *executor.Runner
+	State              *state.Store
+	SelectedBackup     string // path chosen by backup picker
 	PlanRows           []PlanRow
 }
 
@@ -63,11 +69,12 @@ type AppConfig struct {
 type AppModel struct {
 	phase    Phase
 	config   *AppConfig
-	mainMenu mainMenuModel
-	options  optionsMenuModel
-	picker   componentPickerModel
-	progress progressModel
-	summary  summaryModel
+	mainMenu     mainMenuModel
+	options      optionsMenuModel
+	picker       componentPickerModel
+	backupPicker backupPickerModel
+	progress     progressModel
+	summary      summaryModel
 	width    int
 	height   int
 	quitting bool
@@ -133,6 +140,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateOptionsMenu(msg)
 	case PhaseComponentPicker:
 		return m.updateComponentPicker(msg)
+	case PhaseBackupPicker:
+		return m.updateBackupPicker(msg)
 	case PhaseInstalling:
 		return m.updateInstalling(msg)
 	case PhaseSummary:
@@ -168,6 +177,8 @@ func (m AppModel) View() tea.View {
 		content = m.options.View(w)
 	case PhaseComponentPicker:
 		content = m.picker.View(w)
+	case PhaseBackupPicker:
+		content = m.backupPicker.View(w)
 	case PhaseInstalling:
 		content = m.progress.View(w)
 	case PhaseSummary:
@@ -213,11 +224,17 @@ func (m AppModel) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config.Mode = ModeInstall
 			m.summary = newSummaryModel(true)
 			m.phase = PhaseOptionsMenu
-		case ModeUpdate, ModeRestore:
+		case ModeUpdate, ModeDoctor:
 			m.phase = PhaseInstalling
 			return m, m.startInstall()
+		case ModeRestore:
+			m.backupPicker = newBackupPicker()
+			m.phase = PhaseBackupPicker
+			return m, nil
 		case ModeCustomInstall:
 			m.phase = PhaseOptionsMenu
+		case ModeUninstall:
+			m.phase = PhaseComponentPicker
 		case ModeInstall:
 			m.phase = PhaseOptionsMenu
 		}
@@ -264,12 +281,37 @@ func (m AppModel) updateComponentPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = PhaseInstalling
 			return m, m.startInstall()
 		case "esc", "backspace":
-			m.phase = PhaseOptionsMenu
+			if m.config.Mode == ModeUninstall {
+				m.phase = PhaseMainMenu
+			} else {
+				m.phase = PhaseOptionsMenu
+			}
 			return m, nil
 		}
 	}
 	var cmd tea.Cmd
 	m.picker, cmd = m.picker.Update(msg)
+	return m, cmd
+}
+
+func (m AppModel) updateBackupPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
+		switch msg.String() {
+		case "enter":
+			sel := m.backupPicker.selected()
+			if sel == "" {
+				return m, nil
+			}
+			m.config.SelectedBackup = sel
+			m.phase = PhaseInstalling
+			return m, m.startInstall()
+		case "esc", "backspace":
+			m.phase = PhaseMainMenu
+			return m, nil
+		}
+	}
+	var cmd tea.Cmd
+	m.backupPicker, cmd = m.backupPicker.Update(msg)
 	return m, cmd
 }
 
@@ -298,6 +340,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.summary.steps = m.progress.steps
 			m.summary.endTime = time.Now()
 			m.phase = PhaseSummary
+			m.saveState()
 			return m, drainCmd(m.eventCh)
 		}
 		return m, listenCmd(m.eventCh)
@@ -310,6 +353,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.summary.steps = m.progress.steps
 		m.summary.endTime = time.Now()
 		m.phase = PhaseSummary
+		m.saveState()
 		return m, nil
 
 	default:
@@ -368,8 +412,42 @@ func (m *AppModel) returnToMainMenu() {
 	m.eventCh = nil
 	m.progress = newProgressModel()
 	m.summary = newSummaryModel(false)
+	if m.config.LogFile != nil {
+		m.summary.logPath = m.config.LogFile.Path()
+	}
 	m.options = newOptionsMenu()
 	m.picker = newComponentPicker()
+}
+
+// syncRepo does a fast-forward git pull to ensure configs are
+// up-to-date before applying. Failures are logged but do not block
+// the install — the user may be offline or have local changes.
+func (m *AppModel) syncRepo() {
+	if m.config.Runner == nil || m.config.RootDir == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(
+		context.Background(), 15*time.Second,
+	)
+	defer cancel()
+	if err := m.config.Runner.RunInDir(
+		ctx, m.config.RootDir, "git", "pull", "--ff-only",
+	); err != nil {
+		m.config.Runner.Log.Write(fmt.Sprintf(
+			"NOTE: git pull --ff-only skipped: %v", err,
+		))
+	}
+}
+
+// saveState persists the install state to disk. Best-effort.
+func (m *AppModel) saveState() {
+	if m.config.State != nil {
+		if err := m.config.State.Save(); err != nil && m.config.Runner != nil {
+			m.config.Runner.Log.Write(
+				fmt.Sprintf("WARNING: save state: %v", err),
+			)
+		}
+	}
 }
 
 // --------------------------------------------------------------------------
@@ -379,6 +457,11 @@ func (m *AppModel) returnToMainMenu() {
 const maxParallelWorkers = 5
 
 func (m *AppModel) startInstall() tea.Cmd {
+	// Sync dotfiles repo before install/update (best-effort).
+	if m.config.Mode != ModeRestore && m.config.Mode != ModeDoctor {
+		m.syncRepo()
+	}
+
 	var tasks []engine.Task
 
 	switch m.config.Mode {
@@ -386,6 +469,10 @@ func (m *AppModel) startInstall() tea.Cmd {
 		tasks = m.buildUpdateTasks()
 	case ModeRestore:
 		tasks = m.buildRestoreTasks()
+	case ModeDoctor:
+		tasks = m.buildDoctorTasks()
+	case ModeUninstall:
+		tasks = m.buildUninstallTasks()
 	default:
 		tasks = m.buildInstallTasks()
 	}
@@ -447,7 +534,7 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 				installedSet[t.Command] = true
 				continue
 			}
-			if registry.IsInstalled(&t) {
+			if registry.CheckInstalled(&t) == registry.StatusInstalled {
 				installedSet[t.Command] = true
 			}
 		}
@@ -457,7 +544,8 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 			if !registry.ShouldInstall(&t, plat) {
 				continue
 			}
-			if !m.config.ForceReinstall && registry.IsInstalled(&t) {
+			status := registry.CheckInstalled(&t)
+			if !m.config.ForceReinstall && status == registry.StatusInstalled {
 				m.summary.alreadyInstalled++
 				m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 					Component: t.Name, Action: "Package",
@@ -465,9 +553,16 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 				})
 				continue
 			}
+			planStatus := "would install"
+			if status == registry.StatusOutdated {
+				ver := registry.InstalledVersion(&t)
+				planStatus = fmt.Sprintf(
+					"outdated (%s → %s)", ver, t.MinVersion,
+				)
+			}
 			m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 				Component: t.Name, Action: "Package",
-				Status: "would install",
+				Status: planStatus,
 			})
 
 			t := t // capture
@@ -489,8 +584,21 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 				DependsOn: deps,
 				Resources: resourcesForTool(&t, mgrName),
 				Run: func(ctx context.Context) error {
-					ic := &registry.InstallContext{Runner: runner, PkgMgr: mgr}
-					return registry.ExecuteInstall(ctx, &t, ic, plat)
+					ic := &registry.InstallContext{
+						Runner:         runner,
+						PkgMgr:         mgr,
+						ForceReinstall: m.config.ForceReinstall,
+					}
+					if err := registry.ExecuteInstall(ctx, &t, ic, plat); err != nil {
+						return err
+					}
+					if m.config.State != nil {
+						ver := registry.InstalledVersion(&t)
+						m.config.State.RecordInstall(
+							t.Name, ver, "install",
+						)
+					}
+					return nil
 				},
 			})
 			toolTaskIDs = append(toolTaskIDs, taskID)
@@ -513,6 +621,21 @@ func (m *AppModel) buildInstallTasks() []engine.Task {
 				Status: "already configured",
 			})
 			continue
+		}
+		// Show diff details for replacements.
+		if status == "would replace" {
+			diffs := config.DiffComponent(
+				comp.Name, m.config.RootDir,
+			)
+			if len(diffs) > 0 {
+				status = "would replace: " + diffs[0]
+				if len(diffs) > 1 {
+					status = fmt.Sprintf(
+						"would replace (%d files)",
+						len(diffs),
+					)
+				}
+			}
 		}
 		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
 			Component: comp.Name, Action: "Setup", Status: status,
@@ -589,14 +712,30 @@ func resourcesForTool(t *registry.Tool, mgrName string) []engine.Resource {
 
 func (m *AppModel) buildUpdateTasks() []engine.Task {
 	var tasks []engine.Task
-	updateSteps := update.AllSteps(m.config.Runner, m.config.PkgMgr, m.config.Platform)
-	var prevID string
+	updateSteps := update.AllSteps(
+		m.config.Runner, m.config.PkgMgr, m.config.Platform,
+	)
+
+	// Self-update step (only for release builds).
+	if step := update.SelfUpdateStep(
+		m.config.Runner, Version,
+	); step != nil {
+		updateSteps = append(updateSteps, *step)
+	}
+
+	// System packages must run first (repos update, dependency
+	// installs). Everything else can run in parallel.
+	sysID := ""
 	for _, s := range updateSteps {
 		s := s
 		id := "update-" + s.Name
 		var deps []string
-		if prevID != "" {
-			deps = []string{prevID}
+		if s.Name == "System packages" {
+			// No deps — runs first.
+			sysID = id
+		} else if sysID != "" {
+			// All other steps depend on system packages.
+			deps = []string{sysID}
 		}
 		tasks = append(tasks, engine.Task{
 			ID:        id,
@@ -606,25 +745,100 @@ func (m *AppModel) buildUpdateTasks() []engine.Task {
 				return s.Fn(ctx)
 			},
 		})
-		prevID = id
 	}
 	return tasks
 }
 
 func (m *AppModel) buildRestoreTasks() []engine.Task {
+	backupPath := m.config.SelectedBackup
 	return []engine.Task{
 		{
 			ID:    "restore",
 			Label: "Restoring from backup",
 			Run: func(_ context.Context) error {
-				backups, err := backup.ListBackups()
-				if err != nil || len(backups) == 0 {
-					return fmt.Errorf("no backups found")
+				if backupPath == "" {
+					return fmt.Errorf("no backup selected")
 				}
-				return backup.Restore(backups[0].Path, m.config.DryRun)
+				return backup.Restore(backupPath, m.config.DryRun)
 			},
 		},
 	}
+}
+
+func (m *AppModel) buildUninstallTasks() []engine.Task {
+	var tasks []engine.Task
+	runner := m.config.Runner
+	rootDir := m.config.RootDir
+
+	for _, comp := range config.AllComponents() {
+		comp := comp
+		if !m.config.IsComponentSelected(comp.Name) {
+			continue
+		}
+		tasks = append(tasks, engine.Task{
+			ID:    "uninstall-" + comp.Name,
+			Label: fmt.Sprintf("Removing %s", comp.Name),
+			Run: func(_ context.Context) error {
+				return config.RemoveComponentSymlinks(
+					comp.Name, rootDir, runner,
+				)
+			},
+		})
+	}
+	return tasks
+}
+
+func (m *AppModel) buildDoctorTasks() []engine.Task {
+	var tasks []engine.Task
+	plat := m.config.Platform
+
+	// Check all registered tools.
+	for _, t := range registry.AllTools() {
+		if !registry.ShouldInstall(&t, plat) {
+			continue
+		}
+		t := t
+		tasks = append(tasks, engine.Task{
+			ID:    "check-" + t.Command,
+			Label: "Checking " + t.Name,
+			Run: func(_ context.Context) error {
+				status := registry.CheckInstalled(&t)
+				switch status {
+				case registry.StatusNotInstalled:
+					return fmt.Errorf("not installed")
+				case registry.StatusOutdated:
+					ver := registry.InstalledVersion(&t)
+					return fmt.Errorf(
+						"outdated (%s, need %s)",
+						ver, t.MinVersion,
+					)
+				}
+				return nil
+			},
+		})
+	}
+
+	// Check all component symlinks.
+	for _, comp := range config.AllComponents() {
+		comp := comp
+		tasks = append(tasks, engine.Task{
+			ID:    "check-" + comp.Name,
+			Label: "Checking " + comp.Name,
+			Run: func(_ context.Context) error {
+				status := config.InspectComponent(
+					comp.Name, m.config.RootDir,
+				)
+				switch status {
+				case "already configured":
+					return nil
+				default:
+					return fmt.Errorf("%s", status)
+				}
+			},
+		})
+	}
+
+	return tasks
 }
 
 // listenCmd returns a Bubble Tea command that blocks until the next

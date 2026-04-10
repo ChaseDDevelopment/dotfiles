@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
@@ -66,7 +67,7 @@ const (
 
 // InspectSymlink checks the state of a single symlink entry without modifying anything.
 func InspectSymlink(entry SymlinkEntry, rootDir string) SymlinkStatus {
-	source := filepath.Join(rootDir, "configs", entry.Source)
+	source := resolveSource(rootDir, entry.Source)
 	target := os.ExpandEnv(entry.Target)
 
 	// If the target doesn't exist at all, it's missing.
@@ -124,6 +125,103 @@ func InspectComponent(component, rootDir string) string {
 	return "would configure"
 }
 
+// resolveSource returns the OS-specific source path if a variant
+// exists (e.g. configs/git/config##darwin), otherwise the base path.
+// Variants use the "##os" suffix convention (similar to YADM).
+func resolveSource(rootDir, source string) string {
+	base := filepath.Join(rootDir, "configs", source)
+	variant := base + "##" + runtime.GOOS
+	if _, err := os.Stat(variant); err == nil {
+		return variant
+	}
+	return base
+}
+
+// DiffSymlink returns a human-readable description of what would
+// change if the symlink were applied. Returns "" when the symlink
+// is already correct or the target is missing (nothing to diff).
+func DiffSymlink(entry SymlinkEntry, rootDir string) string {
+	source := resolveSource(rootDir, entry.Source)
+	target := os.ExpandEnv(entry.Target)
+
+	info, err := os.Lstat(target)
+	if err != nil {
+		return "" // target doesn't exist
+	}
+
+	// If it's a symlink pointing elsewhere, show the redirect.
+	if info.Mode()&os.ModeSymlink != 0 {
+		existing, err := os.Readlink(target)
+		if err != nil {
+			return fmt.Sprintf("%s: unreadable symlink", target)
+		}
+		canonSource, _ := filepath.Abs(source)
+		canonExisting, _ := filepath.Abs(existing)
+		if canonSource == canonExisting {
+			return "" // already correct
+		}
+		return fmt.Sprintf(
+			"%s: symlink %s → %s",
+			target, existing, source,
+		)
+	}
+
+	// Regular file/dir — indicate replacement.
+	kind := "file"
+	if info.IsDir() {
+		kind = "directory"
+	}
+	return fmt.Sprintf(
+		"%s: replace %s with symlink → %s",
+		target, kind, source,
+	)
+}
+
+// DiffComponent returns diff descriptions for all symlinks in a
+// component that would be modified.
+func DiffComponent(component, rootDir string) []string {
+	var diffs []string
+	for _, entry := range AllSymlinks() {
+		if entry.Component != component {
+			continue
+		}
+		if d := DiffSymlink(entry, rootDir); d != "" {
+			diffs = append(diffs, d)
+		}
+	}
+	return diffs
+}
+
+// RemoveComponentSymlinks removes all symlinks for a component
+// that point to the dotfiles repo. Regular files/dirs are left
+// untouched to avoid data loss.
+func RemoveComponentSymlinks(
+	component, rootDir string,
+	runner *executor.Runner,
+) error {
+	for _, entry := range AllSymlinks() {
+		if entry.Component != component {
+			continue
+		}
+		target := os.ExpandEnv(entry.Target)
+		link, err := os.Readlink(target)
+		if err != nil {
+			continue // not a symlink
+		}
+		source := resolveSource(rootDir, entry.Source)
+		canonSource, _ := filepath.Abs(source)
+		canonLink, _ := filepath.Abs(link)
+		if canonSource != canonLink {
+			continue // points elsewhere
+		}
+		os.Remove(target)
+		if runner != nil {
+			runner.EmitVerbose("Removed " + target)
+		}
+	}
+	return nil
+}
+
 // ApplySymlink creates a single symlink, backing up the existing
 // target. The runner parameter is used for verbose status output
 // and may be nil.
@@ -134,7 +232,7 @@ func ApplySymlink(
 	dryRun bool,
 	runner *executor.Runner,
 ) error {
-	source := filepath.Join(rootDir, "configs", entry.Source)
+	source := resolveSource(rootDir, entry.Source)
 	target := os.ExpandEnv(entry.Target)
 
 	// Verify source exists.

@@ -6,6 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
 )
 
 // ---------------------------------------------------------------------------
@@ -32,6 +35,8 @@ func newMainMenu() mainMenuModel {
 			{icon: " ", label: "Dry Run", desc: "Preview changes without modifying", mode: ModeDryRun},
 			{icon: "󰚰 ", label: "Update", desc: "Update all installed tools", mode: ModeUpdate},
 			{icon: " ", label: "Restore", desc: "Restore from a backup", mode: ModeRestore},
+			{icon: " ", label: "Doctor", desc: "Verify installation health", mode: ModeDoctor},
+			{icon: " ", label: "Uninstall", desc: "Remove component symlinks", mode: ModeUninstall},
 			{icon: " ", label: "Exit", desc: "", mode: ModeExit},
 		},
 	}
@@ -218,19 +223,13 @@ type componentItem struct {
 }
 
 func newComponentPicker() componentPickerModel {
-	return componentPickerModel{
-		items: []componentItem{
-			{icon: "✦", name: "All"},
-			{icon: " ", name: "Zsh"},
-			{icon: " ", name: "Tmux"},
-			{icon: " ", name: "Neovim"},
-			{icon: " ", name: "Starship"},
-			{icon: " ", name: "Atuin"},
-			{icon: "󰊠", name: "Ghostty"},
-			{icon: " ", name: "Yazi"},
-			{icon: " ", name: "Git"},
-		},
+	items := []componentItem{{icon: "✦", name: "All"}}
+	for _, c := range config.AllComponents() {
+		items = append(items, componentItem{
+			icon: c.Icon, name: c.Name,
+		})
 	}
+	return componentPickerModel{items: items}
 }
 
 func (m componentPickerModel) Update(msg tea.Msg) (componentPickerModel, tea.Cmd) {
@@ -308,5 +307,89 @@ func (m componentPickerModel) selectedComponents() []string {
 		}
 	}
 	return sel
+}
+
+// ---------------------------------------------------------------------------
+// Backup Picker (single-select)
+// ---------------------------------------------------------------------------
+
+type backupPickerModel struct {
+	items  []backup.BackupInfo
+	cursor int
+	err    error
+}
+
+func newBackupPicker() backupPickerModel {
+	backups, err := backup.ListBackups()
+	return backupPickerModel{items: backups, err: err}
+}
+
+func (m backupPickerModel) Update(msg tea.Msg) (backupPickerModel, tea.Cmd) {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
+		switch msg.String() {
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.items)-1 {
+				m.cursor++
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m backupPickerModel) View(width int) string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("  Select Backup"))
+	b.WriteString(panelGap("\n\n"))
+
+	if m.err != nil || len(m.items) == 0 {
+		b.WriteString(dimStyle.Render("  No backups found."))
+		b.WriteString(panelGap("\n"))
+	} else {
+		for i, item := range m.items {
+			isSelected := i == m.cursor
+
+			cursor := panelGap("  ")
+			if isSelected {
+				cursor = cursorStyle.Render("▸ ")
+			}
+
+			label := menuDimStyle.Render(item.Date)
+			if isSelected {
+				label = selectedStyle.Render(item.Date)
+			}
+
+			path := ""
+			if isSelected {
+				path = panelGap("  ") + dimStyle.Render(item.Path)
+			}
+
+			b.WriteString(fmt.Sprintf(
+				"%s%s%s%s", cursor, label, path, panelGap("\n"),
+			))
+		}
+	}
+
+	content := b.String()
+	w := contentWidth(width)
+	panel := panelStyle.Width(w).Render(content)
+	footer := renderFooter("↑/↓ navigate", "enter select", "esc back")
+	footerBlock := lipgloss.NewStyle().
+		Width(panelOuterWidth(w)).
+		AlignHorizontal(lipgloss.Center).
+		Render(footer)
+
+	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
+}
+
+func (m backupPickerModel) selected() string {
+	if len(m.items) == 0 {
+		return ""
+	}
+	return m.items[m.cursor].Path
 }
 

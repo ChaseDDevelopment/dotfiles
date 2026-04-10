@@ -13,6 +13,7 @@ import (
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/state"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/tui"
 
 	"golang.org/x/term"
@@ -64,19 +65,19 @@ func main() {
 			)
 		}
 	}
-	sudoCtx, cancelSudo := context.WithCancel(
-		context.Background(),
-	)
-	defer cancelSudo()
-	stopSudo := executor.StartKeepalive(sudoCtx)
-	defer stopSudo()
-
 	logFile, err := executor.NewLogFile(filepath.Join(rootDir, "install.log"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 	defer logFile.Close()
+
+	sudoCtx, cancelSudo := context.WithCancel(
+		context.Background(),
+	)
+	defer cancelSudo()
+	stopSudo := executor.StartKeepalive(sudoCtx, logFile)
+	defer stopSudo()
 
 	runner := executor.NewRunner(logFile, *dryRun)
 
@@ -94,6 +95,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	installState, err := state.Load(state.DefaultPath())
+	if err != nil {
+		logFile.Write(fmt.Sprintf(
+			"WARNING: load state: %v (starting fresh)", err,
+		))
+		installState, _ = state.Load(state.DefaultPath())
+	}
+
 	cfg := &tui.AppConfig{
 		DryRun:   *dryRun,
 		Platform: plat,
@@ -101,6 +110,7 @@ func main() {
 		RootDir:  rootDir,
 		LogFile:  logFile,
 		Runner:   runner,
+		State:    installState,
 	}
 
 	tui.Version = Version
