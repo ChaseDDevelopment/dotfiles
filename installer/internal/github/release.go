@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
@@ -27,13 +27,20 @@ const (
 	PatternRawBinary
 )
 
+// Runner is the interface required for executing shell commands
+// during GitHub release installs. Satisfied by *executor.Runner.
+type Runner interface {
+	Run(ctx context.Context, name string, args ...string) error
+}
+
 // Config holds parameters for downloading from GitHub Releases.
 type Config struct {
-	Repo    string     // e.g., "eza-community/eza"
-	Pattern URLPattern // which URL format
-	Binary  string     // binary name inside the archive
-	StripV  bool       // strip leading 'v' from version tag
-	LibC    string     // "musl" or "gnu" (for TargetTriple pattern)
+	Repo       string     // e.g., "eza-community/eza"
+	Pattern    URLPattern // which URL format
+	Binary     string     // binary name inside the archive
+	StripV     bool       // strip leading 'v' from version tag
+	LibC       string     // "musl" or "gnu" (for TargetTriple pattern)
+	PinVersion string     // pin to specific version (bypasses LatestVersion)
 }
 
 // LatestVersion fetches the latest release tag from a GitHub repository
@@ -42,6 +49,7 @@ func LatestVersion(repo string, stripV bool) (string, error) {
 	url := fmt.Sprintf("https://github.com/%s/releases/latest", repo)
 
 	client := &http.Client{
+		Timeout: 15 * time.Second,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -108,9 +116,16 @@ func BuildURL(cfg *Config, p *platform.Platform, version string) (url string, is
 	return "", false
 }
 
-// DownloadAndInstall downloads a release asset and installs the binary
-// to /usr/local/bin.
-func DownloadAndInstall(ctx context.Context, url, binaryName string, isTarball bool) error {
+// DownloadAndInstall downloads a release asset and installs the
+// binary to /usr/local/bin. When runner is non-nil, shell commands
+// (tar, sudo install) are routed through it for consistent logging,
+// TTY passthrough, and dry-run support.
+func DownloadAndInstall(
+	ctx context.Context,
+	url, binaryName string,
+	isTarball bool,
+	runner Runner,
+) error {
 	tmpDir, err := os.MkdirTemp("", "dotsetup-*")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
@@ -118,12 +133,16 @@ func DownloadAndInstall(ctx context.Context, url, binaryName string, isTarball b
 	defer os.RemoveAll(tmpDir)
 
 	if isTarball {
-		return downloadTarball(ctx, url, binaryName, tmpDir)
+		return downloadTarball(ctx, url, binaryName, tmpDir, runner)
 	}
-	return downloadBinary(ctx, url, binaryName, tmpDir)
+	return downloadBinary(ctx, url, binaryName, tmpDir, runner)
 }
 
-func downloadTarball(ctx context.Context, url, binaryName, tmpDir string) error {
+func downloadTarball(
+	ctx context.Context,
+	url, binaryName, tmpDir string,
+	runner Runner,
+) error {
 	tarPath := filepath.Join(tmpDir, "archive.tar.gz")
 	if err := downloadFile(ctx, url, tarPath); err != nil {
 		return err
@@ -134,9 +153,10 @@ func downloadTarball(ctx context.Context, url, binaryName, tmpDir string) error 
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, "tar", "-xzf", tarPath, "-C", extractDir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("tar extract: %w\n%s", err, string(out))
+	if err := runner.Run(
+		ctx, "tar", "-xzf", tarPath, "-C", extractDir,
+	); err != nil {
+		return fmt.Errorf("tar extract: %w", err)
 	}
 
 	binPath, err := findBinary(extractDir, binaryName)
@@ -144,15 +164,19 @@ func downloadTarball(ctx context.Context, url, binaryName, tmpDir string) error 
 		return err
 	}
 
-	return installBinary(ctx, binPath, binaryName)
+	return installBinary(ctx, binPath, binaryName, runner)
 }
 
-func downloadBinary(ctx context.Context, url, binaryName, tmpDir string) error {
+func downloadBinary(
+	ctx context.Context,
+	url, binaryName, tmpDir string,
+	runner Runner,
+) error {
 	binPath := filepath.Join(tmpDir, binaryName)
 	if err := downloadFile(ctx, url, binPath); err != nil {
 		return err
 	}
-	return installBinary(ctx, binPath, binaryName)
+	return installBinary(ctx, binPath, binaryName, runner)
 }
 
 func downloadFile(ctx context.Context, url, dest string) error {
@@ -203,11 +227,13 @@ func findBinary(dir, name string) (string, error) {
 	return found, nil
 }
 
-func installBinary(ctx context.Context, srcPath, name string) error {
+func installBinary(
+	ctx context.Context,
+	srcPath, name string,
+	runner Runner,
+) error {
 	dest := filepath.Join("/usr/local/bin", name)
-	cmd := exec.CommandContext(ctx, "sudo", "install", "-m", "755", srcPath, dest)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("install %s to %s: %w\n%s", name, dest, err, string(out))
-	}
-	return nil
+	return runner.Run(
+		ctx, "sudo", "install", "-m", "755", srcPath, dest,
+	)
 }

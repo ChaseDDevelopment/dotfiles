@@ -10,8 +10,9 @@ import (
 // Apt implements PackageManager for APT-based systems (Debian, Ubuntu).
 // Prefers nala as a frontend when available.
 type Apt struct {
-	runner  *executor.Runner
-	useNala bool
+	runner     *executor.Runner
+	useNala    bool
+	didUpdate  bool
 }
 
 func (a *Apt) Name() string { return "apt" }
@@ -23,7 +24,25 @@ func (a *Apt) cmd() string {
 	return "apt-get"
 }
 
+// ensureUpdated runs apt-get update once per session before the
+// first install to ensure the package cache is fresh.
+func (a *Apt) ensureUpdated(ctx context.Context) error {
+	if a.didUpdate {
+		return nil
+	}
+	if err := a.runner.Run(
+		ctx, "sudo", a.cmd(), "update",
+	); err != nil {
+		return fmt.Errorf("%s update: %w", a.cmd(), err)
+	}
+	a.didUpdate = true
+	return nil
+}
+
 func (a *Apt) Install(ctx context.Context, genericNames ...string) error {
+	if err := a.ensureUpdated(ctx); err != nil {
+		return err
+	}
 	for _, generic := range genericNames {
 		names := a.MapName(generic)
 		for _, pkg := range names {

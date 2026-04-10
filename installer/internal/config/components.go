@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
@@ -15,20 +16,21 @@ import (
 // Component describes a configurable dotfiles component.
 type Component struct {
 	Name        string
+	Icon        string // Nerd Font icon for TUI display
 	RequiredCmd string // binary that must exist before setup
 }
 
 // AllComponents returns the ordered list of components.
 func AllComponents() []Component {
 	return []Component{
-		{Name: "Zsh", RequiredCmd: "zsh"},
-		{Name: "Tmux", RequiredCmd: "tmux"},
-		{Name: "Neovim", RequiredCmd: "nvim"},
-		{Name: "Starship", RequiredCmd: "starship"},
-		{Name: "Atuin", RequiredCmd: "atuin"},
-		{Name: "Ghostty"},
-		{Name: "Yazi", RequiredCmd: "yazi"},
-		{Name: "Git", RequiredCmd: "git"},
+		{Name: "Zsh", Icon: " ", RequiredCmd: "zsh"},
+		{Name: "Tmux", Icon: " ", RequiredCmd: "tmux"},
+		{Name: "Neovim", Icon: " ", RequiredCmd: "nvim"},
+		{Name: "Starship", Icon: " ", RequiredCmd: "starship"},
+		{Name: "Atuin", Icon: " ", RequiredCmd: "atuin"},
+		{Name: "Ghostty", Icon: "󰊠"},
+		{Name: "Yazi", Icon: " ", RequiredCmd: "yazi"},
+		{Name: "Git", Icon: " ", RequiredCmd: "git"},
 	}
 }
 
@@ -46,13 +48,10 @@ func SetupComponent(ctx context.Context, comp Component, sc *SetupContext) error
 	// Check required command.
 	if comp.RequiredCmd != "" {
 		if _, err := exec.LookPath(comp.RequiredCmd); err != nil {
-			sc.Runner.EmitVerbose(fmt.Sprintf(
-				"Skipping %s: %s not found",
+			return fmt.Errorf(
+				"%s setup requires %s, but it was not found in PATH",
 				comp.Name, comp.RequiredCmd,
-			))
-			sc.Runner.Log.Write(fmt.Sprintf(
-				"Skipping %s setup: %s not found", comp.Name, comp.RequiredCmd))
-			return nil
+			)
 		}
 	}
 
@@ -68,7 +67,56 @@ func SetupComponent(ctx context.Context, comp Component, sc *SetupContext) error
 	if sc.DryRun {
 		return nil
 	}
-	return runPostInstall(ctx, comp.Name, sc)
+	if err := runPostInstall(ctx, comp.Name, sc); err != nil {
+		// Rollback symlinks on hook failure to avoid half-configured state.
+		rollbackSymlinks(comp.Name, sc.RootDir, sc.Runner)
+		return err
+	}
+
+	// Run user-defined hook script if present.
+	if err := runUserHook(ctx, comp.Name, sc); err != nil {
+		rollbackSymlinks(comp.Name, sc.RootDir, sc.Runner)
+		return err
+	}
+	return nil
+}
+
+// rollbackSymlinks removes symlinks that were just applied for a
+// component, restoring a clean state after a hook failure.
+func rollbackSymlinks(component, rootDir string, runner *executor.Runner) {
+	for _, entry := range AllSymlinks() {
+		if entry.Component != component {
+			continue
+		}
+		target := os.ExpandEnv(entry.Target)
+		// Only remove if it's a symlink pointing to our source.
+		if link, err := os.Readlink(target); err == nil {
+			source := resolveSource(rootDir, entry.Source)
+			canonSource, _ := filepath.Abs(source)
+			canonLink, _ := filepath.Abs(link)
+			if canonSource == canonLink {
+				os.Remove(target)
+				if runner != nil {
+					runner.EmitVerbose("Rolled back " + target)
+				}
+			}
+		}
+	}
+}
+
+// runUserHook executes an optional user-defined shell script at
+// configs/<component>/hooks/post-install.sh. This allows users to
+// extend setup without modifying Go source.
+func runUserHook(ctx context.Context, name string, sc *SetupContext) error {
+	hookPath := filepath.Join(
+		sc.RootDir, "configs",
+		strings.ToLower(name), "hooks", "post-install.sh",
+	)
+	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
+		return nil
+	}
+	sc.Runner.EmitVerbose("Running user hook: " + hookPath)
+	return sc.Runner.Run(ctx, "bash", hookPath)
 }
 
 func runPostInstall(ctx context.Context, name string, sc *SetupContext) error {
@@ -113,7 +161,14 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 	}
 
 	// Remove stale ~/.zshrc (ZDOTDIR handles it now).
-	os.Remove(filepath.Join(home, ".zshrc"))
+	// Back it up first if it exists and is not already a symlink.
+	staleZshrc := filepath.Join(home, ".zshrc")
+	if info, err := os.Lstat(staleZshrc); err == nil {
+		if info.Mode()&os.ModeSymlink == 0 {
+			_ = sc.Backup.BackupFile(staleZshrc)
+		}
+		os.Remove(staleZshrc)
+	}
 
 	// Install Antidote.
 	antidotePaths := []string{
@@ -223,6 +278,18 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		}
 	}
 
+	// Pre-install plugins headlessly so first launch is fast.
+	if platform.HasCommand("nvim") {
+		sc.Runner.EmitVerbose("Syncing Neovim plugins (headless)")
+		if err := sc.Runner.Run(
+			ctx, "nvim", "--headless", "+q",
+		); err != nil {
+			sc.Runner.Log.Write(fmt.Sprintf(
+				"WARNING: headless nvim plugin sync failed: %v", err,
+			))
+		}
+	}
+
 	return nil
 }
 
@@ -268,5 +335,28 @@ func setupGit(_ context.Context, sc *SetupContext) error {
 	// Ensure ~/.config/git/ exists before the file symlink.
 	sc.Runner.EmitVerbose("Creating ~/.config/git directory")
 	gitDir := os.ExpandEnv("$HOME/.config/git")
-	return os.MkdirAll(gitDir, 0o755)
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		return err
+	}
+
+	// Warn if git identity is not configured.
+	if platform.HasCommand("git") {
+		name, _ := exec.Command(
+			"git", "config", "--global", "user.name",
+		).Output()
+		email, _ := exec.Command(
+			"git", "config", "--global", "user.email",
+		).Output()
+		if len(name) == 0 || len(email) == 0 {
+			sc.Runner.Log.Write(
+				"WARNING: git user.name or user.email not set — " +
+					"run: git config --global user.name 'Your Name' && " +
+					"git config --global user.email 'you@example.com'",
+			)
+			sc.Runner.EmitVerbose(
+				"⚠ git identity not configured (user.name/user.email)",
+			)
+		}
+	}
+	return nil
 }

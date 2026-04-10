@@ -212,4 +212,4 @@ TRAPINT() {
 # zprof
 
 # bun completions
-[ -s "/Users/orion/.bun/_bun" ] && source "/Users/orion/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
