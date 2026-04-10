@@ -36,7 +36,7 @@ type Runner struct {
 
 // NewRunner creates a Runner attached to the given log file.
 func NewRunner(log *LogFile, dryRun bool) *Runner {
-	return &Runner{Log: log, DryRun: dryRun, maxRecent: 8}
+	return &Runner{Log: log, DryRun: dryRun, maxRecent: 200}
 }
 
 // EnableVerboseChannel creates the buffered channel used by

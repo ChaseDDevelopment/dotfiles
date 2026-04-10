@@ -336,13 +336,28 @@ func BuildDoctorTasks(bc *BuildConfig) BuildResult {
 				status := registry.CheckInstalled(&t)
 				switch status {
 				case registry.StatusNotInstalled:
-					return fmt.Errorf("not installed")
+					hint := ""
+					if t.Command != "" {
+						hint = fmt.Sprintf(
+							" (fix: run installer or install %q manually)",
+							t.Command,
+						)
+					}
+					return fmt.Errorf("not installed%s", hint)
 				case registry.StatusOutdated:
 					ver := registry.InstalledVersion(&t)
 					return fmt.Errorf(
-						"outdated (%s, need %s)",
+						"outdated: have %s, need %s (fix: run Update from main menu)",
 						ver, t.MinVersion,
 					)
+				}
+				// Log version on success for verbose output.
+				if bc.Runner != nil {
+					if ver := registry.InstalledVersion(&t); ver != "" {
+						bc.Runner.EmitVerbose(
+							fmt.Sprintf("  %s: %s", t.Name, ver),
+						)
+					}
 				}
 				return nil
 			},
@@ -352,8 +367,8 @@ func BuildDoctorTasks(bc *BuildConfig) BuildResult {
 	for _, comp := range config.AllComponents() {
 		comp := comp
 		tasks = append(tasks, engine.Task{
-			ID:    "check-" + comp.Name,
-			Label: "Checking " + comp.Name,
+			ID:    "check-config-" + comp.Name,
+			Label: "Checking " + comp.Name + " config",
 			Run: func(_ context.Context) error {
 				status := config.InspectComponent(
 					comp.Name, bc.RootDir,
@@ -361,6 +376,14 @@ func BuildDoctorTasks(bc *BuildConfig) BuildResult {
 				switch status {
 				case "already configured":
 					return nil
+				case "would replace":
+					return fmt.Errorf(
+						"config conflicts detected (fix: run Install to update symlinks)",
+					)
+				case "would configure":
+					return fmt.Errorf(
+						"not configured (fix: run Install to create symlinks)",
+					)
 				default:
 					return fmt.Errorf("%s", status)
 				}

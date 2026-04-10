@@ -1,5 +1,25 @@
 [core]
     pager = delta
+    excludesFile = ~/.config/git/ignore
+
+[push]
+    default = current
+    autoSetupRemote = true
+
+[fetch]
+    prune = true
+
+[pull]
+    rebase = true
+
+[rebase]
+    autoStash = true
+
+[rerere]
+    enabled = true
+
+[diff]
+    algorithm = histogram
 
 [interactive]
     diffFilter = delta --color-only

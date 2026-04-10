@@ -110,6 +110,7 @@ func CheckInstalled(t *Tool) ToolStatus {
 func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platform.Platform) error {
 	mgrName := ic.PkgMgr.Name()
 
+	var lastErr error
 	for _, strategy := range t.Strategies {
 		if !strategy.AppliesTo(mgrName) {
 			continue
@@ -124,12 +125,16 @@ func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platfor
 			}
 			return nil
 		}
+		lastErr = err
 		ic.Runner.Log.Write(fmt.Sprintf(
 			"Strategy %d failed for %s: %v, trying next",
 			strategy.Method, t.Name, err,
 		))
 	}
-	return fmt.Errorf("all install strategies failed for %s", t.Name)
+	if lastErr != nil {
+		return fmt.Errorf("all install strategies failed for %s: %w", t.Name, lastErr)
+	}
+	return fmt.Errorf("no applicable install strategies for %s", t.Name)
 }
 
 func executeStrategy(ctx context.Context, s *InstallStrategy, ic *InstallContext, p *platform.Platform) error {

@@ -7,9 +7,12 @@ import (
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
+
+const compactVerboseLines = 8
 
 // toolStatus tracks the state of a single tool in the grid.
 type toolStatus int
@@ -60,6 +63,10 @@ type progressModel struct {
 
 	// Verbose output lines (read from Runner.RecentLines).
 	recentLines []string
+
+	// Expanded verbose viewport (toggled with 'v').
+	expandedVerbose bool
+	verboseViewport viewport.Model
 }
 
 // allFinished reports whether every queued tool has reached a
@@ -195,6 +202,18 @@ func stripLabelPrefix(label string) string {
 
 func (m progressModel) Update(msg tea.Msg) (progressModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		if msg.String() == "v" && m.verbose {
+			m.expandedVerbose = !m.expandedVerbose
+			return m, nil
+		}
+		// Forward scroll keys to viewport when expanded.
+		if m.expandedVerbose {
+			var cmd tea.Cmd
+			m.verboseViewport, cmd = m.verboseViewport.Update(msg)
+			return m, cmd
+		}
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -269,12 +288,36 @@ func (m progressModel) View(width int) string {
 		// Verbose: show recent output lines.
 		if m.verbose && len(m.recentLines) > 0 {
 			b.WriteString(panelGap("\n"))
-			for _, line := range m.recentLines {
-				truncated := line
-				if len(truncated) > w-8 {
-					truncated = truncated[:w-9] + "…"
+			if m.expandedVerbose {
+				// Scrollable viewport with all lines.
+				var content strings.Builder
+				for _, line := range m.recentLines {
+					truncated := line
+					if len(truncated) > w-8 {
+						truncated = truncated[:w-9] + "…"
+					}
+					content.WriteString("  " + truncated + "\n")
 				}
-				b.WriteString(panelGap("  ") + dimStyle.Render(truncated) + panelGap("\n"))
+				m.verboseViewport.SetWidth(w - 4)
+				m.verboseViewport.SetHeight(12)
+				m.verboseViewport.SetContent(content.String())
+				m.verboseViewport.GotoBottom()
+				b.WriteString(dimStyle.Render(m.verboseViewport.View()) + panelGap("\n"))
+				b.WriteString(panelGap("  ") + dimStyle.Render("v: collapse  j/k: scroll") + panelGap("\n"))
+			} else {
+				// Compact: show last N lines.
+				lines := m.recentLines
+				if len(lines) > compactVerboseLines {
+					lines = lines[len(lines)-compactVerboseLines:]
+				}
+				for _, line := range lines {
+					truncated := line
+					if len(truncated) > w-8 {
+						truncated = truncated[:w-9] + "…"
+					}
+					b.WriteString(panelGap("  ") + dimStyle.Render(truncated) + panelGap("\n"))
+				}
+				b.WriteString(panelGap("  ") + dimStyle.Render("v: expand log") + panelGap("\n"))
 			}
 		}
 	} else if m.done {

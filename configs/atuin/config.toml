@@ -4,7 +4,7 @@
 # Where to store the database
 db_path = "~/.local/share/atuin/history.db"
 
-# How often to sync (if logged in)
+# How often to sync (applies when sync is enabled below)
 sync_frequency = "1h"
 
 # Search mode: prefix, fulltext, fuzzy, skim

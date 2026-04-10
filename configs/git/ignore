@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Languages
+__pycache__/
+*.pyc
+node_modules/
+.sass-cache/
+
+# Build artifacts
+*.o
+*.so
+*.dylib

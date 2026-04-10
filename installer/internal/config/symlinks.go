@@ -44,8 +44,9 @@ func AllSymlinks() []SymlinkEntry {
 		// Yazi
 		{Source: "yazi", Target: "$HOME/.config/yazi", IsDir: true, Component: "Yazi"},
 
-		// Git (single file to preserve other files in ~/.config/git/)
+		// Git (single files to preserve other files in ~/.config/git/)
 		{Source: "git/config", Target: "$HOME/.config/git/config", IsDir: false, Component: "Git"},
+		{Source: "git/ignore", Target: "$HOME/.config/git/ignore", IsDir: false, Component: "Git"},
 
 		// Lazygit
 		{Source: "lazygit", Target: "$HOME/.config/lazygit", IsDir: true, Component: "Git"},

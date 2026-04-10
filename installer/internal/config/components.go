@@ -119,6 +119,15 @@ func runUserHook(ctx context.Context, name string, sc *SetupContext) error {
 	return sc.Runner.Run(ctx, "bash", hookPath)
 }
 
+// bestEffort runs fn and logs a warning if it fails, without
+// aborting the setup. Use for optional post-install steps where
+// failure should not block the overall component configuration.
+func bestEffort(sc *SetupContext, msg string, fn func() error) {
+	if err := fn(); err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf("WARNING: %s: %v", msg, err))
+	}
+}
+
 func runPostInstall(ctx context.Context, name string, sc *SetupContext) error {
 	switch name {
 	case "Zsh":
@@ -207,9 +216,9 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 			`for p in /opt/homebrew/opt/antidote/share/antidote /usr/local/opt/antidote/share/antidote %s/.config/zsh/.antidote; do [ -f "$p/antidote.zsh" ] && source "$p/antidote.zsh" && antidote bundle < "%s" > "%s" && break; done`,
 			home, pluginsTxt, pluginsZsh,
 		)
-		if err := sc.Runner.Run(ctx, "zsh", "-c", script); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf("WARNING: antidote plugin compilation failed: %v", err))
-		}
+		bestEffort(sc, "antidote plugin compilation failed", func() error {
+			return sc.Runner.Run(ctx, "zsh", "-c", script)
+		})
 	}
 
 	// Set zsh as default shell.
@@ -233,24 +242,24 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 	if _, err := os.Stat(tpmScript); err == nil {
 		// Start tmux server and source config for TPM env (best-effort).
 		tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
-		if err := sc.Runner.RunShell(ctx,
-			fmt.Sprintf(`tmux start-server \; source-file "%s" 2>/dev/null || true`, tmuxConf)); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf("WARNING: tmux server start failed: %v", err))
-		}
-		if err := sc.Runner.Run(ctx, "chmod", "+x", tpmScript); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf("WARNING: chmod tpm script failed: %v", err))
-		}
-		if err := sc.Runner.Run(ctx, tpmScript); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf("WARNING: TPM plugin install failed: %v", err))
-		}
+		bestEffort(sc, "tmux server start failed", func() error {
+			return sc.Runner.RunShell(ctx,
+				fmt.Sprintf(`tmux start-server \; source-file "%s" 2>/dev/null || true`, tmuxConf))
+		})
+		bestEffort(sc, "chmod tpm script failed", func() error {
+			return sc.Runner.Run(ctx, "chmod", "+x", tpmScript)
+		})
+		bestEffort(sc, "TPM plugin install failed", func() error {
+			return sc.Runner.Run(ctx, tpmScript)
+		})
 	}
 
 	// Reload tmux config if running (best-effort).
 	if err := sc.Runner.Run(ctx, "pgrep", "-x", "tmux"); err == nil {
 		tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
-		if err := sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf("WARNING: tmux config reload failed: %v", err))
-		}
+		bestEffort(sc, "tmux config reload failed", func() error {
+			return sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf)
+		})
 	}
 
 	return nil
@@ -273,21 +282,17 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 	blinkDir := filepath.Join(home, ".local", "share", "nvim", "site", "pack", "core", "opt", "blink.cmp")
 	if _, err := os.Stat(blinkDir); err == nil && platform.HasCommand("cargo") {
 		sc.Runner.EmitVerbose("Building blink.cmp fuzzy matcher")
-		if err := sc.Runner.RunInDir(ctx, blinkDir, "cargo", "build", "--release"); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf("WARNING: blink.cmp cargo build failed: %v", err))
-		}
+		bestEffort(sc, "blink.cmp cargo build failed", func() error {
+			return sc.Runner.RunInDir(ctx, blinkDir, "cargo", "build", "--release")
+		})
 	}
 
 	// Pre-install plugins headlessly so first launch is fast.
 	if platform.HasCommand("nvim") {
 		sc.Runner.EmitVerbose("Syncing Neovim plugins (headless)")
-		if err := sc.Runner.Run(
-			ctx, "nvim", "--headless", "+q",
-		); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf(
-				"WARNING: headless nvim plugin sync failed: %v", err,
-			))
-		}
+		bestEffort(sc, "headless nvim plugin sync failed", func() error {
+			return sc.Runner.Run(ctx, "nvim", "--headless", "+q")
+		})
 	}
 
 	return nil
@@ -300,9 +305,9 @@ func setupStarship(ctx context.Context, sc *SetupContext) error {
 	// If no custom config was symlinked, generate catppuccin preset.
 	if _, err := os.Stat(customConfig); os.IsNotExist(err) {
 		if platform.HasCommand("starship") {
-			if err := sc.Runner.Run(ctx, "starship", "preset", "catppuccin-powerline", "-o", configFile); err != nil {
-				sc.Runner.Log.Write(fmt.Sprintf("WARNING: starship preset failed: %v", err))
-			}
+			bestEffort(sc, "starship preset failed", func() error {
+				return sc.Runner.Run(ctx, "starship", "preset", "catppuccin-powerline", "-o", configFile)
+			})
 		}
 	}
 	return nil
@@ -310,9 +315,9 @@ func setupStarship(ctx context.Context, sc *SetupContext) error {
 
 func setupYazi(ctx context.Context, sc *SetupContext) error {
 	if platform.HasCommand("ya") {
-		if err := sc.Runner.Run(ctx, "ya", "pkg", "install"); err != nil {
-			sc.Runner.Log.Write(fmt.Sprintf("WARNING: yazi package install failed: %v", err))
-		}
+		bestEffort(sc, "yazi package install failed", func() error {
+			return sc.Runner.Run(ctx, "ya", "pkg", "install")
+		})
 	}
 	return nil
 }

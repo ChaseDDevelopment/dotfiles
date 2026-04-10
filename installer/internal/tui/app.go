@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -25,6 +26,7 @@ const (
 	PhaseComponentPicker
 	PhaseBackupPicker
 	PhaseInstalling
+	PhaseFailurePrompt
 	PhaseSummary
 )
 
@@ -82,6 +84,11 @@ type AppModel struct {
 	// cancelEngine cancels the engine context, stopping all running
 	// tasks and preventing goroutine leaks on Ctrl+C or critical failure.
 	cancelEngine context.CancelFunc
+
+	// failedTaskLabel is set when a critical task fails, used by
+	// the failure prompt to display which tool failed.
+	failedTaskLabel string
+	failedTaskErr   error
 
 	startTime time.Time
 }
@@ -141,6 +148,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateBackupPicker(msg)
 	case PhaseInstalling:
 		return m.updateInstalling(msg)
+	case PhaseFailurePrompt:
+		return m.updateFailurePrompt(msg)
 	case PhaseSummary:
 		return m.updateSummary(msg)
 	}
@@ -178,6 +187,8 @@ func (m AppModel) View() tea.View {
 		content = m.backupPicker.View(w)
 	case PhaseInstalling:
 		content = m.progress.View(w)
+	case PhaseFailurePrompt:
+		content = m.failurePromptView(w)
 	case PhaseSummary:
 		content = m.summary.View(w, m.height)
 	}
@@ -328,16 +339,12 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err == nil {
 			m.saveState()
 		}
-		// Abort if a critical tool failed.
+		// Prompt user on critical tool failure.
 		if msg.Critical && msg.Err != nil {
-			if m.cancelEngine != nil {
-				m.cancelEngine()
-			}
-			m.summary.steps = m.progress.steps
-			m.summary.endTime = time.Now()
-			m.summary.criticalFailure = true
-			m.phase = PhaseSummary
-			return m, drainCmd(m.eventCh)
+			m.failedTaskLabel = m.progress.nameForID(msg.ID)
+			m.failedTaskErr = msg.Err
+			m.phase = PhaseFailurePrompt
+			return m, nil
 		}
 		// Transition to summary if all tasks are finished —
 		// don't wait solely for AllDoneMsg which can be missed.
@@ -370,6 +377,67 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progress, cmd = m.progress.Update(msg)
 		return m, cmd
 	}
+}
+
+func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
+		switch msg.String() {
+		case "c", "s": // continue / skip
+			// Return to installing phase without cancelling engine.
+			// The engine already skipped dependents of the failed task.
+			m.phase = PhaseInstalling
+			// Check if all tasks are done (failure may have been the last).
+			if m.progress.allFinished() {
+				m.summary.steps = m.progress.steps
+				m.summary.endTime = time.Now()
+				m.phase = PhaseSummary
+				m.saveState()
+				return m, drainCmd(m.eventCh)
+			}
+			return m, listenCmd(m.eventCh)
+		case "a", "q": // abort
+			if m.cancelEngine != nil {
+				m.cancelEngine()
+			}
+			m.summary.steps = m.progress.steps
+			m.summary.endTime = time.Now()
+			m.summary.criticalFailure = true
+			m.phase = PhaseSummary
+			return m, drainCmd(m.eventCh)
+		}
+	}
+	return m, nil
+}
+
+func (m AppModel) failurePromptView(width int) string {
+	w := contentWidth(width)
+	var b strings.Builder
+
+	b.WriteString(errorStyle.Render("  Critical Tool Failed"))
+	b.WriteString(panelGap("\n\n"))
+
+	b.WriteString(panelGap("  "))
+	b.WriteString(selectedStyle.Render(m.failedTaskLabel))
+	b.WriteString(panelGap(" failed:\n"))
+	b.WriteString(panelGap("  "))
+	b.WriteString(dimStyle.Render(m.failedTaskErr.Error()))
+	b.WriteString(panelGap("\n\n"))
+
+	b.WriteString(panelGap("  "))
+	b.WriteString(dimStyle.Render("Dependents of this tool will be skipped."))
+	b.WriteString(panelGap("\n\n"))
+
+	b.WriteString(panelGap("  "))
+	b.WriteString(selectedStyle.Render("[c]"))
+	b.WriteString(panelGap(" Continue without it"))
+	b.WriteString(panelGap("\n"))
+	b.WriteString(panelGap("  "))
+	b.WriteString(errorStyle.Render("[a]"))
+	b.WriteString(panelGap(" Abort install"))
+	b.WriteString(panelGap("\n"))
+
+	panel := panelStyle.Width(w).Render(b.String())
+	return panel
 }
 
 func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {

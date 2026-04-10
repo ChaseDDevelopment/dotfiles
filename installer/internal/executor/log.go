@@ -33,7 +33,9 @@ func (l *LogFile) Write(msg string) {
 		return
 	}
 	ts := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Fprintf(l.file, "[%s] %s\n", ts, msg)
+	if _, err := fmt.Fprintf(l.file, "[%s] %s\n", ts, msg); err != nil {
+		fmt.Fprintf(os.Stderr, "log write failed: %v\n", err)
+	}
 }
 
 // WriteRaw appends raw bytes to the log without timestamps.
@@ -43,7 +45,9 @@ func (l *LogFile) WriteRaw(data []byte) {
 	if l.file == nil {
 		return
 	}
-	l.file.Write(data)
+	if _, err := l.file.Write(data); err != nil {
+		fmt.Fprintf(os.Stderr, "log write failed: %v\n", err)
+	}
 }
 
 // Path returns the log file path.

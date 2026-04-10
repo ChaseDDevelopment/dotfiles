@@ -38,7 +38,7 @@ ASSET="dotsetup-${OS}-${ARCH}"
 # Fetch the latest release tag from GitHub (e.g. "v0.0.1").
 get_latest_tag() {
     local url
-    url=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+    url=$(curl -fsSL --connect-timeout 10 --max-time 30 -o /dev/null -w '%{url_effective}' \
         "https://github.com/${REPO}/releases/latest" 2>/dev/null) || return 1
     # URL must contain /tag/ — otherwise there are no releases.
     [[ "$url" == */tag/* ]] || return 1
@@ -57,9 +57,10 @@ download_binary() {
     echo "Downloading dotsetup ${tag} for ${OS}/${ARCH}..."
     mkdir -p "$(dirname "$BINARY")"
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$url" -o "$BINARY"
+        curl -fsSL --connect-timeout 10 --max-time 120 --retry 2 --retry-delay 3 \
+            "$url" -o "$BINARY"
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$BINARY" "$url"
+        wget --timeout=30 --tries=3 -qO "$BINARY" "$url"
     else
         echo "Error: curl or wget required" >&2
         return 1
