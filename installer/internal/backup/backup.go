@@ -18,6 +18,7 @@ type Manager struct {
 	dryRun  bool
 	once    sync.Once
 	initErr error
+	mu      sync.Mutex
 }
 
 // NewManager creates a backup manager with a timestamped directory.
@@ -55,6 +56,9 @@ func (m *Manager) BackupFile(path string) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return fmt.Errorf("create backup subdir: %w", err)
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return copyRecursive(path, dest)
 }
 

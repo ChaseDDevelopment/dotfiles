@@ -35,6 +35,7 @@ type BuildConfig struct {
 	DryRun           bool
 	ForceReinstall   bool
 	SkipPackages     bool
+	SkipUpdate       bool
 	CleanBackup      bool
 	SelectedBackup   string
 	SelectedComps    []string // nil = all
@@ -269,6 +270,9 @@ func BuildUpdateTasks(bc *BuildConfig) BuildResult {
 	sysID := ""
 	for _, s := range updateSteps {
 		s := s
+		if bc.SkipUpdate && s.Name == "System packages" {
+			continue
+		}
 		id := "update-" + s.Name
 		var deps []string
 		if s.Name == "System packages" {

@@ -30,11 +30,11 @@ func (a *Apt) cmd() string {
 // first install to ensure the package cache is fresh.
 func (a *Apt) ensureUpdated(ctx context.Context) error {
 	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	if a.didUpdate {
-		a.mu.Unlock()
 		return nil
 	}
-	a.mu.Unlock()
 
 	if err := a.runner.Run(
 		ctx, "sudo", a.cmd(), "update",
@@ -42,9 +42,7 @@ func (a *Apt) ensureUpdated(ctx context.Context) error {
 		return fmt.Errorf("%s update: %w", a.cmd(), err)
 	}
 
-	a.mu.Lock()
 	a.didUpdate = true
-	a.mu.Unlock()
 	return nil
 }
 

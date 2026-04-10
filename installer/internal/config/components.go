@@ -221,14 +221,17 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	// Set zsh as default shell.
-	zshPath, err := exec.LookPath("zsh")
-	if err == nil {
-		currentShell := os.Getenv("SHELL")
-		if currentShell != zshPath {
-			if err := sc.Runner.Run(ctx, "chsh", "-s", zshPath); err != nil {
-				return fmt.Errorf("chsh to zsh: %w", err)
-			}
+	// Set zsh as default shell. We cannot call chsh from the TUI
+	// because it prompts for a password and the TUI owns the
+	// terminal via alt-screen mode, which causes a hang.
+	currentShell := os.Getenv("SHELL")
+	if !strings.HasSuffix(currentShell, "/zsh") {
+		zshPath, err := exec.LookPath("zsh")
+		if err == nil {
+			sc.Runner.Log.Write(fmt.Sprintf(
+				"Run 'chsh -s %s' after install to set default shell",
+				zshPath,
+			))
 		}
 	}
 

@@ -34,7 +34,7 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 			return runner.Run(ctx, "rustup", "update")
 		}},
 		{"Cargo binaries", func(ctx context.Context) error {
-			return updateCargoBinaries(ctx, runner, mgrName)
+			return updateCargoBinaries(ctx, runner)
 		}},
 		{"uv ecosystem", func(ctx context.Context) error {
 			if !platform.HasCommand("uv") {
@@ -114,7 +114,6 @@ func SelfUpdateStep(
 func updateCargoBinaries(
 	ctx context.Context,
 	runner *executor.Runner,
-	mgrName string,
 ) error {
 	if !platform.HasCommand("cargo") {
 		return nil
@@ -134,17 +133,6 @@ func updateCargoBinaries(
 		); err != nil {
 			errs = append(errs, fmt.Errorf(
 				"cargo install %s: %w", t.CargoCrate, err,
-			))
-		}
-	}
-	// yazi via cargo only if not brew/pacman installed.
-	if platform.HasCommand("yazi") &&
-		mgrName != "brew" && mgrName != "pacman" {
-		if err := runner.Run(
-			ctx, "cargo", "install", "--force", "yazi-build",
-		); err != nil {
-			errs = append(errs, fmt.Errorf(
-				"cargo install yazi-build: %w", err,
 			))
 		}
 	}

@@ -331,17 +331,23 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case engine.TaskStartedMsg:
 		m.progress.markActive(msg.ID, msg.Label)
+		name := stripLabelPrefix(msg.Label)
+		m.summary.startTimes[name] = time.Now()
 		return m, listenCmd(m.eventCh)
 
 	case engine.TaskDoneMsg:
 		m.progress.markDone(msg.ID, msg.Err)
+		name := m.progress.nameForID(msg.ID)
+		if start, ok := m.summary.startTimes[name]; ok {
+			m.summary.durations[name] = time.Since(start)
+		}
 		// Save state incrementally so progress survives crashes.
 		if msg.Err == nil {
 			m.saveState()
 		}
 		// Prompt user on critical tool failure.
 		if msg.Critical && msg.Err != nil {
-			m.failedTaskLabel = m.progress.nameForID(msg.ID)
+			m.failedTaskLabel = name
 			m.failedTaskErr = msg.Err
 			m.phase = PhaseFailurePrompt
 			return m, listenCmd(m.eventCh)
@@ -391,9 +397,15 @@ func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case engine.TaskStartedMsg:
 		m.progress.markActive(msg.ID, msg.Label)
+		name := stripLabelPrefix(msg.Label)
+		m.summary.startTimes[name] = time.Now()
 		return m, listenCmd(m.eventCh)
 	case engine.TaskDoneMsg:
 		m.progress.markDone(msg.ID, msg.Err)
+		name := m.progress.nameForID(msg.ID)
+		if start, ok := m.summary.startTimes[name]; ok {
+			m.summary.durations[name] = time.Since(start)
+		}
 		if msg.Err == nil {
 			m.saveState()
 		}
@@ -515,6 +527,10 @@ func (m AppModel) updateSummary(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *AppModel) returnToMainMenu() {
 	m.phase = PhaseMainMenu
 	m.config.DryRun = false
+	m.config.Verbose = false
+	if m.config.Runner != nil {
+		m.config.Runner.Verbose = false
+	}
 	m.config.PlanRows = nil
 	m.config.SelectedComponents = nil
 	m.cancelEngine = nil
@@ -580,6 +596,7 @@ func (m *AppModel) buildConfig() *orchestrator.BuildConfig {
 		DryRun:         m.config.DryRun,
 		ForceReinstall: m.config.ForceReinstall,
 		SkipPackages:   m.config.SkipPackages,
+		SkipUpdate:     m.config.SkipUpdate,
 		CleanBackup:    m.config.CleanBackup,
 		SelectedBackup: m.config.SelectedBackup,
 		SelectedComps:  comps,
@@ -595,6 +612,12 @@ func (m *AppModel) applyResult(r orchestrator.BuildResult) []engine.Task {
 }
 
 func (m *AppModel) startInstall() tea.Cmd {
+	// Propagate DryRun to Runner so commands like syncRepo() are
+	// skipped correctly (Runner.Run checks r.DryRun).
+	if m.config.Runner != nil {
+		m.config.Runner.DryRun = m.config.DryRun
+	}
+
 	// Sync dotfiles repo before install/update (best-effort).
 	if m.config.Mode != ModeRestore && m.config.Mode != ModeDoctor {
 		m.syncRepo()
