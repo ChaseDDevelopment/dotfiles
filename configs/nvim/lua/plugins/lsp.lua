@@ -4,6 +4,7 @@ vim.lsp.config('*', {
 
 vim.lsp.enable({
 	'basedpyright',
+	'gopls',
 	'lua_ls',
 	'vtsls',
 	'omnisharp',

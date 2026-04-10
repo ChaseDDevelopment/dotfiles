@@ -11,15 +11,22 @@
 
 [pull]
     rebase = true
+    autostash = true
 
 [rebase]
     autoStash = true
+    updateRefs = true
+
+[commit]
+    verbose = true
 
 [rerere]
     enabled = true
 
 [diff]
     algorithm = histogram
+    colorMoved = default
+    colorMovedWS = allow-indentation-change
 
 [interactive]
     diffFilter = delta --color-only
@@ -29,6 +36,11 @@
     dark = true
     line-numbers = true
     hyperlinks = true
+
+[alias]
+    unstage = restore --staged
+    amend = commit --amend --no-edit
+    graph = log --graph --all --decorate --oneline
 
 [merge]
     conflictstyle = zdiff3

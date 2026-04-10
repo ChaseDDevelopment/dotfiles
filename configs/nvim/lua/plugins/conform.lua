@@ -1,6 +1,7 @@
 require("conform").setup({
 	formatters_by_ft = {
 		python = { "ruff_format" },
+		go = { "goimports" },
 		typescript = { "prettier" },
 		javascript = { "prettier" },
 		typescriptreact = { "prettier" },
