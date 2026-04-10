@@ -58,5 +58,7 @@ func (l *LogFile) Close() error {
 	if l.file == nil {
 		return nil
 	}
-	return l.file.Close()
+	err := l.file.Close()
+	l.file = nil
+	return err
 }

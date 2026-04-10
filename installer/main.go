@@ -100,7 +100,7 @@ func main() {
 		logFile.Write(fmt.Sprintf(
 			"WARNING: load state: %v (starting fresh)", err,
 		))
-		installState, _ = state.Load(state.DefaultPath())
+		installState = state.NewStore(state.DefaultPath())
 	}
 
 	cfg := &tui.AppConfig{

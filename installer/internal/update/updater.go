@@ -203,18 +203,9 @@ func updateNeovim(ctx context.Context, runner *executor.Runner, mgr pkgmgr.Packa
 		}
 		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "neovim")
 	case "apt":
-		// Re-download from GitHub (same as fresh install).
-		return runner.RunShell(ctx, `
-			arch=$(uname -m)
-			case "$arch" in aarch64|arm64) arch="arm64" ;; *) arch="x86_64" ;; esac
-			url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-${arch}.tar.gz"
-			curl -fsSL "$url" -o /tmp/nvim.tar.gz
-			sudo rm -rf /opt/nvim /opt/nvim-linux-x86_64 /opt/nvim-linux-arm64
-			sudo tar -C /opt -xzf /tmp/nvim.tar.gz
-			sudo rm -f /usr/local/bin/nvim
-			sudo ln -s /opt/nvim-linux-*/bin/nvim /usr/local/bin/nvim
-			rm -f /tmp/nvim.tar.gz
-		`)
+		// Reuse the same GitHub release install logic.
+		ic := &registry.InstallContext{Runner: runner, PkgMgr: mgr, Platform: plat}
+		return registry.InstallNeovimApt(ctx, ic)
 	default:
 		return mgr.Install(ctx, "neovim")
 	}

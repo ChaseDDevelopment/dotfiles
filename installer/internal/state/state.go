@@ -32,6 +32,14 @@ func DefaultPath() string {
 	)
 }
 
+// NewStore creates a fresh, empty store for the given path.
+func NewStore(path string) *Store {
+	return &Store{
+		path:  path,
+		Tools: make(map[string]ToolRecord),
+	}
+}
+
 // Load reads the state file from disk, or returns an empty store
 // if it doesn't exist.
 func Load(path string) (*Store, error) {

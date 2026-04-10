@@ -106,7 +106,7 @@ func BuildURL(cfg *Config, p *platform.Platform, version string) (url string, is
 		), true
 
 	case PatternRawBinary:
-		osName, arch := p.LowerStyle()
+		osName, arch := p.GoStyle()
 		return fmt.Sprintf(
 			"https://github.com/%s/releases/latest/download/%s_%s_%s",
 			cfg.Repo, cfg.Binary, osName, arch,
@@ -179,12 +179,16 @@ func downloadBinary(
 	return installBinary(ctx, binPath, binaryName, runner)
 }
 
+// downloadClient is used for fetching release assets. It has a
+// generous timeout because some archives are large.
+var downloadClient = &http.Client{Timeout: 5 * time.Minute}
+
 func downloadFile(ctx context.Context, url, dest string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := downloadClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}

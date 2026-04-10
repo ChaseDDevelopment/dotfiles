@@ -3,6 +3,7 @@ package pkgmgr
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 )
@@ -10,9 +11,10 @@ import (
 // Apt implements PackageManager for APT-based systems (Debian, Ubuntu).
 // Prefers nala as a frontend when available.
 type Apt struct {
-	runner     *executor.Runner
-	useNala    bool
-	didUpdate  bool
+	runner    *executor.Runner
+	useNala   bool
+	mu        sync.Mutex
+	didUpdate bool
 }
 
 func (a *Apt) Name() string { return "apt" }
@@ -27,15 +29,22 @@ func (a *Apt) cmd() string {
 // ensureUpdated runs apt-get update once per session before the
 // first install to ensure the package cache is fresh.
 func (a *Apt) ensureUpdated(ctx context.Context) error {
+	a.mu.Lock()
 	if a.didUpdate {
+		a.mu.Unlock()
 		return nil
 	}
+	a.mu.Unlock()
+
 	if err := a.runner.Run(
 		ctx, "sudo", a.cmd(), "update",
 	); err != nil {
 		return fmt.Errorf("%s update: %w", a.cmd(), err)
 	}
+
+	a.mu.Lock()
 	a.didUpdate = true
+	a.mu.Unlock()
 	return nil
 }
 

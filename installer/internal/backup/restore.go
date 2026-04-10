@@ -8,30 +8,16 @@ import (
 	"strings"
 )
 
-// ManagedPaths lists all config paths the installer manages.
-var ManagedPaths = []string{
-	"$HOME/.config/zsh",
-	"$HOME/.config/nvim",
-	"$HOME/.config/starship.toml",
-	"$HOME/.config/atuin",
-	"$HOME/.config/ghostty",
-	"$HOME/.zshenv",
-	"$HOME/.config/tmux",
-	"$HOME/.tmux.conf",
-	"$HOME/.tmux",
-	"$HOME/.config/yazi",
-	"$HOME/.config/git/config",
-	"$HOME/.config/lazygit",
-}
-
 // Restore restores managed paths from a backup directory.
-func Restore(backupDir string, dryRun bool) error {
+// The managedPaths slice should contain $HOME-relative target
+// paths (e.g. from config.ManagedTargets()).
+func Restore(backupDir string, managedPaths []string, dryRun bool) error {
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 		return fmt.Errorf("backup directory not found: %s", backupDir)
 	}
 
 	home := os.Getenv("HOME")
-	for _, path := range ManagedPaths {
+	for _, path := range managedPaths {
 		target := os.ExpandEnv(path)
 
 		// Compute backup source using relative path (matches

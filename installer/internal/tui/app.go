@@ -8,15 +8,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
-	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/engine"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/orchestrator"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/state"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
-	"github.com/chaseddevelopment/dotfiles/installer/internal/registry"
-	"github.com/chaseddevelopment/dotfiles/installer/internal/update"
 )
 
 // Phase represents the current UI phase.
@@ -62,7 +59,7 @@ type AppConfig struct {
 	Runner             *executor.Runner
 	State              *state.Store
 	SelectedBackup     string // path chosen by backup picker
-	PlanRows           []PlanRow
+	PlanRows           []orchestrator.PlanRow
 }
 
 // AppModel is the top-level Bubble Tea model.
@@ -277,7 +274,11 @@ func (m AppModel) updateComponentPicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyPressMsg); ok {
 		switch msg.String() {
 		case "enter":
-			m.config.SelectedComponents = m.picker.selectedComponents()
+			selected := m.picker.selectedComponents()
+			if len(selected) == 0 {
+				return m, nil
+			}
+			m.config.SelectedComponents = selected
 			m.phase = PhaseInstalling
 			return m, m.startInstall()
 		case "esc", "backspace":
@@ -323,6 +324,10 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case engine.TaskDoneMsg:
 		m.progress.markDone(msg.ID, msg.Err)
+		// Save state incrementally so progress survives crashes.
+		if msg.Err == nil {
+			m.saveState()
+		}
 		// Abort if a critical tool failed.
 		if msg.Critical && msg.Err != nil {
 			if m.cancelEngine != nil {
@@ -456,25 +461,55 @@ func (m *AppModel) saveState() {
 
 const maxParallelWorkers = 5
 
+func (m *AppModel) buildConfig() *orchestrator.BuildConfig {
+	// Map nil-means-all for component selection.
+	var comps []string
+	if m.config.Mode == ModeCustomInstall {
+		comps = m.config.SelectedComponents
+	}
+	return &orchestrator.BuildConfig{
+		Runner:         m.config.Runner,
+		PkgMgr:         m.config.PkgMgr,
+		Platform:       m.config.Platform,
+		State:          m.config.State,
+		RootDir:        m.config.RootDir,
+		DryRun:         m.config.DryRun,
+		ForceReinstall: m.config.ForceReinstall,
+		SkipPackages:   m.config.SkipPackages,
+		CleanBackup:    m.config.CleanBackup,
+		SelectedBackup: m.config.SelectedBackup,
+		SelectedComps:  comps,
+		Version:        Version,
+	}
+}
+
+func (m *AppModel) applyResult(r orchestrator.BuildResult) []engine.Task {
+	m.config.PlanRows = append(m.config.PlanRows, r.PlanRows...)
+	m.summary.alreadyInstalled += r.AlreadyInstalled
+	m.summary.alreadyConfigured += r.AlreadyConfigured
+	return r.Tasks
+}
+
 func (m *AppModel) startInstall() tea.Cmd {
 	// Sync dotfiles repo before install/update (best-effort).
 	if m.config.Mode != ModeRestore && m.config.Mode != ModeDoctor {
 		m.syncRepo()
 	}
 
+	bc := m.buildConfig()
 	var tasks []engine.Task
 
 	switch m.config.Mode {
 	case ModeUpdate:
-		tasks = m.buildUpdateTasks()
+		tasks = m.applyResult(orchestrator.BuildUpdateTasks(bc))
 	case ModeRestore:
-		tasks = m.buildRestoreTasks()
+		tasks = m.applyResult(orchestrator.BuildRestoreTasks(bc))
 	case ModeDoctor:
-		tasks = m.buildDoctorTasks()
+		tasks = m.applyResult(orchestrator.BuildDoctorTasks(bc))
 	case ModeUninstall:
-		tasks = m.buildUninstallTasks()
+		tasks = m.applyResult(orchestrator.BuildUninstallTasks(bc))
 	default:
-		tasks = m.buildInstallTasks()
+		tasks = m.applyResult(orchestrator.BuildInstallTasks(bc))
 	}
 
 	if m.config.DryRun {
@@ -491,6 +526,7 @@ func (m *AppModel) startInstall() tea.Cmd {
 
 	m.startTime = time.Now()
 	m.summary.startTime = m.startTime
+	m.progress.startedAt = m.startTime
 	m.progress.verbose = m.config.Verbose
 
 	if m.config.Verbose {
@@ -508,337 +544,6 @@ func (m *AppModel) startInstall() tea.Cmd {
 	m.cancelEngine = cancel
 	m.eventCh = engine.Run(ctx, tasks, maxParallelWorkers)
 	return tea.Batch(m.progress.Init(), listenCmd(m.eventCh))
-}
-
-func (m *AppModel) buildInstallTasks() []engine.Task {
-	var tasks []engine.Task
-	runner := m.config.Runner
-	mgr := m.config.PkgMgr
-	plat := m.config.Platform
-	mgrName := mgr.Name()
-
-	// Collect tool task IDs for component setup dependencies.
-	var toolTaskIDs []string
-
-	// Package installation.
-	if !m.config.SkipPackages {
-		tools := registry.AllTools()
-
-		// Pass 1: build the set of tools that do NOT need a task
-		// (already installed or filtered by platform). This must
-		// be complete before creating tasks so that dependency
-		// filtering works regardless of iteration order.
-		installedSet := map[string]bool{}
-		for _, t := range tools {
-			if !registry.ShouldInstall(&t, plat) {
-				installedSet[t.Command] = true
-				continue
-			}
-			if registry.CheckInstalled(&t) == registry.StatusInstalled {
-				installedSet[t.Command] = true
-			}
-		}
-
-		// Pass 2: create tasks for tools that need installation.
-		for _, t := range tools {
-			if !registry.ShouldInstall(&t, plat) {
-				continue
-			}
-			status := registry.CheckInstalled(&t)
-			if !m.config.ForceReinstall && status == registry.StatusInstalled {
-				m.summary.alreadyInstalled++
-				m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-					Component: t.Name, Action: "Package",
-					Status: "already installed",
-				})
-				continue
-			}
-			planStatus := "would install"
-			if status == registry.StatusOutdated {
-				ver := registry.InstalledVersion(&t)
-				planStatus = fmt.Sprintf(
-					"outdated (%s → %s)", ver, t.MinVersion,
-				)
-			}
-			m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-				Component: t.Name, Action: "Package",
-				Status: planStatus,
-			})
-
-			t := t // capture
-			taskID := t.Command
-
-			// Only depend on tasks that are actually being
-			// installed (not already present or platform-filtered).
-			var deps []string
-			for _, dep := range t.DependsOn {
-				if !installedSet[dep] {
-					deps = append(deps, dep)
-				}
-			}
-
-			tasks = append(tasks, engine.Task{
-				ID:        taskID,
-				Label:     fmt.Sprintf("Installing %s", t.Name),
-				Critical:  t.Critical,
-				DependsOn: deps,
-				Resources: resourcesForTool(&t, mgrName),
-				Run: func(ctx context.Context) error {
-					ic := &registry.InstallContext{
-						Runner:         runner,
-						PkgMgr:         mgr,
-						ForceReinstall: m.config.ForceReinstall,
-					}
-					if err := registry.ExecuteInstall(ctx, &t, ic, plat); err != nil {
-						return err
-					}
-					if m.config.State != nil {
-						ver := registry.InstalledVersion(&t)
-						m.config.State.RecordInstall(
-							t.Name, ver, "install",
-						)
-					}
-					return nil
-				},
-			})
-			toolTaskIDs = append(toolTaskIDs, taskID)
-		}
-	}
-
-	// Component setup (symlinks + hooks) — depends on all tool installs.
-	bm := backup.NewManager(m.config.DryRun)
-	var setupTaskIDs []string
-	for _, comp := range config.AllComponents() {
-		comp := comp // capture
-		if !m.config.IsComponentSelected(comp.Name) {
-			continue
-		}
-		status := config.InspectComponent(comp.Name, m.config.RootDir)
-		if status == "already configured" && !m.config.ForceReinstall {
-			m.summary.alreadyConfigured++
-			m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-				Component: comp.Name, Action: "Setup",
-				Status: "already configured",
-			})
-			continue
-		}
-		// Show diff details for replacements.
-		if status == "would replace" {
-			diffs := config.DiffComponent(
-				comp.Name, m.config.RootDir,
-			)
-			if len(diffs) > 0 {
-				status = "would replace: " + diffs[0]
-				if len(diffs) > 1 {
-					status = fmt.Sprintf(
-						"would replace (%d files)",
-						len(diffs),
-					)
-				}
-			}
-		}
-		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-			Component: comp.Name, Action: "Setup", Status: status,
-		})
-		taskID := "setup-" + comp.Name
-		tasks = append(tasks, engine.Task{
-			ID:        taskID,
-			Label:     fmt.Sprintf("Setting up %s", comp.Name),
-			DependsOn: toolTaskIDs,
-			Run: func(ctx context.Context) error {
-				sc := &config.SetupContext{
-					Runner:   runner,
-					RootDir:  m.config.RootDir,
-					Backup:   bm,
-					DryRun:   m.config.DryRun,
-					Platform: plat,
-				}
-				return config.SetupComponent(ctx, comp, sc)
-			},
-		})
-		setupTaskIDs = append(setupTaskIDs, taskID)
-	}
-
-	// Cleanup backup directory if requested.
-	if m.config.CleanBackup {
-		m.config.PlanRows = append(m.config.PlanRows, PlanRow{
-			Component: "Backup", Action: "Cleanup",
-			Status: "would remove",
-		})
-		if !m.config.DryRun {
-			allDeps := append(toolTaskIDs, setupTaskIDs...)
-			tasks = append(tasks, engine.Task{
-				ID:        "cleanup-backup",
-				Label:     "Cleaning up backup",
-				DependsOn: allDeps,
-				Run: func(_ context.Context) error {
-					return bm.Cleanup()
-				},
-			})
-		}
-	}
-
-	return tasks
-}
-
-// resourcesForTool determines which engine resources a tool needs based
-// on its first applicable install strategy for the current platform.
-func resourcesForTool(t *registry.Tool, mgrName string) []engine.Resource {
-	for _, s := range t.Strategies {
-		if !s.AppliesTo(mgrName) {
-			continue
-		}
-		switch s.Method {
-		case registry.MethodPackageManager:
-			if mgrName == "apt" {
-				return []engine.Resource{engine.ResApt}
-			}
-		case registry.MethodCargo:
-			return []engine.Resource{engine.ResCargo}
-		case registry.MethodCustom:
-			// Custom functions restricted to apt likely use the
-			// package manager internally and need the apt lock.
-			for _, m := range s.Managers {
-				if m == "apt" && mgrName == "apt" {
-					return []engine.Resource{engine.ResApt}
-				}
-			}
-		}
-		// First applicable strategy determines the resource.
-		return nil
-	}
-	return nil
-}
-
-func (m *AppModel) buildUpdateTasks() []engine.Task {
-	var tasks []engine.Task
-	updateSteps := update.AllSteps(
-		m.config.Runner, m.config.PkgMgr, m.config.Platform,
-	)
-
-	// Self-update step (only for release builds).
-	if step := update.SelfUpdateStep(
-		m.config.Runner, Version,
-	); step != nil {
-		updateSteps = append(updateSteps, *step)
-	}
-
-	// System packages must run first (repos update, dependency
-	// installs). Everything else can run in parallel.
-	sysID := ""
-	for _, s := range updateSteps {
-		s := s
-		id := "update-" + s.Name
-		var deps []string
-		if s.Name == "System packages" {
-			// No deps — runs first.
-			sysID = id
-		} else if sysID != "" {
-			// All other steps depend on system packages.
-			deps = []string{sysID}
-		}
-		tasks = append(tasks, engine.Task{
-			ID:        id,
-			Label:     fmt.Sprintf("Updating %s", s.Name),
-			DependsOn: deps,
-			Run: func(ctx context.Context) error {
-				return s.Fn(ctx)
-			},
-		})
-	}
-	return tasks
-}
-
-func (m *AppModel) buildRestoreTasks() []engine.Task {
-	backupPath := m.config.SelectedBackup
-	return []engine.Task{
-		{
-			ID:    "restore",
-			Label: "Restoring from backup",
-			Run: func(_ context.Context) error {
-				if backupPath == "" {
-					return fmt.Errorf("no backup selected")
-				}
-				return backup.Restore(backupPath, m.config.DryRun)
-			},
-		},
-	}
-}
-
-func (m *AppModel) buildUninstallTasks() []engine.Task {
-	var tasks []engine.Task
-	runner := m.config.Runner
-	rootDir := m.config.RootDir
-
-	for _, comp := range config.AllComponents() {
-		comp := comp
-		if !m.config.IsComponentSelected(comp.Name) {
-			continue
-		}
-		tasks = append(tasks, engine.Task{
-			ID:    "uninstall-" + comp.Name,
-			Label: fmt.Sprintf("Removing %s", comp.Name),
-			Run: func(_ context.Context) error {
-				return config.RemoveComponentSymlinks(
-					comp.Name, rootDir, runner,
-				)
-			},
-		})
-	}
-	return tasks
-}
-
-func (m *AppModel) buildDoctorTasks() []engine.Task {
-	var tasks []engine.Task
-	plat := m.config.Platform
-
-	// Check all registered tools.
-	for _, t := range registry.AllTools() {
-		if !registry.ShouldInstall(&t, plat) {
-			continue
-		}
-		t := t
-		tasks = append(tasks, engine.Task{
-			ID:    "check-" + t.Command,
-			Label: "Checking " + t.Name,
-			Run: func(_ context.Context) error {
-				status := registry.CheckInstalled(&t)
-				switch status {
-				case registry.StatusNotInstalled:
-					return fmt.Errorf("not installed")
-				case registry.StatusOutdated:
-					ver := registry.InstalledVersion(&t)
-					return fmt.Errorf(
-						"outdated (%s, need %s)",
-						ver, t.MinVersion,
-					)
-				}
-				return nil
-			},
-		})
-	}
-
-	// Check all component symlinks.
-	for _, comp := range config.AllComponents() {
-		comp := comp
-		tasks = append(tasks, engine.Task{
-			ID:    "check-" + comp.Name,
-			Label: "Checking " + comp.Name,
-			Run: func(_ context.Context) error {
-				status := config.InspectComponent(
-					comp.Name, m.config.RootDir,
-				)
-				switch status {
-				case "already configured":
-					return nil
-				default:
-					return fmt.Errorf("%s", status)
-				}
-			},
-		})
-	}
-
-	return tasks
 }
 
 // listenCmd returns a Bubble Tea command that blocks until the next
@@ -865,16 +570,4 @@ func drainCmd(ch <-chan any) tea.Cmd {
 	}
 }
 
-// IsComponentSelected checks if a component should be set up.
-func (cfg *AppConfig) IsComponentSelected(name string) bool {
-	if cfg.Mode != ModeCustomInstall {
-		return true
-	}
-	for _, c := range cfg.SelectedComponents {
-		if c == "All" || c == name {
-			return true
-		}
-	}
-	return false
-}
 

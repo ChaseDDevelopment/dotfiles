@@ -76,99 +76,51 @@ func (r *Runner) RunWithOutput(
 	name string,
 	args ...string,
 ) (string, error) {
-	cmdStr := name + " " + strings.Join(args, " ")
-
-	if r.DryRun {
-		r.Log.Write(fmt.Sprintf("[DRY RUN] %s", cmdStr))
-		return "", nil
-	}
-
-	r.Log.Write(fmt.Sprintf("Running: %s", cmdStr))
-	r.EmitVerbose("$ " + cmdStr)
-
-	cmd := exec.CommandContext(ctx, name, args...)
-	if r.Stdin != nil {
-		cmd.Stdin = r.Stdin
-	}
-	r.mu.Lock()
-	envCopy := make([]string, len(r.Env))
-	copy(envCopy, r.Env)
-	r.mu.Unlock()
-	if len(envCopy) > 0 {
-		cmd.Env = append(cmd.Environ(), envCopy...)
-	}
-
-	var buf bytes.Buffer
-	// Write stdout+stderr to both the buffer and the log file.
-	logWriter := &logAdapter{log: r.Log}
-	cmd.Stdout = io.MultiWriter(&buf, logWriter)
-	cmd.Stderr = io.MultiWriter(&buf, logWriter)
-
-	err := cmd.Run()
-	output := buf.String()
-
-	// Emit output lines to the verbose channel.
-	if r.Verbose && output != "" {
-		for _, line := range strings.Split(
-			strings.TrimRight(output, "\n"), "\n",
-		) {
-			if cleaned := cleanLine(line); cleaned != "" {
-				r.EmitVerbose(cleaned)
-			}
-		}
-	}
-
-	if err != nil {
-		r.Log.Write(fmt.Sprintf("FAILED: %s (exit: %v)", cmdStr, err))
-		return output, fmt.Errorf("%s: %w", cmdStr, err)
-	}
-
-	r.Log.Write(fmt.Sprintf("OK: %s", cmdStr))
-	return output, nil
-}
-
-// RecentLinesSnapshot drains any pending verbose channel messages
-// into recentLines and returns a copy. Safe to call from a
-// different goroutine than RunWithOutput.
-func (r *Runner) RecentLinesSnapshot() []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	// Drain the verbose channel into recentLines.
-	if r.verboseCh != nil {
-		for {
-			select {
-			case line := <-r.verboseCh:
-				r.recentLines = append(
-					r.recentLines, line,
-				)
-				if len(r.recentLines) > r.maxRecent {
-					r.recentLines = r.recentLines[len(r.recentLines)-r.maxRecent:]
-				}
-			default:
-				goto drained
-			}
-		}
-	drained:
-	}
-	cp := make([]string, len(r.recentLines))
-	copy(cp, r.recentLines)
-	return cp
+	return r.runCmd(ctx, "", name, args...)
 }
 
 // RunInDir executes a command in the specified working directory.
-func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string) error {
+func (r *Runner) RunInDir(
+	ctx context.Context,
+	dir, name string,
+	args ...string,
+) error {
+	_, err := r.runCmd(ctx, dir, name, args...)
+	return err
+}
+
+// runCmd is the shared implementation for RunWithOutput and RunInDir.
+func (r *Runner) runCmd(
+	ctx context.Context,
+	dir, name string,
+	args ...string,
+) (string, error) {
 	cmdStr := name + " " + strings.Join(args, " ")
 
 	if r.DryRun {
-		r.Log.Write(fmt.Sprintf("[DRY RUN] (in %s) %s", dir, cmdStr))
-		return nil
+		if dir != "" {
+			r.Log.Write(fmt.Sprintf(
+				"[DRY RUN] (in %s) %s", dir, cmdStr,
+			))
+		} else {
+			r.Log.Write(fmt.Sprintf("[DRY RUN] %s", cmdStr))
+		}
+		return "", nil
 	}
 
-	r.Log.Write(fmt.Sprintf("Running (in %s): %s", dir, cmdStr))
+	if dir != "" {
+		r.Log.Write(fmt.Sprintf(
+			"Running (in %s): %s", dir, cmdStr,
+		))
+	} else {
+		r.Log.Write(fmt.Sprintf("Running: %s", cmdStr))
+	}
 	r.EmitVerbose("$ " + cmdStr)
 
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = dir
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	if r.Stdin != nil {
 		cmd.Stdin = r.Stdin
 	}
@@ -203,11 +155,39 @@ func (r *Runner) RunInDir(ctx context.Context, dir, name string, args ...string)
 		r.Log.Write(fmt.Sprintf(
 			"FAILED: %s (exit: %v)", cmdStr, err,
 		))
-		return fmt.Errorf("%s: %w", cmdStr, err)
+		return output, fmt.Errorf("%s: %w", cmdStr, err)
 	}
 
 	r.Log.Write(fmt.Sprintf("OK: %s", cmdStr))
-	return nil
+	return output, nil
+}
+
+// RecentLinesSnapshot drains any pending verbose channel messages
+// into recentLines and returns a copy. Safe to call from a
+// different goroutine than RunWithOutput.
+func (r *Runner) RecentLinesSnapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// Drain the verbose channel into recentLines.
+	if r.verboseCh != nil {
+		for {
+			select {
+			case line := <-r.verboseCh:
+				r.recentLines = append(
+					r.recentLines, line,
+				)
+				if len(r.recentLines) > r.maxRecent {
+					r.recentLines = r.recentLines[len(r.recentLines)-r.maxRecent:]
+				}
+			default:
+				goto drained
+			}
+		}
+	drained:
+	}
+	cp := make([]string, len(r.recentLines))
+	copy(cp, r.recentLines)
+	return cp
 }
 
 // RunShell executes a command string through bash.

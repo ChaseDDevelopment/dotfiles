@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
 func rustToolchain() []Tool {
@@ -42,7 +43,7 @@ func devTools() []Tool {
 					CustomFunc: installNeovimPacman,
 				},
 				{Managers: []string{"apt"}, Method: MethodCustom,
-					CustomFunc: installNeovimApt,
+					CustomFunc: InstallNeovimApt,
 				},
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "neovim"},
 			},
@@ -185,10 +186,13 @@ func installNeovimPacman(ctx context.Context, ic *InstallContext) error {
 	return ic.Runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "neovim")
 }
 
-func installNeovimApt(ctx context.Context, ic *InstallContext) error {
+// InstallNeovimApt downloads Neovim from GitHub releases for
+// apt-based systems where the repo version is too old. Exported
+// so update logic can reuse the same install path.
+func InstallNeovimApt(ctx context.Context, ic *InstallContext) error {
 	// Download from GitHub releases for apt systems (repos are too old).
 	arch := "x86_64"
-	if runtime.GOARCH == "arm64" {
+	if ic.Platform != nil && ic.Platform.Arch == platform.ARM64 {
 		arch = "arm64"
 	}
 

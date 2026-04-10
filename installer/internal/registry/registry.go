@@ -5,30 +5,45 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
+var (
+	toolsOnce  sync.Once
+	cachedAll  []Tool
+	lookupMap  map[string]*Tool
+)
+
+func initTools() {
+	toolsOnce.Do(func() {
+		cachedAll = append(cachedAll, coreTools()...)
+		cachedAll = append(cachedAll, rustToolchain()...)
+		cachedAll = append(cachedAll, cliTools()...)
+		cachedAll = append(cachedAll, devTools()...)
+		cachedAll = append(cachedAll, officialInstallerTools()...)
+
+		lookupMap = make(map[string]*Tool, len(cachedAll))
+		for i := range cachedAll {
+			if cachedAll[i].Command != "" {
+				lookupMap[cachedAll[i].Command] = &cachedAll[i]
+			}
+		}
+	})
+}
+
 // AllTools returns every tool the installer manages, in install order.
 func AllTools() []Tool {
-	var all []Tool
-	all = append(all, coreTools()...)
-	all = append(all, rustToolchain()...)
-	all = append(all, cliTools()...)
-	all = append(all, devTools()...)
-	all = append(all, officialInstallerTools()...)
-	return all
+	initTools()
+	return cachedAll
 }
 
 // Lookup finds a tool by command name.
 func Lookup(command string) *Tool {
-	for _, t := range AllTools() {
-		if t.Command == command {
-			return &t
-		}
-	}
-	return nil
+	initTools()
+	return lookupMap[command]
 }
 
 // ShouldInstall checks whether a tool applies to the current platform.

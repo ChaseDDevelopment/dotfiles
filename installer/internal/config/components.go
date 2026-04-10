@@ -246,7 +246,7 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 	}
 
 	// Reload tmux config if running (best-effort).
-	if err := exec.Command("pgrep", "-x", "tmux").Run(); err == nil {
+	if err := sc.Runner.Run(ctx, "pgrep", "-x", "tmux"); err == nil {
 		tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
 		if err := sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf); err != nil {
 			sc.Runner.Log.Write(fmt.Sprintf("WARNING: tmux config reload failed: %v", err))
@@ -331,7 +331,7 @@ func setupGhostty(sc *SetupContext) error {
 	return nil
 }
 
-func setupGit(_ context.Context, sc *SetupContext) error {
+func setupGit(ctx context.Context, sc *SetupContext) error {
 	// Ensure ~/.config/git/ exists before the file symlink.
 	sc.Runner.EmitVerbose("Creating ~/.config/git directory")
 	gitDir := os.ExpandEnv("$HOME/.config/git")
@@ -341,13 +341,13 @@ func setupGit(_ context.Context, sc *SetupContext) error {
 
 	// Warn if git identity is not configured.
 	if platform.HasCommand("git") {
-		name, _ := exec.Command(
-			"git", "config", "--global", "user.name",
-		).Output()
-		email, _ := exec.Command(
-			"git", "config", "--global", "user.email",
-		).Output()
-		if len(name) == 0 || len(email) == 0 {
+		name, _ := sc.Runner.RunWithOutput(
+			ctx, "git", "config", "--global", "user.name",
+		)
+		email, _ := sc.Runner.RunWithOutput(
+			ctx, "git", "config", "--global", "user.email",
+		)
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(email) == "" {
 			sc.Runner.Log.Write(
 				"WARNING: git user.name or user.email not set — " +
 					"run: git config --global user.name 'Your Name' && " +

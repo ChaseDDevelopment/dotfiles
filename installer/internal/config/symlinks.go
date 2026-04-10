@@ -52,6 +52,22 @@ func AllSymlinks() []SymlinkEntry {
 	}
 }
 
+// ManagedTargets returns the de-duplicated list of target paths
+// managed by the installer, derived from AllSymlinks(). Targets
+// use $HOME (unexpanded) so callers can os.ExpandEnv as needed.
+func ManagedTargets() []string {
+	seen := make(map[string]struct{})
+	var targets []string
+	for _, entry := range AllSymlinks() {
+		if _, ok := seen[entry.Target]; ok {
+			continue
+		}
+		seen[entry.Target] = struct{}{}
+		targets = append(targets, entry.Target)
+	}
+	return targets
+}
+
 // SymlinkStatus represents the inspection state of a symlink entry.
 type SymlinkStatus int
 

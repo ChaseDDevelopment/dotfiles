@@ -82,6 +82,15 @@ func SelfUpdate(
 		return err
 	}
 
+	// Backup current binary for rollback.
+	backupFile := exe + ".old"
+	if err := copyFile(exe, backupFile); err != nil {
+		runner.Log.Write(fmt.Sprintf(
+			"WARNING: backup current binary: %v", err,
+		))
+		// Continue — lack of backup shouldn't block the update.
+	}
+
 	// Atomic replace.
 	if err := os.Rename(tmpFile, exe); err != nil {
 		// Try sudo mv as fallback for /usr/local/bin.
@@ -89,12 +98,32 @@ func SelfUpdate(
 			ctx, "sudo", "mv", tmpFile, exe,
 		); err2 != nil {
 			os.Remove(tmpFile)
+			// Attempt rollback from backup.
+			if _, statErr := os.Stat(backupFile); statErr == nil {
+				os.Rename(backupFile, exe)
+			}
 			return fmt.Errorf("replace binary: %w", err)
 		}
 	}
+
+	// Clean up backup on success.
+	os.Remove(backupFile)
 
 	runner.Log.Write(fmt.Sprintf(
 		"Updated dotsetup to %s", latest,
 	))
 	return nil
+}
+
+// copyFile copies src to dst, preserving permissions.
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, info.Mode())
 }

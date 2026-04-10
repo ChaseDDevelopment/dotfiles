@@ -35,13 +35,13 @@ func New(p *platform.Platform, runner *executor.Runner) (PackageManager, error) 
 	case platform.PkgApt:
 		return &Apt{runner: runner, useNala: p.HasNala}, nil
 	case platform.PkgPacman:
-		return &Pacman{runner: runner}, nil
+		return newPacman(runner), nil
 	case platform.PkgDnf:
-		return &Dnf{runner: runner}, nil
+		return newDnf(runner), nil
 	case platform.PkgYum:
-		return &Yum{runner: runner}, nil
+		return newYum(runner), nil
 	case platform.PkgZypper:
-		return &Zypper{runner: runner}, nil
+		return newZypper(runner), nil
 	default:
 		return nil, fmt.Errorf("no supported package manager found")
 	}

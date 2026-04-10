@@ -7,18 +7,13 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
-)
 
-// PlanRow holds one row of the dry-run summary table.
-type PlanRow struct {
-	Component string
-	Action    string
-	Status    string
-}
+	"github.com/chaseddevelopment/dotfiles/installer/internal/orchestrator"
+)
 
 // summaryModel displays the completion screen or dry-run plan.
 type summaryModel struct {
-	rows             []PlanRow
+	rows             []orchestrator.PlanRow
 	steps            []stepResult
 	dryRun           bool
 	criticalFailure  bool   // true if a critical tool failed
@@ -163,21 +158,39 @@ func (m summaryModel) completionView(width int) string {
 		b.WriteString(panelGap("\n"))
 	}
 
-	// Quick start section.
-	b.WriteString(panelGap("\n"))
-	b.WriteString(stepStyle.Render("  Quick Start"))
-	b.WriteString(panelGap("\n"))
-	b.WriteString(thinRule(w))
-	b.WriteString(panelGap("\n"))
-
-	quickItems := []struct{ cmd, desc string }{
-		{"exec zsh", "Reload shell"},
-		{"tmux", "Start tmux"},
-		{"nvim", "Open Neovim"},
+	// Quick start section — only show items for tools that succeeded.
+	succeeded := make(map[string]bool)
+	for _, s := range m.steps {
+		if s.success {
+			succeeded[strings.ToLower(s.label)] = true
+		}
 	}
-	for _, item := range quickItems {
-		b.WriteString(panelGap(" ") + selectedStyle.Render(fmt.Sprintf("%-16s", item.cmd)) +
-			panelGap("  ") + descStyle.Render(item.desc) + panelGap("\n"))
+
+	type quickItem struct {
+		cmd, desc, requires string
+	}
+	allQuick := []quickItem{
+		{"exec zsh", "Reload shell", "zsh"},
+		{"tmux", "Start tmux", "tmux"},
+		{"nvim", "Open Neovim", "neovim"},
+	}
+	var quickItems []quickItem
+	for _, item := range allQuick {
+		if succeeded[item.requires] {
+			quickItems = append(quickItems, item)
+		}
+	}
+
+	if len(quickItems) > 0 {
+		b.WriteString(panelGap("\n"))
+		b.WriteString(stepStyle.Render("  Quick Start"))
+		b.WriteString(panelGap("\n"))
+		b.WriteString(thinRule(w))
+		b.WriteString(panelGap("\n"))
+		for _, item := range quickItems {
+			b.WriteString(panelGap(" ") + selectedStyle.Render(fmt.Sprintf("%-16s", item.cmd)) +
+				panelGap("  ") + descStyle.Render(item.desc) + panelGap("\n"))
+		}
 	}
 
 	// Wrap everything in panel.
@@ -341,11 +354,12 @@ func (m summaryModel) dryRunView(width, height int) string {
 	panel := dryRunPanelStyle.Width(w).Render(panelContent)
 
 	// Footer with scroll hint.
-	hints := "q exit"
+	var footer string
 	if needsScroll {
-		hints = "↑↓ scroll · q exit"
+		footer = renderFooter("↑↓ scroll", "enter menu", "q quit")
+	} else {
+		footer = renderFooter("enter menu", "q quit")
 	}
-	footer := renderFooter(hints, "enter menu", "q quit")
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).

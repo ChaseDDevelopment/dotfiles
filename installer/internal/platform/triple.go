@@ -49,9 +49,3 @@ func (p *Platform) TitleStyle() (string, string) {
 	}
 	return os, arch
 }
-
-// LowerStyle returns lowercase OS and Go-style arch: ("linux"/"darwin", "amd64"/"arm64").
-// Used by yq GitHub release URLs.
-func (p *Platform) LowerStyle() (string, string) {
-	return p.GoStyle()
-}

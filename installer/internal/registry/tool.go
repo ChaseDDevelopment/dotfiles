@@ -6,6 +6,7 @@ import (
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
 // InstallMethod describes how a tool is installed.
@@ -129,6 +130,7 @@ type PostAction struct {
 type InstallContext struct {
 	Runner         *executor.Runner
 	PkgMgr         pkgmgr.PackageManager
+	Platform       *platform.Platform
 	ForceReinstall bool
 }
 

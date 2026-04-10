@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
@@ -53,6 +54,9 @@ type progressModel struct {
 
 	// Label lookup by task ID.
 	labelByID map[string]string
+
+	// Timing for elapsed display.
+	startedAt time.Time
 
 	// Verbose output lines (read from Runner.RecentLines).
 	recentLines []string
@@ -239,15 +243,22 @@ func (m progressModel) View(width int) string {
 		b.WriteString(panelGap("\n"))
 	}
 
-	// Progress bar.
+	// Progress bar with counter and elapsed time.
 	pct := 0.0
 	if m.totalTools > 0 {
 		pct = float64(m.doneCount) / float64(m.totalTools)
 	}
+	counter := dimStyle.Render(fmt.Sprintf(
+		" %d/%d", m.doneCount, m.totalTools,
+	))
+	elapsed := ""
+	if !m.startedAt.IsZero() {
+		d := time.Since(m.startedAt).Truncate(time.Second)
+		elapsed = dimStyle.Render(fmt.Sprintf(" %s", d))
+	}
 	m.progress.SetWidth(w - 14)
 	bar := m.progress.ViewAs(pct)
-	pctStr := dimStyle.Render(fmt.Sprintf(" %d%%", int(pct*100)))
-	b.WriteString(bar + pctStr + panelGap("\n\n"))
+	b.WriteString(bar + counter + elapsed + panelGap("\n\n"))
 
 	// Active tasks.
 	if len(m.active) > 0 {
