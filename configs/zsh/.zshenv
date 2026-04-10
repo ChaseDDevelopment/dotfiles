@@ -19,43 +19,7 @@ export LC_ALL="en_US.UTF-8"
 # Claude Code
 export CLAUDE_CODE_NO_FLICKER=1
 
-# Homebrew (cross-platform detection with cached shellenv)
-_brew_bin=""
-if [[ -f "/opt/homebrew/bin/brew" ]]; then
-    _brew_bin="/opt/homebrew/bin/brew"
-elif [[ -f "/usr/local/bin/brew" ]]; then
-    _brew_bin="/usr/local/bin/brew"
-elif [[ -f "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
-    _brew_bin="/home/linuxbrew/.linuxbrew/bin/brew"
-fi
-if [[ -n "$_brew_bin" ]]; then
-    _brew_cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/brew_shellenv.zsh"
-    [[ -d "${_brew_cache:h}" ]] || mkdir -p "${_brew_cache:h}"
-    if [[ ! -f "$_brew_cache" ]] || [[ "$_brew_bin" -nt "$_brew_cache" ]]; then
-        "$_brew_bin" shellenv > "$_brew_cache"
-    fi
-    source "$_brew_cache"
-fi
-unset _brew_bin _brew_cache
-
-# Path additions
-typeset -U path
-path=(
-    "${HOME}/.local/bin"
-    "${HOME}/.cargo/bin"
-    "${HOME}/.bun/bin"
-    "${HOME}/go/bin"
-    $path
-)
-export PATH
-
-# .NET SDK (installed via dotnet-install.sh to ~/.dotnet)
-if [[ -d "${HOME}/.dotnet" ]]; then
-    export DOTNET_ROOT="${HOME}/.dotnet"
-    export PATH="${DOTNET_ROOT}:${PATH}"
-fi
-
-# Cargo bin is already in PATH above, no need to source .cargo/env
+# PATH setup is in .zprofile (must run AFTER macOS /etc/zprofile path_helper)
 
 # Cross-platform clipboard detection for fzf
 if [[ "$OSTYPE" == "darwin"* ]]; then
