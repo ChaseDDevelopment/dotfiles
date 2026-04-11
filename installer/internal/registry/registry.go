@@ -219,7 +219,11 @@ func executeScript(
 	if shell == "" {
 		shell = "bash" // dash on Debian/Ubuntu can't handle bash syntax
 	}
-	args := append([]string{tmpFile}, cfg.Args...)
+	args := make([]string, 0, len(cfg.Args)+1)
+	args = append(args, tmpFile)
+	for _, a := range cfg.Args {
+		args = append(args, os.ExpandEnv(a))
+	}
 	return ic.Runner.Run(ctx, shell, args...)
 }
 

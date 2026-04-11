@@ -51,6 +51,9 @@ fish_variables
 # Zsh compiled word code files
 *.zwc
 
+# Antidote plugin manager (cloned at runtime into ZDOTDIR)
+configs/zsh/.antidote/
+
 # =============================================================================
 # Tmux Files
 # =============================================================================
@@ -61,6 +64,9 @@ fish_variables
 # =============================================================================
 # Yazi Files
 # =============================================================================
+
+# Atuin receipt (generated at runtime by atuin import)
+configs/atuin/atuin-receipt.json
 
 # Yazi plugins and flavors (downloaded by `ya pkg install`)
 configs/yazi/plugins/
