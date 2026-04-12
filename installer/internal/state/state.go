@@ -2,11 +2,18 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
+
+// ErrCorrupt indicates the state file exists but could not be parsed.
+// Callers should surface this and typically back up the file before
+// starting fresh, rather than silently discarding install history.
+var ErrCorrupt = errors.New("corrupt state file")
 
 // ToolRecord tracks the installation of a single tool.
 type ToolRecord struct {
@@ -57,9 +64,7 @@ func Load(path string) (*Store, error) {
 	}
 
 	if err := json.Unmarshal(data, s); err != nil {
-		// Corrupt state — start fresh.
-		s.Tools = make(map[string]ToolRecord)
-		return s, nil
+		return nil, fmt.Errorf("%w: %v", ErrCorrupt, err)
 	}
 	if s.Tools == nil {
 		s.Tools = make(map[string]ToolRecord)

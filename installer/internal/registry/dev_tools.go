@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
@@ -176,12 +177,19 @@ func devTools() []Tool {
 
 func installNeovimPacman(ctx context.Context, ic *InstallContext) error {
 	// Try AUR helpers first for neovim-git, fall back to pacman.
+	// Log each helper failure so "fell back to stable neovim" isn't
+	// a silent downgrade.
 	for _, helper := range []string{"yay", "paru"} {
-		if _, err := exec.LookPath(helper); err == nil {
-			if err := ic.Runner.Run(ctx, helper, "-S", "--noconfirm", "neovim-git"); err == nil {
-				return nil
-			}
+		if _, err := exec.LookPath(helper); err != nil {
+			continue
 		}
+		if err := ic.Runner.Run(ctx, helper, "-S", "--noconfirm", "neovim-git"); err != nil {
+			ic.Runner.Log.Write(fmt.Sprintf(
+				"NOTE: %s neovim-git failed: %v", helper, err,
+			))
+			continue
+		}
+		return nil
 	}
 	return ic.Runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "neovim")
 }
@@ -212,19 +220,61 @@ func InstallNeovimApt(ctx context.Context, ic *InstallContext) error {
 		return err
 	}
 
-	// Clean up old installs.
-	for _, old := range []string{"/opt/nvim", "/opt/nvim-linux-x86_64", "/opt/nvim-linux-arm64"} {
-		_ = ic.Runner.Run(ctx, "sudo", "rm", "-rf", old)
+	// Peek at the archive to learn the top-level directory name
+	// before extracting. Using a shell glob post-extract would
+	// match any pre-existing /opt/nvim-linux-* dir, including a
+	// stale or hostile one. A literal path is safer.
+	listOut, err := ic.Runner.RunWithOutput(ctx, "tar", "-tzf", tarPath)
+	if err != nil {
+		return fmt.Errorf("list nvim tarball: %w", err)
+	}
+	rootDir := ""
+	for _, line := range strings.Split(listOut, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if i := strings.Index(line, "/"); i > 0 {
+			rootDir = line[:i]
+			break
+		}
+	}
+	if rootDir == "" || strings.ContainsAny(rootDir, "./\\") {
+		return fmt.Errorf(
+			"nvim tarball has no safe top-level directory: %q", rootDir,
+		)
+	}
+
+	// Clean up old installs — propagate errors (permission/busy)
+	// instead of silently proceeding into a broken layout.
+	cleanupTargets := []string{
+		"/opt/nvim",
+		"/opt/nvim-linux-x86_64",
+		"/opt/nvim-linux-arm64",
+		"/opt/" + rootDir,
+	}
+	for _, old := range cleanupTargets {
+		if err := ic.Runner.Run(
+			ctx, "sudo", "rm", "-rf", old,
+		); err != nil {
+			return fmt.Errorf("clean old %s: %w", old, err)
+		}
 	}
 
 	if err := ic.Runner.Run(ctx, "sudo", "tar", "-C", "/opt", "-xzf", tarPath); err != nil {
 		return err
 	}
 
-	// Find the extracted directory and symlink.
-	_ = ic.Runner.Run(ctx, "sudo", "rm", "-f", "/usr/local/bin/nvim")
-	return ic.Runner.RunShell(ctx,
-		"sudo ln -s /opt/nvim-linux-*/bin/nvim /usr/local/bin/nvim")
+	if err := ic.Runner.Run(
+		ctx, "sudo", "rm", "-f", "/usr/local/bin/nvim",
+	); err != nil {
+		return fmt.Errorf("remove stale /usr/local/bin/nvim: %w", err)
+	}
+	return ic.Runner.Run(
+		ctx, "sudo", "ln", "-s",
+		"/opt/"+rootDir+"/bin/nvim",
+		"/usr/local/bin/nvim",
+	)
 }
 
 func installYaziApt(ctx context.Context, ic *InstallContext) error {

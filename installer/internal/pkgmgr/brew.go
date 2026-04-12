@@ -32,7 +32,7 @@ func (b *Brew) Install(ctx context.Context, genericNames ...string) error {
 func (b *Brew) IsInstalled(genericName string) bool {
 	names := b.MapName(genericName)
 	for _, pkg := range names {
-		if err := b.runner.Run(context.Background(), "brew", "list", pkg); err != nil {
+		if _, err := b.runner.RunProbe(context.Background(), "brew", "list", pkg); err != nil {
 			return false
 		}
 	}

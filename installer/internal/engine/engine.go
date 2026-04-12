@@ -38,13 +38,21 @@ type Task struct {
 	Run       func(ctx context.Context) error
 }
 
-// Events emitted by the scheduler to the TUI via the output channel.
+// Event is the sealed interface implemented by every scheduler
+// message. Using a typed channel instead of `chan any` lets the TUI
+// switch be compile-time exhaustive (switch over Event will error
+// if a new variant is added without handling it).
+type Event interface {
+	isEngineEvent()
+}
 
 // TaskStartedMsg is sent when a task begins execution.
 type TaskStartedMsg struct {
 	ID    string
 	Label string
 }
+
+func (TaskStartedMsg) isEngineEvent() {}
 
 // TaskDoneMsg is sent when a task finishes (success or failure).
 type TaskDoneMsg struct {
@@ -54,6 +62,8 @@ type TaskDoneMsg struct {
 	Critical bool
 }
 
+func (TaskDoneMsg) isEngineEvent() {}
+
 // TaskSkippedMsg is sent when a task is skipped due to a failed dependency.
 type TaskSkippedMsg struct {
 	ID     string
@@ -61,5 +71,9 @@ type TaskSkippedMsg struct {
 	Reason string
 }
 
+func (TaskSkippedMsg) isEngineEvent() {}
+
 // AllDoneMsg is sent after all tasks have completed, failed, or been skipped.
 type AllDoneMsg struct{}
+
+func (AllDoneMsg) isEngineEvent() {}

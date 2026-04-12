@@ -183,11 +183,16 @@ func updateNeovim(ctx context.Context, runner *executor.Runner, mgr pkgmgr.Packa
 		return runner.Run(ctx, "brew", "upgrade", "neovim")
 	case "pacman":
 		for _, helper := range []string{"yay", "paru"} {
-			if _, err := exec.LookPath(helper); err == nil {
-				if err := runner.Run(ctx, helper, "-S", "--noconfirm", "neovim-git"); err == nil {
-					return nil
-				}
+			if _, err := exec.LookPath(helper); err != nil {
+				continue
 			}
+			if err := runner.Run(ctx, helper, "-S", "--noconfirm", "neovim-git"); err != nil {
+				runner.Log.Write(fmt.Sprintf(
+					"NOTE: %s neovim-git update failed: %v", helper, err,
+				))
+				continue
+			}
+			return nil
 		}
 		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "neovim")
 	case "apt":

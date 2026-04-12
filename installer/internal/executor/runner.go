@@ -30,8 +30,13 @@ type Runner struct {
 	// verboseCh receives human-readable status lines when verbose mode
 	// is active. Nil until EnableVerboseChannel is called.
 	verboseCh chan string
-	mu        sync.Mutex
-	maxRecent int
+	// droppedLines counts verbose messages that couldn't be delivered
+	// because the channel was full (TUI falling behind). Surfaced
+	// periodically so users know some output is missing — silent
+	// drops used to look identical to a quiet install.
+	droppedLines int
+	mu           sync.Mutex
+	maxRecent    int
 }
 
 // NewRunner creates a Runner attached to the given log file.
@@ -51,7 +56,9 @@ func (r *Runner) EnableVerboseChannel(bufSize int) {
 
 // EmitVerbose sends a human-readable status line to the verbose
 // channel. No-op when the channel is nil. Uses a non-blocking
-// send so task goroutines never stall if the TUI falls behind.
+// send so task goroutines never stall if the TUI falls behind;
+// drops are counted and surfaced by RecentLinesSnapshot so users
+// notice that some output went missing.
 func (r *Runner) EmitVerbose(msg string) {
 	ch := r.verboseCh
 	if ch == nil {
@@ -60,6 +67,9 @@ func (r *Runner) EmitVerbose(msg string) {
 	select {
 	case ch <- msg:
 	default:
+		r.mu.Lock()
+		r.droppedLines++
+		r.mu.Unlock()
 	}
 }
 
@@ -145,10 +155,12 @@ func (r *Runner) runCmd(
 		cmd.Env = append(cmd.Environ(), envCopy...)
 	}
 
+	// Share one writer between Stdout and Stderr so os/exec reuses
+	// a single pipe+goroutine. Two distinct writers race on &buf.
 	var buf bytes.Buffer
-	logWriter := &logAdapter{log: r.Log}
-	cmd.Stdout = io.MultiWriter(&buf, logWriter)
-	cmd.Stderr = io.MultiWriter(&buf, logWriter)
+	combined := io.MultiWriter(&buf, &logAdapter{log: r.Log})
+	cmd.Stdout = combined
+	cmd.Stderr = combined
 
 	err := cmd.Run()
 	output := buf.String()
@@ -199,6 +211,19 @@ func (r *Runner) RecentLinesSnapshot() []string {
 			}
 		}
 	drained:
+	}
+	// Emit a single "dropped N lines" heartbeat so silent drops are
+	// visible. Reset the counter so the notice appears once per
+	// snapshot rather than every frame.
+	if r.droppedLines > 0 {
+		r.recentLines = append(r.recentLines, fmt.Sprintf(
+			"(… %d verbose line(s) dropped — output faster than TUI)",
+			r.droppedLines,
+		))
+		if len(r.recentLines) > r.maxRecent {
+			r.recentLines = r.recentLines[len(r.recentLines)-r.maxRecent:]
+		}
+		r.droppedLines = 0
 	}
 	cp := make([]string, len(r.recentLines))
 	copy(cp, r.recentLines)

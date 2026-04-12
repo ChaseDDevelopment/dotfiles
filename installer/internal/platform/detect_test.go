@@ -227,7 +227,10 @@ func TestMacOSVersion(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("skipping macOS-specific test")
 	}
-	v := macOSVersion()
+	v, err := macOSVersion()
+	if err != nil {
+		t.Errorf("macOSVersion() error = %v", err)
+	}
 	if v == "" {
 		t.Error("macOSVersion() returned empty string")
 	}
@@ -242,15 +245,21 @@ func TestMacOSVersion(t *testing.T) {
 
 func TestLinuxDistro(t *testing.T) {
 	t.Parallel()
-	name, version := linuxDistro()
+	name, version, err := linuxDistro()
 
 	if runtime.GOOS == "linux" {
+		if err != nil {
+			t.Errorf("linuxDistro() on Linux error = %v", err)
+		}
 		if name == "" {
 			t.Error("linuxDistro() returned empty name on Linux")
 		}
 	} else {
-		// On non-Linux, /etc/os-release doesn't exist.
-		// linuxDistro falls back to "Linux" with empty version.
+		// On non-Linux, /etc/os-release doesn't exist; the helper
+		// still returns a "Linux" default but surfaces the error.
+		if err == nil {
+			t.Error("linuxDistro() on non-linux should return error")
+		}
 		if name != "Linux" {
 			t.Errorf(
 				"linuxDistro() on non-linux = %q, want 'Linux'",

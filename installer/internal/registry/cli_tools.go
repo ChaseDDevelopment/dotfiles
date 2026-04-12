@@ -383,7 +383,7 @@ func isNerdFontInstalled() bool {
 func installNerdFontLinux(ctx context.Context, ic *InstallContext) error {
 	version, err := github.LatestVersion("ryanoasis/nerd-fonts", true)
 	if err != nil {
-		version = "3.3.0"
+		return fmt.Errorf("resolve nerd-fonts latest version: %w", err)
 	}
 	url := fmt.Sprintf(
 		"https://github.com/ryanoasis/nerd-fonts/releases/download/v%s/JetBrainsMono.tar.xz",

@@ -17,8 +17,8 @@ const defaultTaskTimeout = 10 * time.Minute
 // maxWorkers caps the number of concurrent goroutines. Resource
 // semaphores (one per Resource type) further serialize tasks that
 // share exclusive resources like apt or cargo.
-func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
-	out := make(chan any, 128)
+func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
+	out := make(chan Event, 128)
 
 	go func() {
 		defer close(out)
@@ -40,21 +40,34 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
 		}
 
 		// Validate dependencies and compute indegree. Unknown deps
-		// are silently stripped to prevent deadlocks.
+		// surface as TaskDoneMsg errors rather than silent strips —
+		// a typo in DependsOn must be loud so bad task wiring is
+		// visible instead of producing wrong task ordering.
+		var missing []string
 		for i := range tasks {
 			t := &tasks[i]
-			var validDeps []string
 			for _, dep := range t.DependsOn {
 				if _, ok := byID[dep]; !ok {
-					// Unknown dependency — strip it to prevent
-					// deadlock from an unresolvable indegree.
+					missing = append(missing, fmt.Sprintf(
+						"%s depends on unknown %q", t.ID, dep,
+					))
 					continue
 				}
-				validDeps = append(validDeps, dep)
 				dependents[dep] = append(dependents[dep], t.ID)
 			}
-			tasks[i].DependsOn = validDeps
-			indegree[t.ID] = len(validDeps)
+			indegree[t.ID] = len(t.DependsOn)
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			for i := range tasks {
+				send(ctx, out, TaskDoneMsg{
+					ID:       tasks[i].ID,
+					Label:    tasks[i].Label,
+					Err:      fmt.Errorf("task graph invalid: %v", missing),
+					Critical: true,
+				})
+			}
+			return
 		}
 
 		// Cycle detection via Kahn's algorithm.
@@ -285,6 +298,10 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
 								select {
 								case readyCh <- childID:
 								case <-ctx.Done():
+									// Still mark ourselves finished before
+									// bailing — otherwise pending drifts
+									// and hides hung-scheduler bugs.
+									markFinished()
 									return
 								}
 							}
@@ -315,7 +332,7 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan any {
 // send writes a message to the output channel, aborting if the
 // context is cancelled. This prevents goroutine leaks when the
 // TUI stops reading events (e.g., on critical failure abort).
-func send(ctx context.Context, ch chan<- any, msg any) {
+func send(ctx context.Context, ch chan<- Event, msg Event) {
 	select {
 	case ch <- msg:
 	case <-ctx.Done():

@@ -9,7 +9,6 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
 const compactVerboseLines = 8
@@ -67,6 +66,11 @@ type progressModel struct {
 	// Expanded verbose viewport (toggled with 'v').
 	expandedVerbose bool
 	verboseViewport viewport.Model
+
+	// width is captured from tea.WindowSizeMsg so viewport sizing
+	// can happen in Update instead of View (which would re-paginate
+	// on every frame and break user scroll state).
+	width int
 }
 
 // allFinished reports whether every queued tool has reached a
@@ -89,10 +93,7 @@ func newProgressModel() progressModel {
 	s.Style = progressActiveStyle
 
 	p := progress.New(
-		progress.WithColors(
-			lipgloss.Color("#cba6f7"),
-			lipgloss.Color("#74c7ec"),
-		),
+		progress.WithColors(catMauve, catSapphire),
 		progress.WithoutPercentage(),
 	)
 
@@ -202,9 +203,17 @@ func stripLabelPrefix(label string) string {
 
 func (m progressModel) Update(msg tea.Msg) (progressModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.resizeVerboseViewport()
+		return m, nil
+
 	case tea.KeyPressMsg:
 		if msg.String() == "v" && m.verbose {
 			m.expandedVerbose = !m.expandedVerbose
+			if m.expandedVerbose {
+				m.syncVerboseViewport()
+			}
 			return m, nil
 		}
 		// Forward scroll keys to viewport when expanded.
@@ -225,6 +234,39 @@ func (m progressModel) Update(msg tea.Msg) (progressModel, tea.Cmd) {
 		return m, cmd
 	}
 	return m, nil
+}
+
+// resizeVerboseViewport updates viewport dimensions in response to
+// a WindowSizeMsg. Kept separate from content updates so resize
+// doesn't clobber scroll position when the user hasn't added lines.
+func (m *progressModel) resizeVerboseViewport() {
+	if m.width <= 0 {
+		return
+	}
+	w := contentWidth(m.width)
+	m.verboseViewport.SetWidth(w - 4)
+	m.verboseViewport.SetHeight(12)
+}
+
+// syncVerboseViewport refreshes the expanded verbose viewport's
+// content and jumps to the bottom. Called when recentLines changes
+// or when the user toggles into expanded mode. Kept out of View so
+// repeated View() calls don't re-paginate and fight user scrolling.
+func (m *progressModel) syncVerboseViewport() {
+	if !m.expandedVerbose || m.width <= 0 {
+		return
+	}
+	w := contentWidth(m.width)
+	var content strings.Builder
+	for _, line := range m.recentLines {
+		truncated := line
+		if len(truncated) > w-8 {
+			truncated = truncated[:w-9] + "…"
+		}
+		content.WriteString("  " + truncated + "\n")
+	}
+	m.verboseViewport.SetContent(content.String())
+	m.verboseViewport.GotoBottom()
 }
 
 func (m progressModel) View(width int) string {
@@ -289,19 +331,8 @@ func (m progressModel) View(width int) string {
 		if m.verbose && len(m.recentLines) > 0 {
 			b.WriteString(panelGap("\n"))
 			if m.expandedVerbose {
-				// Scrollable viewport with all lines.
-				var content strings.Builder
-				for _, line := range m.recentLines {
-					truncated := line
-					if len(truncated) > w-8 {
-						truncated = truncated[:w-9] + "…"
-					}
-					content.WriteString("  " + truncated + "\n")
-				}
-				m.verboseViewport.SetWidth(w - 4)
-				m.verboseViewport.SetHeight(12)
-				m.verboseViewport.SetContent(content.String())
-				m.verboseViewport.GotoBottom()
+				// Viewport content + sizing is maintained in Update
+				// via syncVerboseViewport / resizeVerboseViewport.
 				b.WriteString(dimStyle.Render(m.verboseViewport.View()) + panelGap("\n"))
 				b.WriteString(panelGap("  ") + dimStyle.Render("v: collapse  j/k: scroll") + panelGap("\n"))
 			} else {

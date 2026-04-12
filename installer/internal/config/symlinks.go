@@ -228,10 +228,15 @@ func RemoveComponentSymlinks(
 		source := resolveSource(rootDir, entry.Source)
 		canonSource, err1 := filepath.Abs(source)
 		canonLink, err2 := filepath.Abs(link)
-		if err1 == nil && err2 == nil && canonSource != canonLink {
-			continue // points elsewhere
+		// Only remove when we can verify both paths AND they match.
+		// If either Abs call fails we don't know who owns the link,
+		// so leave it alone rather than delete blind.
+		if err1 != nil || err2 != nil || canonSource != canonLink {
+			continue
 		}
-		os.Remove(target)
+		if err := os.Remove(target); err != nil {
+			return fmt.Errorf("remove symlink %s: %w", target, err)
+		}
 		if runner != nil {
 			runner.EmitVerbose("Removed " + target)
 		}

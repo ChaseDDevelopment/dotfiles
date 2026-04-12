@@ -12,8 +12,8 @@ import (
 
 // collectEvents drains the event channel and returns all messages
 // (excluding the final AllDoneMsg).
-func collectEvents(ch <-chan any) []any {
-	var msgs []any
+func collectEvents(ch <-chan Event) []Event {
+	var msgs []Event
 	for msg := range ch {
 		if _, ok := msg.(AllDoneMsg); ok {
 			continue
@@ -177,26 +177,42 @@ func TestFailedTaskSkipsDependents(t *testing.T) {
 	}
 }
 
-func TestUnknownDependencyStripped(t *testing.T) {
-	// Task B depends on "nonexistent" — should not deadlock.
+func TestUnknownDependencyReportedLoudly(t *testing.T) {
+	// Task B depends on "nonexistent" — used to be silently stripped,
+	// now must emit a critical TaskDoneMsg so bad task wiring is
+	// visible instead of producing wrong task ordering.
 	done := make(chan struct{})
+	var events []Event
 	go func() {
 		tasks := []Task{
 			{
 				ID: "b", Label: "B", DependsOn: []string{"nonexistent"},
-				Run: func(_ context.Context) error { return nil },
+				Run: func(_ context.Context) error {
+					t.Error("task b must not run when graph is invalid")
+					return nil
+				},
 			},
 		}
 		ch := Run(context.Background(), tasks, 5)
-		collectEvents(ch)
+		events = collectEvents(ch)
 		close(done)
 	}()
 
 	select {
 	case <-done:
-		// Success — no deadlock.
 	case <-time.After(5 * time.Second):
-		t.Fatal("deadlock: unknown dependency was not stripped")
+		t.Fatal("scheduler did not return on invalid task graph")
+	}
+
+	var sawCritical bool
+	for _, ev := range events {
+		if msg, ok := ev.(TaskDoneMsg); ok && msg.Critical && msg.Err != nil {
+			sawCritical = true
+			break
+		}
+	}
+	if !sawCritical {
+		t.Errorf("expected critical TaskDoneMsg about invalid graph, got %v", events)
 	}
 }
 

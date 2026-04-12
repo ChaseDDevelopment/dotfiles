@@ -40,7 +40,11 @@ func Restore(backupDir string, managedPaths []string, dryRun bool) error {
 			continue
 		}
 
-		os.RemoveAll(target)
+		if err := os.RemoveAll(target); err != nil {
+			return fmt.Errorf(
+				"clear target %s before restore: %w", target, err,
+			)
+		}
 		if err := copyRecursive(source, target); err != nil {
 			return fmt.Errorf("restore %s: %w", target, err)
 		}

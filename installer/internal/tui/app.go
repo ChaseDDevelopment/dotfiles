@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/engine"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/orchestrator"
@@ -62,6 +63,9 @@ type AppConfig struct {
 	State              *state.Store
 	SelectedBackup     string // path chosen by backup picker
 	PlanRows           []orchestrator.PlanRow
+	// Failures collects best-effort setup warnings for the summary
+	// screen. Initialized fresh for each run in startInstall.
+	Failures *config.TrackedFailures
 }
 
 // AppModel is the top-level Bubble Tea model.
@@ -79,7 +83,7 @@ type AppModel struct {
 	quitting bool
 
 	// Parallel engine event channel.
-	eventCh <-chan any
+	eventCh <-chan engine.Event
 
 	// cancelEngine cancels the engine context, stopping all running
 	// tasks and preventing goroutine leaks on Ctrl+C or critical failure.
@@ -131,10 +135,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Handle window size.
+	// Handle window size — capture locally and forward to every
+	// sub-model that owns a viewport / layout.
 	if msg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = msg.Width
 		m.height = msg.Height
+		m.progress, _ = m.progress.Update(msg)
+		m.mainMenu, _ = m.mainMenu.Update(msg)
+		m.options, _ = m.options.Update(msg)
+		m.picker, _ = m.picker.Update(msg)
+		m.backupPicker, _ = m.backupPicker.Update(msg)
 	}
 
 	switch m.phase {
@@ -214,6 +224,13 @@ func (m AppModel) View() tea.View {
 
 // Version is injected from main.
 var Version = "dev"
+
+// CriticalFailure returns true if a critical install task failed and
+// the user aborted. Exposed so main.go can propagate a non-zero exit
+// code to shell scripts and CI wrappers instead of lying with 0.
+func (m AppModel) CriticalFailure() bool {
+	return m.summary.criticalFailure
+}
 
 // --------------------------------------------------------------------------
 // Phase update handlers
@@ -357,6 +374,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.progress.allFinished() {
 			m.summary.steps = m.progress.steps
 			m.summary.endTime = time.Now()
+			m.summary.warnings = m.config.Failures
 			m.phase = PhaseSummary
 			m.saveState()
 			if m.summary.doctorMode && m.width > 0 && m.height > 0 {
@@ -373,6 +391,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case engine.AllDoneMsg:
 		m.summary.steps = m.progress.steps
 		m.summary.endTime = time.Now()
+		m.summary.warnings = m.config.Failures
 		m.phase = PhaseSummary
 		m.saveState()
 		if m.summary.doctorMode && m.width > 0 && m.height > 0 {
@@ -380,10 +399,16 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case repoSyncedMsg:
+		// syncRepo finished (outcome already logged inside the Cmd).
+		// Kick off the engine now.
+		return m, m.runInstallTasks()
+
 	default:
 		// Forward spinner ticks, progress frames, etc.
 		if m.config.Verbose && m.config.Runner != nil {
 			m.progress.recentLines = m.config.Runner.RecentLinesSnapshot()
+			m.progress.syncVerboseViewport()
 		}
 		var cmd tea.Cmd
 		m.progress, cmd = m.progress.Update(msg)
@@ -533,6 +558,7 @@ func (m *AppModel) returnToMainMenu() {
 	}
 	m.config.PlanRows = nil
 	m.config.SelectedComponents = nil
+	m.config.Failures = nil
 	m.cancelEngine = nil
 	m.eventCh = nil
 	m.progress = newProgressModel()
@@ -544,23 +570,33 @@ func (m *AppModel) returnToMainMenu() {
 	m.picker = newComponentPicker()
 }
 
-// syncRepo does a fast-forward git pull to ensure configs are
-// up-to-date before applying. Failures are logged but do not block
-// the install — the user may be offline or have local changes.
-func (m *AppModel) syncRepo() {
-	if m.config.Runner == nil || m.config.RootDir == "" {
-		return
-	}
-	ctx, cancel := context.WithTimeout(
-		context.Background(), 15*time.Second,
-	)
-	defer cancel()
-	if err := m.config.Runner.RunInDir(
-		ctx, m.config.RootDir, "git", "pull", "--ff-only",
-	); err != nil {
-		m.config.Runner.Log.Write(fmt.Sprintf(
-			"NOTE: git pull --ff-only skipped: %v", err,
-		))
+// repoSyncedMsg is emitted when the background git-pull finishes.
+// Outcome is already logged inside the Cmd; the message is just a
+// trigger to move on to engine setup.
+type repoSyncedMsg struct{}
+
+// syncRepoCmd returns a tea.Cmd that runs `git pull --ff-only` off
+// the Update loop so the TUI stays responsive. Failures (offline,
+// local changes, not-a-repo) are logged but non-fatal.
+func (m AppModel) syncRepoCmd() tea.Cmd {
+	runner := m.config.Runner
+	rootDir := m.config.RootDir
+	return func() tea.Msg {
+		if runner == nil || rootDir == "" {
+			return repoSyncedMsg{}
+		}
+		ctx, cancel := context.WithTimeout(
+			context.Background(), 15*time.Second,
+		)
+		defer cancel()
+		if err := runner.RunInDir(
+			ctx, rootDir, "git", "pull", "--ff-only",
+		); err != nil {
+			runner.Log.Write(fmt.Sprintf(
+				"NOTE: git pull --ff-only skipped: %v", err,
+			))
+		}
+		return repoSyncedMsg{}
 	}
 }
 
@@ -587,6 +623,9 @@ func (m *AppModel) buildConfig() *orchestrator.BuildConfig {
 	if m.config.Mode == ModeCustomInstall {
 		comps = m.config.SelectedComponents
 	}
+	if m.config.Failures == nil {
+		m.config.Failures = config.NewTrackedFailures()
+	}
 	return &orchestrator.BuildConfig{
 		Runner:         m.config.Runner,
 		PkgMgr:         m.config.PkgMgr,
@@ -601,6 +640,7 @@ func (m *AppModel) buildConfig() *orchestrator.BuildConfig {
 		SelectedBackup: m.config.SelectedBackup,
 		SelectedComps:  comps,
 		Version:        Version,
+		Failures:       m.config.Failures,
 	}
 }
 
@@ -612,17 +652,25 @@ func (m *AppModel) applyResult(r orchestrator.BuildResult) []engine.Task {
 }
 
 func (m *AppModel) startInstall() tea.Cmd {
-	// Propagate DryRun to Runner so commands like syncRepo() are
-	// skipped correctly (Runner.Run checks r.DryRun).
+	// Propagate DryRun to Runner so commands invoked during
+	// planning are skipped correctly (Runner.Run checks r.DryRun).
 	if m.config.Runner != nil {
 		m.config.Runner.DryRun = m.config.DryRun
 	}
 
-	// Sync dotfiles repo before install/update (best-effort).
+	// For install/update, sync the repo off the Update loop. The
+	// Cmd emits repoSyncedMsg; updateInstalling picks that up and
+	// calls runInstallTasks. Doctor + Restore skip the sync.
 	if m.config.Mode != ModeRestore && m.config.Mode != ModeDoctor {
-		m.syncRepo()
+		return m.syncRepoCmd()
 	}
+	return m.runInstallTasks()
+}
 
+// runInstallTasks builds the engine task graph and kicks off the
+// worker pool. Split out from startInstall so we can run it after
+// syncRepoCmd returns via repoSyncedMsg.
+func (m *AppModel) runInstallTasks() tea.Cmd {
 	bc := m.buildConfig()
 	var tasks []engine.Task
 
@@ -676,7 +724,7 @@ func (m *AppModel) startInstall() tea.Cmd {
 
 // listenCmd returns a Bubble Tea command that blocks until the next
 // engine event arrives, then delivers it as a tea.Msg.
-func listenCmd(ch <-chan any) tea.Cmd {
+func listenCmd(ch <-chan engine.Event) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
 		if !ok {
@@ -689,7 +737,7 @@ func listenCmd(ch <-chan any) tea.Cmd {
 // drainCmd consumes and discards remaining engine events after the
 // TUI has transitioned away from the install phase (e.g., on critical
 // failure). This prevents engine goroutines from blocking on sends.
-func drainCmd(ch <-chan any) tea.Cmd {
+func drainCmd(ch <-chan engine.Event) tea.Cmd {
 	return func() tea.Msg {
 		for range ch {
 			// Discard until channel is closed.

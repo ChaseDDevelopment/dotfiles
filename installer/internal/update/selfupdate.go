@@ -73,22 +73,24 @@ func SelfUpdate(
 	if err := runner.Run(
 		ctx, "curl", "-fsSL", url, "-o", tmpFile,
 	); err != nil {
-		os.Remove(tmpFile)
+		cleanupTmp(runner, tmpFile)
 		return fmt.Errorf("download update: %w", err)
 	}
 
 	if err := os.Chmod(tmpFile, 0o755); err != nil {
-		os.Remove(tmpFile)
-		return err
+		cleanupTmp(runner, tmpFile)
+		return fmt.Errorf("chmod update: %w", err)
 	}
 
-	// Backup current binary for rollback.
+	// Backup current binary for rollback. Refuse the update if
+	// this fails — without a backup a bad replace leaves the user
+	// with a broken/missing binary and no way back.
 	backupFile := exe + ".old"
 	if err := copyFile(exe, backupFile); err != nil {
-		runner.Log.Write(fmt.Sprintf(
-			"WARNING: backup current binary: %v", err,
-		))
-		// Continue — lack of backup shouldn't block the update.
+		cleanupTmp(runner, tmpFile)
+		return fmt.Errorf(
+			"backup current binary before update: %w", err,
+		)
 	}
 
 	// Atomic replace.
@@ -97,22 +99,45 @@ func SelfUpdate(
 		if err2 := runner.Run(
 			ctx, "sudo", "mv", tmpFile, exe,
 		); err2 != nil {
-			os.Remove(tmpFile)
-			// Attempt rollback from backup.
+			cleanupTmp(runner, tmpFile)
+			// Attempt rollback from backup. If rollback also
+			// fails, surface both errors so the user knows the
+			// binary is in a broken state.
 			if _, statErr := os.Stat(backupFile); statErr == nil {
-				os.Rename(backupFile, exe)
+				if rbErr := os.Rename(backupFile, exe); rbErr != nil {
+					return fmt.Errorf(
+						"replace binary: %w; rollback also failed: %v "+
+							"(backup remains at %s)",
+						err, rbErr, backupFile,
+					)
+				}
 			}
 			return fmt.Errorf("replace binary: %w", err)
 		}
 	}
 
-	// Clean up backup on success.
-	os.Remove(backupFile)
+	// Clean up backup on success. Don't fail the update over a
+	// leftover .old file, but log it so it isn't invisible.
+	if err := os.Remove(backupFile); err != nil && !os.IsNotExist(err) {
+		runner.Log.Write(fmt.Sprintf(
+			"NOTE: remove rollback backup %s: %v", backupFile, err,
+		))
+	}
 
 	runner.Log.Write(fmt.Sprintf(
 		"Updated dotsetup to %s", latest,
 	))
 	return nil
+}
+
+// cleanupTmp removes the staging file from a failed update and logs
+// any removal error so it isn't hidden.
+func cleanupTmp(runner *executor.Runner, tmpFile string) {
+	if err := os.Remove(tmpFile); err != nil && !os.IsNotExist(err) {
+		runner.Log.Write(fmt.Sprintf(
+			"NOTE: remove update staging file %s: %v", tmpFile, err,
+		))
+	}
 }
 
 // copyFile copies src to dst, preserving permissions.

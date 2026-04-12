@@ -41,10 +41,21 @@ type SetupContext struct {
 	Backup   *backup.Manager
 	DryRun   bool
 	Platform *platform.Platform
+	// Failures collects best-effort post-install warnings that used
+	// to vanish into install.log. May be nil in tests — all recording
+	// goes through TrackedFailures.Record which tolerates nil.
+	Failures *TrackedFailures
+	// Component is the name of the component currently being set up.
+	// Used by bestEffort to attribute failures for the summary screen.
+	Component string
 }
 
 // SetupComponent applies symlinks and runs post-install hooks.
 func SetupComponent(ctx context.Context, comp Component, sc *SetupContext) error {
+	// Tag failures with the component name so the summary screen
+	// shows "Tmux — TPM plugin install: ..." instead of a bare step.
+	sc.Component = comp.Name
+
 	// Check required command.
 	if comp.RequiredCmd != "" {
 		if _, err := exec.LookPath(comp.RequiredCmd); err != nil {
@@ -119,12 +130,14 @@ func runUserHook(ctx context.Context, name string, sc *SetupContext) error {
 	return sc.Runner.Run(ctx, "bash", hookPath)
 }
 
-// bestEffort runs fn and logs a warning if it fails, without
-// aborting the setup. Use for optional post-install steps where
-// failure should not block the overall component configuration.
+// bestEffort runs fn and records any failure against the current
+// component so it reaches the summary screen. Failures are also
+// logged to install.log for post-mortem. The setup continues
+// regardless — that's the "best-effort" contract.
 func bestEffort(sc *SetupContext, msg string, fn func() error) {
 	if err := fn(); err != nil {
 		sc.Runner.Log.Write(fmt.Sprintf("WARNING: %s: %v", msg, err))
+		sc.Failures.Record(sc.Component, msg, err)
 	}
 }
 
@@ -170,13 +183,21 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 	}
 
 	// Remove stale ~/.zshrc (ZDOTDIR handles it now).
-	// Back it up first if it exists and is not already a symlink.
+	// Back it up first if it exists and is not already a symlink —
+	// refuse to delete if the backup step fails.
 	staleZshrc := filepath.Join(home, ".zshrc")
 	if info, err := os.Lstat(staleZshrc); err == nil {
 		if info.Mode()&os.ModeSymlink == 0 {
-			_ = sc.Backup.BackupFile(staleZshrc)
+			if err := sc.Backup.BackupFile(staleZshrc); err != nil {
+				return fmt.Errorf(
+					"backup %s before removal: %w",
+					staleZshrc, err,
+				)
+			}
 		}
-		os.Remove(staleZshrc)
+		if err := os.Remove(staleZshrc); err != nil {
+			return fmt.Errorf("remove stale %s: %w", staleZshrc, err)
+		}
 	}
 
 	// Install Antidote.

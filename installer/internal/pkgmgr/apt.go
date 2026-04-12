@@ -64,7 +64,7 @@ func (a *Apt) Install(ctx context.Context, genericNames ...string) error {
 func (a *Apt) IsInstalled(genericName string) bool {
 	names := a.MapName(genericName)
 	for _, pkg := range names {
-		if err := a.runner.Run(context.Background(), "dpkg", "-l", pkg); err != nil {
+		if _, err := a.runner.RunProbe(context.Background(), "dpkg", "-l", pkg); err != nil {
 			return false
 		}
 	}

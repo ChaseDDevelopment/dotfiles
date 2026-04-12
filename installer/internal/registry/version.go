@@ -40,6 +40,12 @@ func versionAtLeast(have, want [3]int) bool {
 	return true
 }
 
+// TODO(#29): this helper collapses three distinct outcomes
+// (binary missing, --version changed format, probe hang) into a
+// single `false`. Distinguishing them requires threading a logger
+// through InstallContext/CheckInstalled — safe once TrackedFailures
+// lands (#23) so the diagnostic has somewhere to surface.
+
 // getInstalledVersion runs the tool's version command and extracts
 // the version triplet. Returns the raw version string and parsed
 // triplet. Returns ("", [3]int{}, false) on any failure.

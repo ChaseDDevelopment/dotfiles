@@ -7,11 +7,17 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
+
+// tagPattern matches release tags that start with an optional "v"
+// followed by a digit — enough to reject placeholders like "latest",
+// error pages, or empty segments returned by non-redirect responses.
+var tagPattern = regexp.MustCompile(`^v?\d`)
 
 // URLPattern identifies the GitHub release URL format.
 type URLPattern int
@@ -60,6 +66,16 @@ func LatestVersion(repo string, stripV bool) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	// GitHub returns 302 for a real redirect to the tag page. A 200
+	// means we're looking at an error page (rate limit, repo moved)
+	// — the Location header may be empty or garbage.
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+		return "", fmt.Errorf(
+			"unexpected status %d fetching %s (expected redirect)",
+			resp.StatusCode, url,
+		)
+	}
+
 	loc := resp.Header.Get("Location")
 	if loc == "" {
 		return "", fmt.Errorf("no redirect from %s", url)
@@ -67,8 +83,14 @@ func LatestVersion(repo string, stripV bool) (string, error) {
 
 	// Location looks like:
 	//   https://github.com/org/repo/releases/tag/v1.2.3
-	parts := strings.Split(loc, "/")
+	parts := strings.Split(strings.TrimRight(loc, "/"), "/")
 	tag := parts[len(parts)-1]
+
+	if !tagPattern.MatchString(tag) {
+		return "", fmt.Errorf(
+			"unexpected tag %q from redirect %s", tag, loc,
+		)
+	}
 
 	if stripV {
 		tag = strings.TrimPrefix(tag, "v")

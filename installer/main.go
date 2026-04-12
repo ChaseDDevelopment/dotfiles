@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -30,7 +32,9 @@ func main() {
 
 	augmentPath()
 
-	dryRun := flag.Bool("dry-run", false, "Preview changes without making them")
+	// --version is diagnostic only. Dry-run is a runtime mode set
+	// inside the TUI options screen so it stays consistent across
+	// navigation; a CLI flag would silently desync.
 	version := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
@@ -58,17 +62,20 @@ func main() {
 
 	// Pre-authenticate sudo before the TUI takes ownership of
 	// stdin. The keepalive goroutine refreshes the credential
-	// cache so long-running installs don't hit timeouts.
-	if !*dryRun {
-		if executor.NeedsSudo() {
-			if err := executor.PreAuth(); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-			}
-		} else if executor.HasSudo() {
-			fmt.Fprintln(os.Stderr,
-				"[sudo] Credentials already available.",
+	// cache so long-running installs don't hit timeouts. Fail
+	// fast if auth doesn't succeed — sudo prompts inside the alt
+	// screen are hidden and every sudo task would silently error.
+	if executor.NeedsSudo() {
+		if err := executor.PreAuth(); err != nil {
+			fmt.Fprintf(os.Stderr,
+				"Error: sudo authentication failed: %v\n", err,
 			)
+			os.Exit(1)
 		}
+	} else if executor.HasSudo() {
+		fmt.Fprintln(os.Stderr,
+			"[sudo] Credentials already available.",
+		)
 	}
 	logFile, err := executor.NewLogFile(filepath.Join(rootDir, "install.log"))
 	if err != nil {
@@ -84,7 +91,7 @@ func main() {
 	stopSudo := executor.StartKeepalive(sudoCtx, logFile)
 	defer stopSudo()
 
-	runner := executor.NewRunner(logFile, *dryRun)
+	runner := executor.NewRunner(logFile, false)
 
 	// Open /dev/tty so child processes can identify the
 	// controlling terminal. sudo needs this to match cached
@@ -100,16 +107,40 @@ func main() {
 		os.Exit(1)
 	}
 
-	installState, err := state.Load(state.DefaultPath())
+	statePath := state.DefaultPath()
+	installState, err := state.Load(statePath)
 	if err != nil {
-		logFile.Write(fmt.Sprintf(
-			"WARNING: load state: %v (starting fresh)", err,
-		))
-		installState = state.NewStore(state.DefaultPath())
+		if errors.Is(err, state.ErrCorrupt) {
+			// Preserve the corrupt file so the user can inspect it
+			// instead of losing their install history silently.
+			backupPath := fmt.Sprintf(
+				"%s.bak-%s", statePath,
+				time.Now().Format("20060102-150405"),
+			)
+			if renameErr := os.Rename(statePath, backupPath); renameErr != nil {
+				fmt.Fprintf(os.Stderr,
+					"Error: state file is corrupt and backup failed: "+
+						"load=%v rename=%v\n",
+					err, renameErr,
+				)
+				os.Exit(1)
+			}
+			msg := fmt.Sprintf(
+				"WARNING: state file corrupt (%v); "+
+					"moved to %s, starting fresh",
+				err, backupPath,
+			)
+			fmt.Fprintln(os.Stderr, msg)
+			logFile.Write(msg)
+			installState = state.NewStore(statePath)
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: load state: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	cfg := &tui.AppConfig{
-		DryRun:   *dryRun,
+		DryRun:   false,
 		Platform: plat,
 		PkgMgr:   mgr,
 		RootDir:  rootDir,
@@ -122,9 +153,15 @@ func main() {
 
 	app := tui.NewApp(cfg)
 	p := tea.NewProgram(app)
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+	// Propagate critical install failures as non-zero exit — CI
+	// wrappers and shell scripts need this to stop silently lying.
+	if m, ok := finalModel.(tui.AppModel); ok && m.CriticalFailure() {
+		os.Exit(2)
 	}
 }
 
@@ -198,7 +235,12 @@ func augmentPath() {
 			path = d + string(filepath.ListSeparator) + path
 		}
 	}
-	os.Setenv("PATH", path)
+	if err := os.Setenv("PATH", path); err != nil {
+		fmt.Fprintf(os.Stderr,
+			"Error: setenv PATH: %v\n", err,
+		)
+		os.Exit(1)
+	}
 }
 
 func hasConfigs(dir string) bool {

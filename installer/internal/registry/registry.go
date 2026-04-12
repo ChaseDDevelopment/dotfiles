@@ -123,10 +123,17 @@ func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platfor
 		if err == nil {
 			for _, pa := range strategy.PostInstall {
 				if paErr := executePostAction(ctx, &pa, ic); paErr != nil {
-					ic.Runner.Log.Write(fmt.Sprintf("WARNING: %v", paErr))
+					ic.Runner.Log.Write(fmt.Sprintf(
+						"Strategy %d post-install failed for %s: %v",
+						strategy.Method, t.Name, paErr,
+					))
+					err = fmt.Errorf("post-install: %w", paErr)
+					break
 				}
 			}
-			return nil
+			if err == nil {
+				return nil
+			}
 		}
 		lastErr = err
 		ic.Runner.Log.Write(fmt.Sprintf(

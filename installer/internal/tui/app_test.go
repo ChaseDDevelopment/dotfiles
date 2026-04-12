@@ -618,7 +618,7 @@ func TestAppModel_UpdateInstalling_TaskStarted(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseInstalling
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	msg := engine.TaskStartedMsg{ID: "install-zsh", Label: "Installing zsh"}
@@ -637,7 +637,7 @@ func TestAppModel_UpdateInstalling_TaskDoneSuccess(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseInstalling
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	// Start a task first.
@@ -662,7 +662,7 @@ func TestAppModel_UpdateInstalling_TaskDoneCriticalFailure(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseInstalling
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	app.progress.markActive("install-brew", "Installing brew")
@@ -690,7 +690,7 @@ func TestAppModel_UpdateInstalling_TaskSkipped(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseInstalling
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	msg := engine.TaskSkippedMsg{
@@ -729,7 +729,7 @@ func TestAppModel_UpdateFailurePrompt_Continue(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseFailurePrompt
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 	app.failedTaskLabel = "brew"
 	app.failedTaskErr = errors.New("failed")
@@ -753,7 +753,7 @@ func TestAppModel_UpdateFailurePrompt_ContinueAllDone(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseFailurePrompt
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 	app.failedTaskLabel = "brew"
 	app.failedTaskErr = errors.New("failed")
@@ -778,7 +778,7 @@ func TestAppModel_UpdateFailurePrompt_Abort(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseFailurePrompt
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 	app.failedTaskLabel = "brew"
 	app.failedTaskErr = errors.New("failed")
@@ -802,7 +802,7 @@ func TestAppModel_UpdateFailurePrompt_EngineEvents(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseFailurePrompt
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	// Engine events should be processed while showing prompt.
@@ -850,16 +850,21 @@ func TestAppModel_SyncRepoNilRunner(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.config.Runner = nil
-	// Should not panic.
-	app.syncRepo()
+	// Cmd should return repoSyncedMsg without panicking.
+	msg := app.syncRepoCmd()()
+	if _, ok := msg.(repoSyncedMsg); !ok {
+		t.Errorf("syncRepoCmd() = %T, want repoSyncedMsg", msg)
+	}
 }
 
 func TestAppModel_SyncRepoEmptyRootDir(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.config.RootDir = ""
-	// Should not panic.
-	app.syncRepo()
+	msg := app.syncRepoCmd()()
+	if _, ok := msg.(repoSyncedMsg); !ok {
+		t.Errorf("syncRepoCmd() = %T, want repoSyncedMsg", msg)
+	}
 }
 
 func TestAppModel_SaveStateNilState(t *testing.T) {
@@ -974,7 +979,7 @@ func TestAppModel_ApplyResult(t *testing.T) {
 
 func TestListenCmd(t *testing.T) {
 	t.Parallel()
-	ch := make(chan any, 1)
+	ch := make(chan engine.Event, 1)
 	ch <- engine.TaskStartedMsg{ID: "test", Label: "test"}
 
 	cmd := listenCmd(ch)
@@ -987,7 +992,7 @@ func TestListenCmd(t *testing.T) {
 
 func TestListenCmd_ClosedChannel(t *testing.T) {
 	t.Parallel()
-	ch := make(chan any)
+	ch := make(chan engine.Event)
 	close(ch)
 
 	cmd := listenCmd(ch)
@@ -1000,7 +1005,7 @@ func TestListenCmd_ClosedChannel(t *testing.T) {
 
 func TestDrainCmd(t *testing.T) {
 	t.Parallel()
-	ch := make(chan any, 5)
+	ch := make(chan engine.Event, 5)
 	ch <- engine.TaskStartedMsg{}
 	ch <- engine.TaskDoneMsg{}
 	ch <- engine.TaskSkippedMsg{}
@@ -1018,7 +1023,7 @@ func TestAppModel_UpdateInstalling_NonCriticalFailure(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseInstalling
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	app.progress.markActive("install-bat", "Installing bat")
@@ -1044,7 +1049,7 @@ func TestAppModel_UpdateInstalling_TaskDoneWithDoctorMode(t *testing.T) {
 	app.width = 80
 	app.height = 40
 	app.summary.doctorMode = true
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	app.progress.markActive("check-zsh", "Installing zsh")
@@ -1067,7 +1072,7 @@ func TestAppModel_UpdateInstalling_SavesStateOnSuccess(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseInstalling
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	app.progress.markActive("install-zsh", "Installing zsh")
@@ -1161,7 +1166,7 @@ func TestAppModel_FailurePromptQQuitsGlobally(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseFailurePrompt
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 	app.failedTaskLabel = "brew"
 	app.failedTaskErr = errors.New("failed")
@@ -1184,7 +1189,7 @@ func TestAppModel_FailurePromptAbortWithCancelEngine(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseFailurePrompt
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 	app.failedTaskLabel = "brew"
 	app.failedTaskErr = errors.New("failed")
@@ -1381,7 +1386,7 @@ func TestAppModel_SummaryTimestamps(t *testing.T) {
 	t.Parallel()
 	app := NewApp(newTestConfig())
 	app.phase = PhaseInstalling
-	ch := make(chan any, 10)
+	ch := make(chan engine.Event, 10)
 	app.eventCh = ch
 
 	app.progress.markActive("install-zsh", "Installing zsh")

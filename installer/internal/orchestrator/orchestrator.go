@@ -40,6 +40,10 @@ type BuildConfig struct {
 	SelectedBackup   string
 	SelectedComps    []string // nil = all
 	Version          string   // build version for self-update
+	// Failures collects best-effort post-install warnings from
+	// component setup hooks. Shared across all tasks in one run so
+	// the summary screen can show everything that didn't succeed.
+	Failures *config.TrackedFailures
 }
 
 // BuildResult is returned by each Build* function.
@@ -216,6 +220,7 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 					Backup:   bm,
 					DryRun:   bc.DryRun,
 					Platform: plat,
+					Failures: bc.Failures,
 				}
 				return config.SetupComponent(ctx, comp, sc)
 			},

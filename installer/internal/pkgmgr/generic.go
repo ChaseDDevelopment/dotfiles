@@ -66,7 +66,8 @@ func newPacman(runner *executor.Runner) PackageManager {
 			return r.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", pkg)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
-			return r.Run(context.Background(), "pacman", "-Q", pkg) == nil
+			_, err := r.RunProbe(context.Background(), "pacman", "-Q", pkg)
+			return err == nil
 		},
 		updateFn: func(ctx context.Context, r *executor.Runner) error {
 			return r.Run(ctx, "sudo", "pacman", "-Syu", "--noconfirm")
@@ -89,7 +90,8 @@ func newDnf(runner *executor.Runner) PackageManager {
 			return r.Run(ctx, "sudo", "dnf", "install", "-y", pkg)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
-			return r.Run(context.Background(), "dnf", "list", "installed", pkg) == nil
+			_, err := r.RunProbe(context.Background(), "dnf", "list", "installed", pkg)
+			return err == nil
 		},
 		updateFn: func(ctx context.Context, r *executor.Runner) error {
 			return r.Run(ctx, "sudo", "dnf", "update", "-y")
@@ -112,7 +114,8 @@ func newYum(runner *executor.Runner) PackageManager {
 			return r.Run(ctx, "sudo", "yum", "install", "-y", pkg)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
-			return r.Run(context.Background(), "yum", "list", "installed", pkg) == nil
+			_, err := r.RunProbe(context.Background(), "yum", "list", "installed", pkg)
+			return err == nil
 		},
 		updateFn: func(ctx context.Context, r *executor.Runner) error {
 			return r.Run(ctx, "sudo", "yum", "update", "-y")
@@ -135,7 +138,8 @@ func newZypper(runner *executor.Runner) PackageManager {
 			return r.Run(ctx, "sudo", "zypper", "install", "-y", pkg)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
-			return r.Run(context.Background(), "zypper", "se", "--installed-only", pkg) == nil
+			_, err := r.RunProbe(context.Background(), "zypper", "se", "--installed-only", pkg)
+			return err == nil
 		},
 		updateFn: func(ctx context.Context, r *executor.Runner) error {
 			return r.Run(ctx, "sudo", "zypper", "update", "-y")

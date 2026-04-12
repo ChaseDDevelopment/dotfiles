@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 
+	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/orchestrator"
 )
 
@@ -29,6 +30,12 @@ type summaryModel struct {
 	// Per-tool timing: tracked from TaskStartedMsg to TaskDoneMsg.
 	startTimes map[string]time.Time
 	durations  map[string]time.Duration
+
+	// warnings holds best-effort post-install failures recorded
+	// during the run. Rendered beneath the main summary table so
+	// users see what didn't quite succeed even when the overall
+	// install "passed".
+	warnings *config.TrackedFailures
 }
 
 func newSummaryModel(dryRun bool) summaryModel {
@@ -198,6 +205,27 @@ func (m summaryModel) completionView(width, height int) string {
 		b.WriteString(m.viewport.View())
 	} else {
 		b.WriteString(tableBody.String())
+	}
+
+	// Best-effort warnings — failures from post-install hooks that
+	// don't fail the component but still deserve visibility.
+	if snap := m.warnings.Snapshot(); len(snap) > 0 {
+		b.WriteString(panelGap("\n"))
+		b.WriteString(stepStyle.Render(fmt.Sprintf(
+			"  Completed with %d warning(s)", len(snap),
+		)))
+		b.WriteString(panelGap("\n"))
+		b.WriteString(thinRule(w))
+		b.WriteString(panelGap("\n"))
+		for _, row := range snap {
+			line := fmt.Sprintf(
+				"  • %s — %s: %v", row.Component, row.Step, row.Err,
+			)
+			if max := w - 4; len(line) > max && max > 3 {
+				line = line[:max-1] + "…"
+			}
+			b.WriteString(dimStyle.Render(line) + panelGap("\n"))
+		}
 	}
 
 	// Log file path.

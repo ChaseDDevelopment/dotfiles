@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -156,20 +157,17 @@ func TestLoad_CorruptFile(t *testing.T) {
 	// Write invalid JSON.
 	os.WriteFile(path, []byte("{invalid json!!!!}"), 0o644)
 
+	// Corrupt files must return ErrCorrupt so the caller can
+	// preserve the existing file instead of silently wiping it.
 	s, err := Load(path)
-	if err != nil {
-		t.Fatalf(
-			"Load should not error for corrupt file: %v", err,
-		)
+	if err == nil {
+		t.Fatal("Load should return error for corrupt file")
 	}
-	if s == nil {
-		t.Fatal("Load returned nil store for corrupt file")
+	if !errors.Is(err, ErrCorrupt) {
+		t.Errorf("error should wrap ErrCorrupt, got: %v", err)
 	}
-	if len(s.Tools) != 0 {
-		t.Errorf(
-			"expected 0 tools for corrupt file, got %d",
-			len(s.Tools),
-		)
+	if s != nil {
+		t.Error("Load should return nil store on corrupt file")
 	}
 }
 

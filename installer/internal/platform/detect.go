@@ -101,10 +101,24 @@ func Detect() (*Platform, error) {
 	case "darwin":
 		p.OS = MacOS
 		p.OSName = "macOS"
-		p.OSVersion = macOSVersion()
+		ver, err := macOSVersion()
+		if err != nil {
+			// Not fatal — most install strategies don't branch on
+			// OSVersion — but surface the reason so distro-specific
+			// mapping failures aren't mysterious.
+			fmt.Fprintf(os.Stderr,
+				"Warning: detect macOS version: %v\n", err,
+			)
+		}
+		p.OSVersion = ver
 	case "linux":
 		p.OS = Linux
-		name, version := linuxDistro()
+		name, version, err := linuxDistro()
+		if err != nil {
+			fmt.Fprintf(os.Stderr,
+				"Warning: detect linux distro: %v\n", err,
+			)
+		}
 		p.OSName = name
 		p.OSVersion = version
 	default:
@@ -142,18 +156,18 @@ func (p *Platform) IsDesktopEnvironment() bool {
 	return os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
 }
 
-func macOSVersion() string {
+func macOSVersion() (string, error) {
 	out, err := exec.Command("sw_vers", "-productVersion").Output()
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("sw_vers: %w", err)
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(string(out)), nil
 }
 
-func linuxDistro() (name, version string) {
+func linuxDistro() (name, version string, err error) {
 	data, err := os.ReadFile("/etc/os-release")
 	if err != nil {
-		return "Linux", ""
+		return "Linux", "", fmt.Errorf("read /etc/os-release: %w", err)
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.HasPrefix(line, "NAME=") {
@@ -165,8 +179,11 @@ func linuxDistro() (name, version string) {
 	}
 	if name == "" {
 		name = "Linux"
+		return name, version, fmt.Errorf(
+			"/etc/os-release has no NAME= line",
+		)
 	}
-	return name, version
+	return name, version, nil
 }
 
 func detectPackageManager() PkgManagerType {
