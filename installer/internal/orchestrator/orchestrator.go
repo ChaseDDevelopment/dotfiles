@@ -228,6 +228,52 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		setupIDs = append(setupIDs, taskID)
 	}
 
+	// Post-install drift sweep: if any install script slipped an
+	// append past the NoProfileModify env vars, restore the repo
+	// configs to HEAD and record the backup dir as a warning. This
+	// runs after every install+setup task so the next `git pull`
+	// isn't blocked by accumulated cruft.
+	driftSweepAdded := false
+	if !bc.DryRun && bc.RootDir != "" {
+		driftSweepAdded = true
+		allDeps := make(
+			[]string, 0, len(toolIDs)+len(setupIDs),
+		)
+		allDeps = append(allDeps, toolIDs...)
+		allDeps = append(allDeps, setupIDs...)
+		tasks = append(tasks, engine.Task{
+			ID:        "sweep-repo-drift",
+			Label:     "Restoring repo configs",
+			DependsOn: allDeps,
+			Run: func(_ context.Context) error {
+				drifted, err := config.DetectRepoDrift(bc.RootDir)
+				if err != nil || len(drifted) == 0 {
+					return err
+				}
+				backupDir, rerr := config.BackupAndReset(
+					bc.RootDir, bm, drifted,
+				)
+				if rerr != nil {
+					return rerr
+				}
+				runner.Log.Write(fmt.Sprintf(
+					"Drift sweep: restored %d config file(s); "+
+						"originals saved to %s",
+					len(drifted), backupDir,
+				))
+				bc.Failures.Record(
+					"Repo",
+					fmt.Sprintf(
+						"restored %d file(s) mutated by install scripts",
+						len(drifted),
+					),
+					fmt.Errorf("originals saved to %s", backupDir),
+				)
+				return nil
+			},
+		})
+	}
+
 	// Cleanup backup directory if requested.
 	if bc.CleanBackup {
 		rows = append(rows, PlanRow{
@@ -236,10 +282,16 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		})
 		if !bc.DryRun {
 			allDeps := make(
-				[]string, 0, len(toolIDs)+len(setupIDs),
+				[]string, 0, len(toolIDs)+len(setupIDs)+1,
 			)
 			allDeps = append(allDeps, toolIDs...)
 			allDeps = append(allDeps, setupIDs...)
+			// sweep-repo-drift may have saved files into this same
+			// backup manager; make sure cleanup doesn't race by
+			// running after the sweep, when the sweep exists.
+			if driftSweepAdded {
+				allDeps = append(allDeps, "sweep-repo-drift")
+			}
 			tasks = append(tasks, engine.Task{
 				ID:        "cleanup-backup",
 				Label:     "Cleaning up backup",

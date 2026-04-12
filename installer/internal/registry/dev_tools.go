@@ -19,8 +19,13 @@ func rustToolchain() []Tool {
 			Name: "rust", Command: "cargo", Description: "Rust toolchain via rustup",
 			Strategies: []InstallStrategy{
 				{Method: MethodScript, Script: &ScriptConfig{
-					URL:  "https://sh.rustup.rs",
-					Args: []string{"-y"},
+					URL: "https://sh.rustup.rs",
+					// --no-modify-path: configs/zsh/.zprofile already
+					// prepends ~/.cargo/bin to PATH, so the installer
+					// writing its own `source ~/.cargo/env` line into
+					// .zshenv is redundant and pollutes the repo.
+					Args:            []string{"-y", "--no-modify-path"},
+					NoProfileModify: true,
 				}},
 			},
 		},
@@ -92,7 +97,8 @@ func devTools() []Tool {
 			Name: "uv", Command: "uv", Description: "Fast Python package manager",
 			Strategies: []InstallStrategy{
 				{Method: MethodScript, Script: &ScriptConfig{
-					URL: "https://astral.sh/uv/install.sh",
+					URL:             "https://astral.sh/uv/install.sh",
+					NoProfileModify: true,
 				}},
 			},
 		},
@@ -111,8 +117,9 @@ func devTools() []Tool {
 			Name: "bun", Command: "bun", Description: "Fast JavaScript runtime",
 			Strategies: []InstallStrategy{
 				{Method: MethodScript, Script: &ScriptConfig{
-					URL:   "https://bun.sh/install",
-					Shell: "bash",
+					URL:             "https://bun.sh/install",
+					Shell:           "bash",
+					NoProfileModify: true,
 				}},
 			},
 		},
@@ -134,8 +141,9 @@ func devTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "starship"},
 				{Method: MethodScript, Script: &ScriptConfig{
-					URL:  "https://starship.rs/install.sh",
-					Args: []string{"--yes"},
+					URL:             "https://starship.rs/install.sh",
+					Args:            []string{"--yes"},
+					NoProfileModify: true,
 				}},
 			},
 		},

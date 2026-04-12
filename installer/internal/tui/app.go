@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/engine"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
@@ -664,6 +665,52 @@ func (m AppModel) syncRepoCmd() tea.Cmd {
 			strings.Contains(lowered, "not possible to fast-forward") ||
 			strings.Contains(lowered, "non-fast-forward")
 		if hardFail {
+			// Auto-recover when every dirty tracked file lives under
+			// configs/. This is the dock case: upstream tool install
+			// scripts appended to symlinked files and blocked the
+			// pull. Any edit the user actually cared about would be
+			// committed; anything else is cruft we can restore from
+			// HEAD. If drift spans outside configs/ (e.g. the user
+			// was editing installer source), bail to the block
+			// screen instead of nuking real work.
+			drifted, derr := config.DetectRepoDrift(rootDir)
+			if derr == nil && len(drifted) > 0 && bodyDriftInScope(body, drifted) {
+				// One-shot manager per auto-restore. The
+				// orchestrator uses its own manager later for
+				// install-time backups; they don't share state, and
+				// keeping them separate avoids lifecycle coupling.
+				bm := backup.NewManager(false)
+				backupDir, rerr := config.BackupAndReset(
+					rootDir, bm, drifted,
+				)
+				if rerr == nil {
+					runner.Log.Write(fmt.Sprintf(
+						"Auto-restored %d drifted config file(s); "+
+							"originals saved to %s",
+						len(drifted), backupDir,
+					))
+					if failures != nil {
+						failures.Record(
+							"Repo",
+							fmt.Sprintf("auto-restored %d file(s)", len(drifted)),
+							fmt.Errorf("originals saved to %s", backupDir),
+						)
+					}
+					// Retry the pull now that the working tree is
+					// clean. If it still fails, fall through to the
+					// block screen with the new output.
+					cmd := exec.CommandContext(
+						ctx, "git", "pull", "--ff-only",
+					)
+					cmd.Dir = rootDir
+					retryOut, retryErr := cmd.CombinedOutput()
+					if retryErr == nil {
+						runner.Log.WriteRaw(retryOut)
+						return repoSyncedMsg{}
+					}
+					body = string(retryOut)
+				}
+			}
 			return repoSyncBlockedMsg{body: body}
 		}
 		// Soft failure: record as a visible warning so the summary
@@ -677,6 +724,30 @@ func (m AppModel) syncRepoCmd() tea.Cmd {
 		}
 		return repoSyncedMsg{}
 	}
+}
+
+// bodyDriftInScope defends the auto-restore path: every dirty path
+// git named in the merge-blocking error must match a path returned
+// by DetectRepoDrift (which is already scoped to configs/). If
+// anything else shows up, we refuse to auto-restore and let the
+// user handle it manually via the block screen.
+func bodyDriftInScope(body string, drifted []string) bool {
+	set := make(map[string]struct{}, len(drifted))
+	for _, p := range drifted {
+		set[p] = struct{}{}
+	}
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		// git's "would be overwritten" message indents each path
+		// with a tab. Other lines can be ignored.
+		if !strings.HasPrefix(line, "configs/") {
+			continue
+		}
+		if _, ok := set[line]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // saveState persists the install state to disk. Best-effort.
@@ -735,6 +806,12 @@ func (m *AppModel) startInstall() tea.Cmd {
 	// planning are skipped correctly (Runner.Run checks r.DryRun).
 	if m.config.Runner != nil {
 		m.config.Runner.DryRun = m.config.DryRun
+	}
+	// Initialize Failures before syncRepoCmd so the auto-restore
+	// path has somewhere to record the backup dir. buildConfig
+	// checks for nil but that runs later, after the sync.
+	if m.config.Failures == nil {
+		m.config.Failures = config.NewTrackedFailures()
 	}
 
 	// For install/update, sync the repo off the Update loop. The

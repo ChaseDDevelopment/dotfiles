@@ -54,6 +54,10 @@ fish_variables
 # Antidote plugin manager (cloned at runtime into ZDOTDIR)
 configs/zsh/.antidote/
 
+# Antidote-generated plugin bundle (regenerated at shell startup from
+# .zsh_plugins.txt; drifts per-machine so it must not be tracked)
+configs/zsh/plugins/.zsh_plugins.zsh
+
 # =============================================================================
 # Tmux Files
 # =============================================================================

@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -603,5 +604,51 @@ func TestRunWithStdin(t *testing.T) {
 	err = r.Run(ctx, "echo", "stdin-test")
 	if err != nil {
 		t.Errorf("Run with Stdin set error = %v", err)
+	}
+}
+
+// TestRunWithEnv_IsolatesInvocation confirms RunWithEnv passes its
+// extraEnv to the child but does NOT persist into Runner.Env, so
+// subsequent Run calls don't inherit the per-invocation vars.
+// Regression guard against "opt-out env leaks into unrelated
+// commands" class of bug.
+func TestRunWithEnv_IsolatesInvocation(t *testing.T) {
+	t.Parallel()
+	r := newTestRunner(t, false)
+	ctx := context.Background()
+
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "env.txt")
+
+	// First run: pass extraEnv. Child should see the var.
+	if err := r.RunWithEnv(
+		ctx,
+		[]string{"DOTSETUP_TEST=scoped"},
+		"sh", "-c",
+		fmt.Sprintf(`printf "%%s" "$DOTSETUP_TEST" > %q`, out),
+	); err != nil {
+		t.Fatalf("RunWithEnv: %v", err)
+	}
+	if data, _ := os.ReadFile(out); string(data) != "scoped" {
+		t.Errorf("first run: got %q, want %q", data, "scoped")
+	}
+
+	// Second run via regular Run: must NOT see the var.
+	if err := r.Run(
+		ctx, "sh", "-c",
+		fmt.Sprintf(`printf "%%s" "$DOTSETUP_TEST" > %q`, out),
+	); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if data, _ := os.ReadFile(out); string(data) != "" {
+		t.Errorf("follow-up Run leaked env: got %q, want empty", data)
+	}
+
+	// Runner.Env should also be untouched — AddEnv is the
+	// documented way to persist vars; RunWithEnv must not.
+	for _, entry := range r.Env {
+		if strings.HasPrefix(entry, "DOTSETUP_TEST=") {
+			t.Errorf("RunWithEnv leaked into Runner.Env: %q", entry)
+		}
 	}
 }

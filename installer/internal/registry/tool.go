@@ -102,10 +102,20 @@ type InstallStrategy struct {
 type GitHubConfig = github.Config
 
 // ScriptConfig holds parameters for script-based installs.
+//
+// NoProfileModify tells executeScript to invoke the upstream
+// installer with env vars (PROFILE=/dev/null, SHELL=/bin/sh,
+// INSTALLER_NO_MODIFY_PATH=1) that cause the installer's
+// rc-file-append branch to no-op. Use for bun/nvm/uv/rustup-init/
+// atuin/starship — every PATH export and init eval they'd write
+// is already covered by configs/zsh/.zprofile and the _cached_init
+// scheme in configs/zsh/.zshrc, so suppressing the append keeps
+// the symlinked repo files clean.
 type ScriptConfig struct {
-	URL   string   // URL to download the install script
-	Args  []string // arguments to pass to the script
-	Shell string   // "sh" or "bash" (default "sh")
+	URL             string   // URL to download the install script
+	Args            []string // arguments to pass to the script
+	Shell           string   // "sh" or "bash" (default "sh")
+	NoProfileModify bool     // inject opt-out env to block rc edits
 }
 
 // GitCloneConfig holds parameters for git clone installs.

@@ -3,6 +3,9 @@ package registry
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,6 +77,75 @@ func TestExecuteInstall_StrategyFailureFallsThrough(t *testing.T) {
 	}
 	if !strategy2Called {
 		t.Fatal("strategy 2 was not attempted after strategy 1 install failure")
+	}
+}
+
+// TestExecuteScript_NoProfileModifyInjectsEnv confirms the
+// opt-out env vars are exported to the child process when a
+// ScriptConfig sets NoProfileModify. Regression guard for the
+// "install script mutates symlinked zsh configs" bug — if this
+// breaks, the upstream installer can freely append to the repo.
+func TestExecuteScript_NoProfileModifyInjectsEnv(t *testing.T) {
+	ic := newTestCtx(t)
+	// Take the Runner out of dry-run so the probe actually executes.
+	ic.Runner.DryRun = false
+
+	tmp := t.TempDir()
+	envOut := filepath.Join(tmp, "child-env.txt")
+	// Write a script that dumps its env to a file whose path is
+	// passed as arg $1. The installer wraps scripts with
+	// `bash <scriptPath> <args...>` so $1 inside the script is
+	// this envOut path.
+	probeScript := filepath.Join(tmp, "probe.sh")
+	scriptBody := "#!/usr/bin/env bash\nenv > \"$1\"\n"
+	if err := os.WriteFile(
+		probeScript, []byte(scriptBody), 0o755,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stand up an http server that serves probeScript as the install
+	// payload — executeScript always downloads from URL, so we need
+	// a real endpoint. Using a local listener keeps the test offline.
+	srv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte(scriptBody))
+		},
+	))
+	defer srv.Close()
+
+	strategy := &InstallStrategy{
+		Method: MethodScript,
+		Script: &ScriptConfig{
+			URL:             srv.URL,
+			Args:            []string{envOut},
+			Shell:           "bash",
+			NoProfileModify: true,
+		},
+	}
+	if err := executeStrategy(
+		context.Background(), strategy, ic, ic.Platform,
+	); err != nil {
+		t.Fatalf("executeStrategy: %v", err)
+	}
+
+	data, err := os.ReadFile(envOut)
+	if err != nil {
+		t.Fatalf("child env file missing: %v", err)
+	}
+	got := string(data)
+	for _, needle := range []string{
+		"PROFILE=/dev/null",
+		"SHELL=/bin/sh",
+		"INSTALLER_NO_MODIFY_PATH=1",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Errorf(
+				"child env missing %q\nfull env:\n%s",
+				needle, got,
+			)
+		}
 	}
 }
 

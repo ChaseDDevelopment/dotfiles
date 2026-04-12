@@ -87,7 +87,23 @@ func (r *Runner) RunWithOutput(
 	name string,
 	args ...string,
 ) (string, error) {
-	return r.runCmd(ctx, "", name, false, args...)
+	return r.runCmd(ctx, "", nil, name, false, args...)
+}
+
+// RunWithEnv executes a command with additional environment
+// variables applied only to this invocation. Used to pass
+// per-script opt-outs (PROFILE=/dev/null, SHELL=/bin/sh, etc.)
+// to upstream installers without leaking those vars into
+// subsequent Run calls via Runner.Env. Each entry must be
+// "KEY=VALUE".
+func (r *Runner) RunWithEnv(
+	ctx context.Context,
+	extraEnv []string,
+	name string,
+	args ...string,
+) error {
+	_, err := r.runCmd(ctx, "", extraEnv, name, false, args...)
+	return err
 }
 
 // RunProbe executes a command without logging FAILED on non-zero exit.
@@ -97,7 +113,7 @@ func (r *Runner) RunProbe(
 	name string,
 	args ...string,
 ) (string, error) {
-	return r.runCmd(ctx, "", name, true, args...)
+	return r.runCmd(ctx, "", nil, name, true, args...)
 }
 
 // RunInDir executes a command in the specified working directory.
@@ -106,16 +122,21 @@ func (r *Runner) RunInDir(
 	dir, name string,
 	args ...string,
 ) error {
-	_, err := r.runCmd(ctx, dir, name, false, args...)
+	_, err := r.runCmd(ctx, dir, nil, name, false, args...)
 	return err
 }
 
-// runCmd is the shared implementation for RunWithOutput and RunInDir.
-// When quiet is true, non-zero exits are not logged as FAILED (useful
-// for probe commands where failure is an expected outcome).
+// runCmd is the shared implementation for RunWithOutput and
+// RunInDir. When quiet is true, non-zero exits are not logged as
+// FAILED (useful for probe commands where failure is an expected
+// outcome). extraEnv, when non-nil, is appended to the resolved
+// environment for this invocation only — it does not mutate
+// Runner.Env and doesn't persist across calls.
 func (r *Runner) runCmd(
 	ctx context.Context,
-	dir, name string,
+	dir string,
+	extraEnv []string,
+	name string,
 	quiet bool,
 	args ...string,
 ) (string, error) {
@@ -152,8 +173,17 @@ func (r *Runner) runCmd(
 	envCopy := make([]string, len(r.Env))
 	copy(envCopy, r.Env)
 	r.mu.Unlock()
-	if len(envCopy) > 0 {
-		cmd.Env = append(cmd.Environ(), envCopy...)
+	// Build the final env in layered order: process env → Runner.Env
+	// (persistent) → extraEnv (per-call). Later entries win because
+	// os/exec honors the last occurrence of KEY in cmd.Env.
+	if len(envCopy) > 0 || len(extraEnv) > 0 {
+		cmd.Env = cmd.Environ()
+		if len(envCopy) > 0 {
+			cmd.Env = append(cmd.Env, envCopy...)
+		}
+		if len(extraEnv) > 0 {
+			cmd.Env = append(cmd.Env, extraEnv...)
+		}
 	}
 
 	// Stream output line-by-line so the verbose TUI viewport

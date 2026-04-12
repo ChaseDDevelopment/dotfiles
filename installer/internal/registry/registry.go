@@ -260,7 +260,28 @@ func executeScript(
 	for _, a := range cfg.Args {
 		args = append(args, os.ExpandEnv(a))
 	}
+	if cfg.NoProfileModify {
+		// Every upstream installer we register has its own knob
+		// for disabling rc-file appends. We set all three knobs
+		// unconditionally — each installer ignores the ones it
+		// doesn't recognize, and that's cheaper than per-tool
+		// branching.
+		extraEnv := noProfileEnv()
+		return ic.Runner.RunWithEnv(ctx, extraEnv, shell, args...)
+	}
 	return ic.Runner.Run(ctx, shell, args...)
+}
+
+// noProfileEnv returns the env vars that tell upstream tool
+// installers not to edit the user's shell rc files. Exported via
+// helper so both executeScript and the one-off installers in
+// official_tools.go share the same policy.
+func noProfileEnv() []string {
+	return []string{
+		"PROFILE=/dev/null",          // nvm
+		"SHELL=/bin/sh",              // bun, atuin setup.sh
+		"INSTALLER_NO_MODIFY_PATH=1", // uv (astral)
+	}
 }
 
 func executePostAction(ctx context.Context, pa *PostAction, ic *InstallContext) error {

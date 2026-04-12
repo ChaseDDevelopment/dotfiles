@@ -115,7 +115,14 @@ func installNvm(ctx context.Context, ic *InstallContext) error {
 	if err := os.Chmod(scriptPath, 0o755); err != nil {
 		return fmt.Errorf("chmod nvm installer: %w", err)
 	}
-	if err := ic.Runner.Run(ctx, "bash", scriptPath); err != nil {
+	// PROFILE=/dev/null tells nvm's install.sh to skip its
+	// .zshrc/.bashrc append step. configs/zsh/tools/nvm.zsh already
+	// sets NVM_DIR and lazy-loads nvm.sh, so the append would only
+	// duplicate what our repo already provides — and mutate the
+	// symlinked .zshrc in the process.
+	if err := ic.Runner.RunWithEnv(
+		ctx, noProfileEnv(), "bash", scriptPath,
+	); err != nil {
 		return fmt.Errorf("install nvm: %w", err)
 	}
 
@@ -154,7 +161,13 @@ func installAtuin(ctx context.Context, ic *InstallContext) error {
 	if err := os.Chmod(scriptPath, 0o755); err != nil {
 		return fmt.Errorf("chmod atuin installer: %w", err)
 	}
-	if err := ic.Runner.Run(ctx, "sh", scriptPath); err != nil {
+	// SHELL=/bin/sh makes atuin's setup.sh fall through its shell
+	// detection (bash/zsh/fish) and skip the rc-append step.
+	// configs/zsh/.zshrc already runs `_cached_init atuin init zsh`,
+	// so the installer's eval line would be redundant.
+	if err := ic.Runner.RunWithEnv(
+		ctx, noProfileEnv(), "sh", scriptPath,
+	); err != nil {
 		return fmt.Errorf("install atuin: %w", err)
 	}
 	// Add atuin to PATH for the current session so subsequent
