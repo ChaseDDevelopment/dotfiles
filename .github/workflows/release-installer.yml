@@ -5,8 +5,11 @@ on:
     tags:
       - "v*"
 
+# `id-token: write` is required for cosign keyless OIDC signing.
+# `contents: write` is required to publish release assets.
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -37,10 +40,11 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
           VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
         run: |
           go build \
             -trimpath \
-            -ldflags "-s -w -X main.Version=${VERSION}" \
+            -ldflags "-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}" \
             -o "../dist/dotsetup-${GOOS}-${GOARCH}" \
             .
 
@@ -58,8 +62,39 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # Publish SHA256SUMS alongside binaries so SelfUpdate can
+      # verify each asset before replacing the running executable.
+      - name: Generate SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum dotsetup-* > SHA256SUMS
+          cat SHA256SUMS
+
+      # Sigstore keyless signing: cosign uses the workflow's OIDC
+      # token to request a short-lived certificate from Fulcio,
+      # signs SHA256SUMS, and logs the signature to Rekor. No
+      # private key material is stored anywhere — the binding is
+      # between this repo + tag ref and the resulting signature,
+      # which SelfUpdate verifies against the expected identity.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign SHA256SUMS
+        working-directory: dist
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign sign-blob \
+            --output-signature SHA256SUMS.sig \
+            --output-certificate SHA256SUMS.pem \
+            SHA256SUMS
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/dotsetup-*
+          files: |
+            dist/dotsetup-*
+            dist/SHA256SUMS
+            dist/SHA256SUMS.sig
+            dist/SHA256SUMS.pem
           generate_release_notes: true

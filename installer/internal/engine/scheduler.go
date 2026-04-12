@@ -2,17 +2,24 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 )
 
-const defaultTaskTimeout = 10 * time.Minute
+// DefaultTaskTimeout is the per-task wall-clock ceiling when a Task
+// doesn't set its own Timeout. It's long enough for system-package
+// installs but shorter than a cold cargo build — heavy tasks should
+// override via Task.Timeout rather than raise this globally.
+const DefaultTaskTimeout = 10 * time.Minute
 
 // Run executes tasks concurrently respecting dependency order and
 // resource locks. It returns a channel that emits TaskStartedMsg,
-// TaskDoneMsg, TaskSkippedMsg, and a final AllDoneMsg.
+// TaskDoneMsg, and TaskSkippedMsg, then closes to signal completion.
+// The TUI listener (see tui.listenCmd) translates channel close into
+// a synthetic AllDoneMsg; Run itself does not emit that message.
 //
 // maxWorkers caps the number of concurrent goroutines. Resource
 // semaphores (one per Resource type) further serialize tasks that
@@ -250,9 +257,24 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 
 						send(ctx, out, TaskStartedMsg{ID: t.ID, Label: t.Label})
 
-						// Run with timeout.
-						tCtx, cancel := context.WithTimeout(ctx, defaultTaskTimeout)
+						// Run with timeout. Per-task Timeout wins; fall
+						// back to the package default for anything that
+						// doesn't opt out.
+						timeout := t.Timeout
+						if timeout <= 0 {
+							timeout = DefaultTaskTimeout
+						}
+						tCtx, cancel := context.WithTimeout(ctx, timeout)
 						err := t.Run(tCtx)
+						// Surface timeouts with a human-readable label so the
+						// TUI doesn't just show the generic "signal: killed"
+						// from the killed child process.
+						if err != nil && errors.Is(tCtx.Err(), context.DeadlineExceeded) {
+							err = fmt.Errorf(
+								"task %q timed out after %s: %w",
+								t.Label, timeout, err,
+							)
+						}
 						cancel()
 
 						// Release resource semaphores.

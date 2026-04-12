@@ -25,11 +25,26 @@ func initTools() {
 		cachedAll = append(cachedAll, devTools()...)
 		cachedAll = append(cachedAll, officialInstallerTools()...)
 
+		// Build lookup + panic on duplicate Command entries. Before
+		// this check, the map silently last-wrote a duplicate and
+		// Lookup returned whichever entry sorted last — impossible
+		// to diagnose from symptoms. Bad registry wiring is now a
+		// hard build failure (via tests) instead of a runtime
+		// mystery.
 		lookupMap = make(map[string]*Tool, len(cachedAll))
 		for i := range cachedAll {
-			if cachedAll[i].Command != "" {
-				lookupMap[cachedAll[i].Command] = &cachedAll[i]
+			cmd := cachedAll[i].Command
+			if cmd == "" {
+				continue
 			}
+			if existing, dup := lookupMap[cmd]; dup {
+				panic(fmt.Sprintf(
+					"registry: duplicate Command %q (tools %q and %q); "+
+						"rename one of them",
+					cmd, existing.Name, cachedAll[i].Name,
+				))
+			}
+			lookupMap[cmd] = &cachedAll[i]
 		}
 	})
 }
@@ -110,6 +125,16 @@ func CheckInstalled(t *Tool) ToolStatus {
 }
 
 // ExecuteInstall tries each strategy in order until one succeeds.
+//
+// Error classes are handled distinctly:
+//   - A strategy failure (the install step itself didn't complete)
+//     falls through to the next applicable strategy.
+//   - A post-install failure (install succeeded but a follow-up step
+//     like a symlink or PATH addition errored) is terminal for this
+//     tool. Falling through would run the next strategy and
+//     potentially overwrite a successful install with a second
+//     binary of different provenance (e.g., brew-installed tool
+//     clobbered by a GitHub release tarball).
 func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platform.Platform) error {
 	mgrName := ic.PkgMgr.Name()
 
@@ -119,27 +144,31 @@ func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platfor
 			continue
 		}
 
-		err := executeStrategy(ctx, &strategy, ic, p)
-		if err == nil {
-			for _, pa := range strategy.PostInstall {
-				if paErr := executePostAction(ctx, &pa, ic); paErr != nil {
-					ic.Runner.Log.Write(fmt.Sprintf(
-						"Strategy %d post-install failed for %s: %v",
-						strategy.Method, t.Name, paErr,
-					))
-					err = fmt.Errorf("post-install: %w", paErr)
-					break
-				}
-			}
-			if err == nil {
-				return nil
+		if err := executeStrategy(ctx, &strategy, ic, p); err != nil {
+			lastErr = err
+			ic.Runner.Log.Write(fmt.Sprintf(
+				"Strategy %d failed for %s: %v, trying next",
+				strategy.Method, t.Name, err,
+			))
+			continue
+		}
+
+		// Strategy succeeded. Post-install errors are terminal for
+		// this tool — the binary is already in place, so falling
+		// through would double-install.
+		for _, pa := range strategy.PostInstall {
+			if paErr := executePostAction(ctx, &pa, ic); paErr != nil {
+				ic.Runner.Log.Write(fmt.Sprintf(
+					"Strategy %d post-install failed for %s: %v",
+					strategy.Method, t.Name, paErr,
+				))
+				return fmt.Errorf(
+					"%s: post-install after strategy %d: %w",
+					t.Name, strategy.Method, paErr,
+				)
 			}
 		}
-		lastErr = err
-		ic.Runner.Log.Write(fmt.Sprintf(
-			"Strategy %d failed for %s: %v, trying next",
-			strategy.Method, t.Name, err,
-		))
+		return nil
 	}
 	if lastErr != nil {
 		return fmt.Errorf("all install strategies failed for %s: %w", t.Name, lastErr)
@@ -166,7 +195,7 @@ func executeStrategy(ctx context.Context, s *InstallStrategy, ic *InstallContext
 		version := s.GitHub.PinVersion
 		if version == "" {
 			var err error
-			version, err = github.LatestVersion(s.GitHub.Repo, s.GitHub.StripV)
+			version, err = github.LatestVersion(s.GitHub.Repo, s.GitHub.StripVPrefix)
 			if err != nil {
 				return err
 			}

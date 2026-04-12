@@ -91,6 +91,11 @@ type Platform struct {
 	HasNala        bool           // apt systems: nala available as frontend
 	HasYay         bool           // pacman systems: yay AUR helper available
 	HasParu        bool           // pacman systems: paru AUR helper available
+	// Warnings accumulates non-fatal detection issues so callers can
+	// surface them in the TUI instead of having Detect() write to
+	// stderr — stderr corrupts the alt-screen before the TUI owns
+	// the terminal.
+	Warnings []string
 }
 
 // Detect probes the current system and returns a Platform description.
@@ -104,10 +109,11 @@ func Detect() (*Platform, error) {
 		ver, err := macOSVersion()
 		if err != nil {
 			// Not fatal — most install strategies don't branch on
-			// OSVersion — but surface the reason so distro-specific
-			// mapping failures aren't mysterious.
-			fmt.Fprintf(os.Stderr,
-				"Warning: detect macOS version: %v\n", err,
+			// OSVersion — but collect the reason so distro-specific
+			// mapping failures aren't mysterious. Buffered to avoid
+			// corrupting the TUI alt-screen.
+			p.Warnings = append(p.Warnings,
+				fmt.Sprintf("detect macOS version: %v", err),
 			)
 		}
 		p.OSVersion = ver
@@ -115,8 +121,8 @@ func Detect() (*Platform, error) {
 		p.OS = Linux
 		name, version, err := linuxDistro()
 		if err != nil {
-			fmt.Fprintf(os.Stderr,
-				"Warning: detect linux distro: %v\n", err,
+			p.Warnings = append(p.Warnings,
+				fmt.Sprintf("detect linux distro: %v", err),
 			)
 		}
 		p.OSName = name
@@ -187,8 +193,12 @@ func linuxDistro() (name, version string, err error) {
 }
 
 func detectPackageManager() PkgManagerType {
-	// Order matters: prefer brew on macOS, then check Linux managers.
-	if HasCommand("brew") {
+	// Order matters: native system manager first on Linux so
+	// linuxbrew users don't get routed through `brew install --cask`
+	// (casks are macOS-only) when the tool registry offers a
+	// homebrew strategy. Brew is only the preferred choice on
+	// darwin.
+	if runtime.GOOS == "darwin" && HasCommand("brew") {
 		return PkgBrew
 	}
 	if HasCommand("apt-get") {
@@ -205,6 +215,12 @@ func detectPackageManager() PkgManagerType {
 	}
 	if HasCommand("zypper") {
 		return PkgZypper
+	}
+	// Linux with brew (linuxbrew) as last resort — the registry's
+	// apt/pacman/dnf strategies will be empty on systems without
+	// those, so fall back to brew rather than erroring out.
+	if HasCommand("brew") {
+		return PkgBrew
 	}
 	return PkgNone
 }

@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -155,26 +156,54 @@ func (r *Runner) runCmd(
 		cmd.Env = append(cmd.Environ(), envCopy...)
 	}
 
-	// Share one writer between Stdout and Stderr so os/exec reuses
-	// a single pipe+goroutine. Two distinct writers race on &buf.
+	// Stream output line-by-line so the verbose TUI viewport
+	// updates as the command runs rather than getting the whole
+	// dump after it finishes. A single io.Pipe shared by stdout
+	// and stderr keeps us on one goroutine+buffer to avoid the
+	// race that two separate writers would have on the shared
+	// bytes.Buffer.
 	var buf bytes.Buffer
-	combined := io.MultiWriter(&buf, &logAdapter{log: r.Log})
-	cmd.Stdout = combined
-	cmd.Stderr = combined
+	pr, pw := io.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
 
-	err := cmd.Run()
-	output := buf.String()
-
-	// Emit output lines to the verbose channel.
-	if r.Verbose && output != "" {
-		for _, line := range strings.Split(
-			strings.TrimRight(output, "\n"), "\n",
-		) {
-			if cleaned := cleanLine(line); cleaned != "" {
-				r.EmitVerbose(cleaned)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(pr)
+		// Default scanner buffer is 64 KiB — some tools (cargo
+		// build, apt progress) emit long lines and would otherwise
+		// break with bufio.ErrTooLong. 1 MiB is generous but bounded.
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			// Mirror to the aggregate buffer so the existing
+			// return-value contract (CombinedOutput-style string)
+			// is preserved for callers like RunProbe.
+			buf.Write(line)
+			buf.WriteByte('\n')
+			// Raw bytes into the log so users can always recover
+			// original output with ANSI intact.
+			r.Log.WriteRaw(append(append([]byte{}, line...), '\n'))
+			if r.Verbose {
+				if cleaned := cleanLine(string(line)); cleaned != "" {
+					r.EmitVerbose(cleaned)
+				}
 			}
 		}
-	}
+		// scanner.Err is not fatal; a closed pipe after cmd exit
+		// is the expected end-of-stream signal.
+		_ = scanner.Err()
+	}()
+
+	err := cmd.Run()
+	// Closing the write side unblocks the scanner loop; Wait
+	// guarantees the goroutine has fully drained before we read
+	// from buf.
+	pw.Close()
+	wg.Wait()
+	output := buf.String()
 
 	if err != nil {
 		if !quiet {

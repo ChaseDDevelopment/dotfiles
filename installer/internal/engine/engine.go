@@ -4,7 +4,10 @@
 // access to shared resources (e.g., apt dpkg lock, cargo build lock).
 package engine
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Resource identifies a shared system resource that must be accessed
 // exclusively (e.g., dpkg lock for apt, cargo build directory).
@@ -35,7 +38,14 @@ type Task struct {
 	Critical  bool
 	DependsOn []string   // task IDs that must complete first
 	Resources []Resource // exclusive resources needed during execution
-	Run       func(ctx context.Context) error
+	// Timeout caps how long Run may execute. Zero means use the
+	// scheduler default (long enough for package-manager installs
+	// but shorter than a cold cargo build). Override per-task for
+	// known slow work — cargo crates, headless nvim plugin syncs —
+	// so a 10-minute default doesn't kill them with an opaque
+	// "signal: killed".
+	Timeout time.Duration
+	Run     func(ctx context.Context) error
 }
 
 // Event is the sealed interface implemented by every scheduler

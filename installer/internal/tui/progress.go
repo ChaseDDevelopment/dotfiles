@@ -70,7 +70,8 @@ type progressModel struct {
 	// width is captured from tea.WindowSizeMsg so viewport sizing
 	// can happen in Update instead of View (which would re-paginate
 	// on every frame and break user scroll state).
-	width int
+	width  int
+	height int
 }
 
 // allFinished reports whether every queued tool has reached a
@@ -168,6 +169,8 @@ func (m *progressModel) markSkipped(id, label, reason string) {
 	m.toolStatuses[name] = statusSkipped
 	m.steps = append(m.steps, stepResult{
 		label:   name,
+		action:  "skipped",
+		status:  reason,
 		success: false,
 		err:     fmt.Errorf("skipped: %s", reason),
 	})
@@ -205,7 +208,15 @@ func (m progressModel) Update(msg tea.Msg) (progressModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		m.resizeVerboseViewport()
+		// Size the progress bar here once per resize instead of in
+		// View() per frame. The old path mutated through a value
+		// receiver anyway so the set was wasted work on every tick.
+		contentW := contentWidth(m.width)
+		if contentW > 14 {
+			m.progress.SetWidth(contentW - 14)
+		}
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -245,7 +256,21 @@ func (m *progressModel) resizeVerboseViewport() {
 	}
 	w := contentWidth(m.width)
 	m.verboseViewport.SetWidth(w - 4)
-	m.verboseViewport.SetHeight(12)
+	// Derive height from the terminal so short windows don't overflow.
+	// The panel above this viewport consumes roughly 14 lines (header,
+	// grid, progress bar, active-task list); leave breathing room for
+	// the footer and clamp to a sane minimum.
+	h := 12
+	if m.height > 0 {
+		h = m.height - 14
+		if h < 4 {
+			h = 4
+		}
+		if h > 24 {
+			h = 24
+		}
+	}
+	m.verboseViewport.SetHeight(h)
 }
 
 // syncVerboseViewport refreshes the expanded verbose viewport's
@@ -317,7 +342,8 @@ func (m progressModel) View(width int) string {
 		d := time.Since(m.startedAt).Truncate(time.Second)
 		elapsed = dimStyle.Render(fmt.Sprintf(" %s", d))
 	}
-	m.progress.SetWidth(w - 14)
+	// Width is now set in Update on WindowSizeMsg (progress_ticks
+	// fire ~20×/sec and it's wasteful to re-set every frame).
 	bar := m.progress.ViewAs(pct)
 	b.WriteString(bar + counter + elapsed + panelGap("\n\n"))
 

@@ -36,6 +36,12 @@ type summaryModel struct {
 	// users see what didn't quite succeed even when the overall
 	// install "passed".
 	warnings *config.TrackedFailures
+
+	// repoBlockedBody is set when `git pull --ff-only` hard-failed
+	// (local changes or non-fast-forward). The full git output is
+	// rendered on the summary so the user sees which files to stash
+	// or commit before re-running.
+	repoBlockedBody string
 }
 
 func newSummaryModel(dryRun bool) summaryModel {
@@ -80,7 +86,30 @@ func (m summaryModel) completionView(width, height int) string {
 		Width(w - 6).
 		Background(catSurface0)
 
-	if m.criticalFailure {
+	if m.criticalFailure && m.repoBlockedBody != "" {
+		header := errorStyle.Render("  ✗  Install Aborted — Repo Sync Blocked  ✗")
+		b.WriteString(centerWrap.Render(header))
+		b.WriteString(panelGap("\n\n"))
+		b.WriteString(dimStyle.Render(
+			"  Uncommitted local changes prevent `git pull --ff-only`.",
+		))
+		b.WriteString(panelGap("\n"))
+		b.WriteString(dimStyle.Render(
+			"  Stash or commit them, then re-run the installer.",
+		))
+		b.WriteString(panelGap("\n\n"))
+		for _, line := range strings.Split(m.repoBlockedBody, "\n") {
+			line = strings.TrimRight(line, "\r")
+			if line == "" {
+				continue
+			}
+			if max := w - 4; len(line) > max && max > 3 {
+				line = line[:max-1] + "…"
+			}
+			b.WriteString(dimStyle.Render("  " + line))
+			b.WriteString(panelGap("\n"))
+		}
+	} else if m.criticalFailure {
 		header := errorStyle.Render("  ✗  Install Aborted — Critical Tool Failed  ✗")
 		b.WriteString(centerWrap.Render(header))
 	} else if m.doctorMode {
@@ -92,18 +121,50 @@ func (m summaryModel) completionView(width, height int) string {
 	}
 	b.WriteString(panelGap("\n\n"))
 
-	// Categorize results.
+	// Categorize results. Skipped is distinct from failed — a
+	// skipped step didn't run (usually because a dependency failed,
+	// or `git pull` couldn't advance) whereas failed ran and errored.
+	// Merging them hides the "tasks we silently didn't even try"
+	// class of bug.
 	installed := 0
 	configured := 0
 	failed := 0
+	skipped := 0
 	for _, s := range m.steps {
-		if !s.success {
+		switch {
+		case s.action == "skipped":
+			skipped++
+		case !s.success:
 			failed++
-		} else if s.action == "install" {
+		case s.action == "install":
 			installed++
-		} else {
+		default:
 			configured++
 		}
+	}
+
+	// DEGRADED banner when anything failed, skipped, or emitted a
+	// best-effort warning. A single missed step shouldn't hide in a
+	// 300-line log — surface it here so the user sees the run
+	// wasn't clean before they walk away from their terminal.
+	warningCount := len(m.warnings.Snapshot())
+	if failed+skipped+warningCount > 0 && !m.criticalFailure {
+		parts := []string{}
+		if failed > 0 {
+			parts = append(parts, fmt.Sprintf("%d failed", failed))
+		}
+		if skipped > 0 {
+			parts = append(parts, fmt.Sprintf("%d skipped", skipped))
+		}
+		if warningCount > 0 {
+			parts = append(parts, fmt.Sprintf("%d warning(s)", warningCount))
+		}
+		degradedLine := warnStyle.Bold(true).Render(fmt.Sprintf(
+			"  ⚠  DEGRADED — %s  ⚠", strings.Join(parts, ", "),
+		))
+		b.WriteString(panelGap("\n"))
+		b.WriteString(centerWrap.Render(degradedLine))
+		b.WriteString(panelGap("\n"))
 	}
 
 	if !m.startTime.IsZero() && !m.endTime.IsZero() {
@@ -126,6 +187,10 @@ func (m summaryModel) completionView(width, height int) string {
 	if failed > 0 {
 		parts = append(parts, errorStyle.Render(
 			fmt.Sprintf("✗ %d failed", failed)))
+	}
+	if skipped > 0 {
+		parts = append(parts, warnStyle.Render(
+			fmt.Sprintf("⊘ %d skipped", skipped)))
 	}
 	if m.alreadyInstalled > 0 {
 		parts = append(parts, dimStyle.Render(
@@ -233,6 +298,24 @@ func (m summaryModel) completionView(width, height int) string {
 		b.WriteString(panelGap("\n"))
 		b.WriteString(dimStyle.Render(
 			fmt.Sprintf("  Log: %s", m.logPath)))
+		b.WriteString(panelGap("\n"))
+	}
+
+	// Version / commit footer so the exact binary that ran is
+	// visible without hunting through the log. Empty commit means
+	// this is a local dev build; we still show the label so the
+	// "not a release build" signal is obvious.
+	if Version != "" || Commit != "" {
+		shortCommit := Commit
+		if len(shortCommit) > 7 {
+			shortCommit = shortCommit[:7]
+		}
+		label := fmt.Sprintf("  dotsetup %s", Version)
+		if shortCommit != "" {
+			label += fmt.Sprintf(" (%s)", shortCommit)
+		}
+		b.WriteString(panelGap("\n"))
+		b.WriteString(dimStyle.Render(label))
 		b.WriteString(panelGap("\n"))
 	}
 

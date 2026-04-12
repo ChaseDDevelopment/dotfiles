@@ -24,6 +24,11 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
+// Commit is the git SHA this binary was built from, injected via
+// -ldflags. Empty in dev builds. Logged at session start so users
+// (and incident responders) can tell exactly which installer ran.
+var Commit = ""
+
 func main() {
 	if os.Getenv("HOME") == "" {
 		fmt.Fprintln(os.Stderr, "Error: $HOME is not set")
@@ -83,6 +88,18 @@ func main() {
 		os.Exit(1)
 	}
 	defer logFile.Close()
+
+	// Record exactly which binary ran. After the dock incident where a
+	// stale installer silently handled the run, this lets anyone
+	// cross-reference the log against `git log` without guessing.
+	commitLabel := Commit
+	if commitLabel == "" {
+		commitLabel = "unknown"
+	}
+	logFile.Write(fmt.Sprintf(
+		"dotsetup version=%s commit=%s platform=%s/%s",
+		Version, commitLabel, runtime.GOOS, runtime.GOARCH,
+	))
 
 	sudoCtx, cancelSudo := context.WithCancel(
 		context.Background(),
@@ -150,6 +167,7 @@ func main() {
 	}
 
 	tui.Version = Version
+	tui.Commit = Commit
 
 	app := tui.NewApp(cfg)
 	p := tea.NewProgram(app)

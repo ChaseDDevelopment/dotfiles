@@ -297,15 +297,40 @@ func ApplySymlink(
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(target), err)
 	}
 
-	// Remove stale target and create symlink.
-	if err := os.RemoveAll(target); err != nil {
-		return fmt.Errorf("remove %s: %w", target, err)
+	// Stage the new symlink at target+".new" then os.Rename over
+	// the final path. Rename of a symlink on the same filesystem is
+	// atomic, so a crash between "remove old" and "create new" can't
+	// leave the user with no target anymore.
+	stagePath := target + ".new"
+	// Remove any stale staging link from a previous crashed run.
+	if err := os.Remove(stagePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("clear stale stage %s: %w", stagePath, err)
 	}
 	if runner != nil {
 		runner.EmitVerbose("Symlink " + target)
 	}
-	if err := os.Symlink(source, target); err != nil {
-		return fmt.Errorf("symlink %s -> %s: %w", source, target, err)
+	if err := os.Symlink(source, stagePath); err != nil {
+		return fmt.Errorf("symlink %s -> %s: %w", source, stagePath, err)
+	}
+	// On POSIX, os.Rename replaces the destination atomically whether
+	// it's a file, dir, or existing symlink, as long as dir→non-dir
+	// (and vice versa) isn't attempted. If the existing target is a
+	// directory that's not empty, we need to clear it first — but
+	// only after the staging link exists, so a crash either leaves
+	// the old target in place or the new symlink in place.
+	if info, err := os.Lstat(target); err == nil {
+		if info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+			if err := os.RemoveAll(target); err != nil {
+				_ = os.Remove(stagePath)
+				return fmt.Errorf("remove %s: %w", target, err)
+			}
+		}
+	}
+	if err := os.Rename(stagePath, target); err != nil {
+		_ = os.Remove(stagePath)
+		return fmt.Errorf(
+			"rename %s -> %s: %w", stagePath, target, err,
+		)
 	}
 
 	return nil

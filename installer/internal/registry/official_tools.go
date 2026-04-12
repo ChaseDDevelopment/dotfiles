@@ -78,18 +78,44 @@ func installNvm(ctx context.Context, ic *InstallContext) error {
 	// Set NVM_DIR before running the installer so it installs there.
 	ic.Runner.AddEnv("NVM_DIR", nvmDir)
 
-	// Fetch latest nvm version dynamically.
+	// Fetch latest nvm version dynamically. A silent fallback to a
+	// hardcoded tag would violate the "always latest" policy and
+	// hide rate-limits or network issues from the user.
 	nvmTag, err := github.LatestVersion("nvm-sh/nvm", false)
 	if err != nil {
-		nvmTag = "v0.40.4" // fallback
+		return fmt.Errorf("resolve latest nvm version: %w", err)
 	}
 	nvmURL := fmt.Sprintf(
 		"https://raw.githubusercontent.com/nvm-sh/nvm/%s/install.sh",
 		nvmTag,
 	)
-	if err := ic.Runner.RunShell(ctx,
-		fmt.Sprintf("curl -o- %s | bash", nvmURL),
+	// Download the installer to disk, log its sha256 for audit, and
+	// exec from the saved file. Replaces the previous `curl | bash`
+	// pipe so bytes from the network are never executed as they
+	// arrive — an in-flight MITM can't splice commands curl didn't
+	// see.
+	f, err := os.CreateTemp("", "dotsetup-nvm-install-*.sh")
+	if err != nil {
+		return fmt.Errorf("create temp nvm installer: %w", err)
+	}
+	scriptPath := f.Name()
+	f.Close()
+	defer os.Remove(scriptPath)
+
+	if err := ic.Runner.Run(
+		ctx, "curl", "-fsSL", nvmURL, "-o", scriptPath,
 	); err != nil {
+		return fmt.Errorf("download nvm installer: %w", err)
+	}
+	if sum, err := github.Sha256File(scriptPath); err == nil {
+		ic.Runner.Log.Write(fmt.Sprintf(
+			"downloaded nvm %s installer sha256=%s", nvmTag, sum,
+		))
+	}
+	if err := os.Chmod(scriptPath, 0o755); err != nil {
+		return fmt.Errorf("chmod nvm installer: %w", err)
+	}
+	if err := ic.Runner.Run(ctx, "bash", scriptPath); err != nil {
 		return fmt.Errorf("install nvm: %w", err)
 	}
 
@@ -102,10 +128,33 @@ func installNvm(ctx context.Context, ic *InstallContext) error {
 }
 
 func installAtuin(ctx context.Context, ic *InstallContext) error {
-	// Fallback for non-brew/pacman: use official installer.
-	if err := ic.Runner.RunShell(ctx,
-		`curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh`,
+	// Fallback for non-brew/pacman: use official installer. Unlike
+	// the previous `curl | sh` pipe, we download the script to a
+	// temp file, log its sha256 for audit, and exec from disk so no
+	// bytes are executed as they arrive from the network.
+	f, err := os.CreateTemp("", "dotsetup-atuin-install-*.sh")
+	if err != nil {
+		return fmt.Errorf("create temp atuin installer: %w", err)
+	}
+	scriptPath := f.Name()
+	f.Close()
+	defer os.Remove(scriptPath)
+
+	if err := ic.Runner.Run(
+		ctx, "curl", "--proto", "=https", "--tlsv1.2",
+		"-fsSL", "https://setup.atuin.sh", "-o", scriptPath,
 	); err != nil {
+		return fmt.Errorf("download atuin installer: %w", err)
+	}
+	if sum, err := github.Sha256File(scriptPath); err == nil {
+		ic.Runner.Log.Write(fmt.Sprintf(
+			"downloaded atuin installer sha256=%s", sum,
+		))
+	}
+	if err := os.Chmod(scriptPath, 0o755); err != nil {
+		return fmt.Errorf("chmod atuin installer: %w", err)
+	}
+	if err := ic.Runner.Run(ctx, "sh", scriptPath); err != nil {
 		return fmt.Errorf("install atuin: %w", err)
 	}
 	// Add atuin to PATH for the current session so subsequent

@@ -71,7 +71,7 @@ func cliTools() []Tool {
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "eza"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "eza-community/eza", Pattern: github.PatternTargetTriple,
-					Binary: "eza", StripV: true, LibC: "gnu",
+					Binary: "eza", StripVPrefix:true, LibC: "gnu",
 				}},
 				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "eza"},
 			},
@@ -141,7 +141,7 @@ func cliTools() []Tool {
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "git-delta"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "dandavison/delta", Pattern: github.PatternVersionPrefixed,
-					Binary: "delta", StripV: false, LibC: "musl",
+					Binary: "delta", StripVPrefix:false, LibC: "musl",
 				}},
 				{Method: MethodCargo, Crate: "git-delta"},
 			},
@@ -154,7 +154,7 @@ func cliTools() []Tool {
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "lazygit"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "jesseduffield/lazygit", Pattern: github.PatternCustomOSArch,
-					Binary: "lazygit", StripV: true,
+					Binary: "lazygit", StripVPrefix:true,
 				}},
 			},
 		},
@@ -165,7 +165,7 @@ func cliTools() []Tool {
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "xh"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "ducaale/xh", Pattern: github.PatternVersionPrefixed,
-					Binary: "xh", StripV: false, LibC: "musl",
+					Binary: "xh", StripVPrefix:false, LibC: "musl",
 				}},
 				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "xh"},
 			},

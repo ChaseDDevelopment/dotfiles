@@ -61,14 +61,40 @@ func (a *Apt) Install(ctx context.Context, genericNames ...string) error {
 	return nil
 }
 
+// IsInstalled checks each mapped package via dpkg-query. dpkg-query
+// -W -f='${Status}' is precise (exact name match, returns a single
+// field) unlike `dpkg -l` which glob-matches and returns success
+// even when the package is in the "rc" (removed, config remaining)
+// state. Both behaviors are pre-existing latent bugs for packages
+// whose names are prefixes of unrelated packages.
 func (a *Apt) IsInstalled(genericName string) bool {
 	names := a.MapName(genericName)
+	if len(names) == 0 {
+		return false
+	}
 	for _, pkg := range names {
-		if _, err := a.runner.RunProbe(context.Background(), "dpkg", "-l", pkg); err != nil {
+		out, err := a.runner.RunProbe(
+			context.Background(),
+			"dpkg-query", "-W", "-f=${Status}", pkg,
+		)
+		if err != nil {
+			return false
+		}
+		// Status is "install ok installed" when the package is
+		// actually installed. Anything else (including "rc") means
+		// not installed for our purposes.
+		if !containsInstalled(out) {
 			return false
 		}
 	}
-	return len(names) > 0
+	return true
+}
+
+// containsInstalled parses a dpkg-query Status string. Exposed as a
+// helper so the behavior is unit-testable without shelling out.
+func containsInstalled(status string) bool {
+	const want = "install ok installed"
+	return len(status) >= len(want) && status[:len(want)] == want
 }
 
 func (a *Apt) UpdateAll(ctx context.Context) error {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/registry"
@@ -58,15 +59,7 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 			if !platform.HasCommand("starship") {
 				return nil
 			}
-			switch mgrName {
-			case "brew":
-				return runner.Run(ctx, "brew", "upgrade", "starship")
-			case "pacman":
-				return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "starship")
-			default:
-				return runner.RunShell(ctx,
-					`curl -sS https://starship.rs/install.sh -o /tmp/starship-install.sh && sh /tmp/starship-install.sh --yes && rm -f /tmp/starship-install.sh`)
-			}
+			return updateStarship(ctx, runner, mgr)
 		}},
 		{"Atuin", func(ctx context.Context) error {
 			return updateAtuin(ctx, runner, mgrName)
@@ -159,6 +152,26 @@ func updateNvm(ctx context.Context, runner *executor.Runner) error {
 	return runner.RunShell(ctx, script)
 }
 
+func updateStarship(ctx context.Context, runner *executor.Runner, mgr pkgmgr.PackageManager) error {
+	// Package-manager paths are exec-level argv calls — no shell
+	// interpolation, no remote-script execution. Upstream provides
+	// Starship on brew, apt (via Debian/Ubuntu), dnf, pacman, and
+	// zypper so the installer script is rarely needed anymore.
+	switch mgr.Name() {
+	case "brew":
+		return runner.Run(ctx, "brew", "upgrade", "starship")
+	case "pacman":
+		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "starship")
+	case "apt", "dnf", "yum", "zypper":
+		return mgr.Install(ctx, "starship")
+	}
+	return fmt.Errorf(
+		"no safe Starship update path for package manager %q; "+
+			"install Starship via your system package manager and re-run",
+		mgr.Name(),
+	)
+}
+
 func updateAtuin(ctx context.Context, runner *executor.Runner, mgrName string) error {
 	if !platform.HasCommand("atuin") {
 		return nil
@@ -168,10 +181,20 @@ func updateAtuin(ctx context.Context, runner *executor.Runner, mgrName string) e
 		return runner.Run(ctx, "brew", "upgrade", "atuin")
 	case "pacman":
 		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "atuin")
-	default:
-		return runner.RunShell(ctx,
-			`curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh`)
+	case "apt", "dnf", "yum":
+		// atuin ships .deb/.rpm assets in their GitHub release —
+		// but the simplest path when it's installable via cargo is
+		// to upgrade that way rather than piping a remote shell
+		// script through sh.
+		if platform.HasCommand("cargo") {
+			return runner.Run(ctx, "cargo", "install", "atuin")
+		}
 	}
+	return fmt.Errorf(
+		"no safe Atuin update path for package manager %q; "+
+			"install cargo or use a supported package manager",
+		mgrName,
+	)
 }
 
 func updateNeovim(ctx context.Context, runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform.Platform) error {
@@ -213,8 +236,57 @@ func updateDotnet(ctx context.Context, runner *executor.Runner, mgrName string) 
 		return runner.Run(ctx, "brew", "upgrade", "dotnet-sdk")
 	case "pacman":
 		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "dotnet-sdk")
-	default:
-		return runner.RunShell(ctx,
-			`curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && chmod +x /tmp/dotnet-install.sh && /tmp/dotnet-install.sh --channel LTS --install-dir "$HOME/.dotnet" && rm -f /tmp/dotnet-install.sh`)
 	}
+	// No package-manager path: fall back to Microsoft's official
+	// dotnet-install.sh, but download to disk first (auditable), log
+	// the resulting sha256 so incident responders can cross-check,
+	// and invoke the saved file with argv — never through `sh -c` or
+	// `curl | sh`. This is a strict improvement over the previous
+	// implementation. Pinning a sha is TODO; Microsoft's script URL
+	// is versioned but the content churns.
+	return runDownloadedScript(
+		ctx, runner,
+		"https://dot.net/v1/dotnet-install.sh",
+		[]string{
+			"--channel", "LTS",
+			"--install-dir", filepath.Join(os.Getenv("HOME"), ".dotnet"),
+		},
+	)
+}
+
+// runDownloadedScript fetches a shell script to a temp file, logs
+// its sha256 for post-hoc verification, executes it with the given
+// args (no shell interpolation), and removes the file. This replaces
+// the `curl | sh` pattern, which executes bytes as they arrive from
+// the network — an attacker able to inject mid-stream could splice
+// arbitrary commands that curl wouldn't otherwise see.
+func runDownloadedScript(
+	ctx context.Context,
+	runner *executor.Runner,
+	url string,
+	args []string,
+) error {
+	f, err := os.CreateTemp("", "dotsetup-update-*.sh")
+	if err != nil {
+		return fmt.Errorf("create temp script: %w", err)
+	}
+	scriptPath := f.Name()
+	f.Close()
+	defer os.Remove(scriptPath)
+
+	if err := runner.Run(
+		ctx, "curl", "-fsSL", url, "-o", scriptPath,
+	); err != nil {
+		return fmt.Errorf("download %s: %w", url, err)
+	}
+	if sum, err := github.Sha256File(scriptPath); err == nil {
+		runner.Log.Write(fmt.Sprintf(
+			"downloaded %s sha256=%s", url, sum,
+		))
+	}
+	if err := os.Chmod(scriptPath, 0o755); err != nil {
+		return fmt.Errorf("chmod script: %w", err)
+	}
+	argv := append([]string{scriptPath}, args...)
+	return runner.Run(ctx, "bash", argv...)
 }

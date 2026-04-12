@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -136,7 +137,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle window size — capture locally and forward to every
-	// sub-model that owns a viewport / layout.
+	// sub-model that owns a viewport / layout. Summary must also
+	// receive resizes; its viewport re-init happens in updateSummary.
 	if msg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = msg.Width
 		m.height = msg.Height
@@ -145,6 +147,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.options, _ = m.options.Update(msg)
 		m.picker, _ = m.picker.Update(msg)
 		m.backupPicker, _ = m.backupPicker.Update(msg)
+		// Eagerly resize summary viewports so a resize arriving
+		// outside PhaseSummary is still reflected when we get there.
+		if m.summary.dryRun {
+			m.summary.initViewport(msg.Width, msg.Height)
+		} else if m.summary.doctorMode {
+			m.summary.initDoctorViewport(msg.Width, msg.Height)
+		}
 	}
 
 	switch m.phase {
@@ -224,6 +233,12 @@ func (m AppModel) View() tea.View {
 
 // Version is injected from main.
 var Version = "dev"
+
+// Commit is the build-time git SHA from main. Rendered in summary
+// so users (and incident responders) can pin the exact installer
+// that ran — the dock incident had a binary 21 commits behind main
+// with nothing surfaced anywhere in the UI.
+var Commit = ""
 
 // CriticalFailure returns true if a critical install task failed and
 // the user aborted. Exposed so main.go can propagate a non-zero exit
@@ -404,6 +419,18 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Kick off the engine now.
 		return m, m.runInstallTasks()
 
+	case repoSyncBlockedMsg:
+		// Hard failure: local changes block the pull, so continuing
+		// would run a stale installer against newer configs. Abort
+		// straight to summary with a clear, actionable error screen
+		// rather than a 1-line NOTE in a 300-line log.
+		m.summary.steps = nil
+		m.summary.endTime = time.Now()
+		m.summary.criticalFailure = true
+		m.summary.repoBlockedBody = strings.TrimSpace(msg.body)
+		m.phase = PhaseSummary
+		return m, nil
+
 	default:
 		// Forward spinner ticks, progress frames, etc.
 		if m.config.Verbose && m.config.Runner != nil {
@@ -439,9 +466,19 @@ func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progress.markSkipped(msg.ID, msg.Label, msg.Reason)
 		return m, listenCmd(m.eventCh)
 	case engine.AllDoneMsg:
-		// Engine finished while user is deciding — just note it.
+		// Engine finished while user is deciding. Auto-transition to
+		// summary so the prompt doesn't linger over a completed run;
+		// drainCmd keeps listening in case late events race the close.
 		m.progress.done = true
-		return m, nil
+		m.summary.steps = m.progress.steps
+		m.summary.endTime = time.Now()
+		m.summary.warnings = m.config.Failures
+		m.phase = PhaseSummary
+		m.saveState()
+		if m.summary.doctorMode && m.width > 0 && m.height > 0 {
+			m.summary.initDoctorViewport(m.width, m.height)
+		}
+		return m, drainCmd(m.eventCh)
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -575,12 +612,28 @@ func (m *AppModel) returnToMainMenu() {
 // trigger to move on to engine setup.
 type repoSyncedMsg struct{}
 
+// repoSyncBlockedMsg is emitted when `git pull --ff-only` fails in
+// a way that means the running installer is stale: uncommitted
+// local changes or a non-fast-forward divergence. The installer
+// binary is whatever the user last built/downloaded; continuing
+// silently (as the old code did) means running an installer that
+// doesn't match the checked-out configs. Body holds the captured
+// git output so the summary screen can show which files block the
+// pull — the user needs to stash/commit those to proceed cleanly.
+type repoSyncBlockedMsg struct {
+	body string
+}
+
 // syncRepoCmd returns a tea.Cmd that runs `git pull --ff-only` off
-// the Update loop so the TUI stays responsive. Failures (offline,
-// local changes, not-a-repo) are logged but non-fatal.
+// the Update loop so the TUI stays responsive. Soft failures
+// (network down, not-a-repo) are logged as warnings and install
+// continues. Hard failures (local changes block pull, non-
+// fast-forward) abort so the user isn't running a stale binary
+// against newer configs without realizing it.
 func (m AppModel) syncRepoCmd() tea.Cmd {
 	runner := m.config.Runner
 	rootDir := m.config.RootDir
+	failures := m.config.Failures
 	return func() tea.Msg {
 		if runner == nil || rootDir == "" {
 			return repoSyncedMsg{}
@@ -589,12 +642,38 @@ func (m AppModel) syncRepoCmd() tea.Cmd {
 			context.Background(), 15*time.Second,
 		)
 		defer cancel()
-		if err := runner.RunInDir(
-			ctx, rootDir, "git", "pull", "--ff-only",
-		); err != nil {
-			runner.Log.Write(fmt.Sprintf(
-				"NOTE: git pull --ff-only skipped: %v", err,
-			))
+		cmd := exec.CommandContext(ctx, "git", "pull", "--ff-only")
+		cmd.Dir = rootDir
+		out, err := cmd.CombinedOutput()
+		body := string(out)
+		if err == nil {
+			if body != "" {
+				runner.Log.WriteRaw([]byte(body))
+			}
+			return repoSyncedMsg{}
+		}
+		runner.Log.Write(fmt.Sprintf(
+			"git pull --ff-only failed: %v", err,
+		))
+		if body != "" {
+			runner.Log.WriteRaw([]byte(body))
+		}
+		lowered := strings.ToLower(body)
+		hardFail := strings.Contains(lowered, "local changes") ||
+			strings.Contains(lowered, "would be overwritten") ||
+			strings.Contains(lowered, "not possible to fast-forward") ||
+			strings.Contains(lowered, "non-fast-forward")
+		if hardFail {
+			return repoSyncBlockedMsg{body: body}
+		}
+		// Soft failure: record as a visible warning so the summary
+		// banner surfaces it, but don't abort — the user may be
+		// offline and that's legitimate.
+		if failures != nil {
+			failures.Record(
+				"Repo", "git pull --ff-only",
+				fmt.Errorf("continuing with local checkout: %v", err),
+			)
 		}
 		return repoSyncedMsg{}
 	}

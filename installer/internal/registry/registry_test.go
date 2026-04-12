@@ -34,7 +34,7 @@ func TestBuildURL(t *testing.T) {
 			name: "eza target triple",
 			cfg: &github.Config{
 				Repo: "eza-community/eza", Pattern: github.PatternTargetTriple,
-				Binary: "eza", StripV: true, LibC: "gnu",
+				Binary: "eza", StripVPrefix:true, LibC: "gnu",
 			},
 			version: "0.20.0",
 			wantURL: "https://github.com/eza-community/eza/releases/download/v0.20.0/eza_aarch64-apple-darwin.tar.gz",
@@ -54,7 +54,7 @@ func TestBuildURL(t *testing.T) {
 			name: "lazygit custom OS/arch",
 			cfg: &github.Config{
 				Repo: "jesseduffield/lazygit", Pattern: github.PatternCustomOSArch,
-				Binary: "lazygit", StripV: true,
+				Binary: "lazygit", StripVPrefix:true,
 			},
 			version: "0.40.0",
 			wantURL: "https://github.com/jesseduffield/lazygit/releases/download/v0.40.0/lazygit_0.40.0_darwin_arm64.tar.gz",

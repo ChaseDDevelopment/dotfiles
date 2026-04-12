@@ -349,3 +349,94 @@ func TestLoad_PreservesInstalledAt(t *testing.T) {
 		)
 	}
 }
+
+// TestSave_AtomicReplacesExisting confirms the atomic-rename path
+// replaces an existing state.json rather than leaving a stray temp
+// file. Regression guard for the pre-hardening non-atomic Save.
+func TestSave_AtomicReplacesExisting(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+
+	s1 := NewStore(path)
+	s1.RecordInstall("first", "1.0", "brew")
+	if err := s1.Save(); err != nil {
+		t.Fatalf("first Save: %v", err)
+	}
+
+	s2 := NewStore(path)
+	s2.RecordInstall("second", "2.0", "brew")
+	if err := s2.Save(); err != nil {
+		t.Fatalf("second Save: %v", err)
+	}
+
+	// Parent dir should contain state.json plus no lingering tmp.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if name == "state.json" {
+			continue
+		}
+		t.Errorf("unexpected leftover %q in state dir", name)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after atomic save: %v", err)
+	}
+	if _, ok := loaded.LookupTool("second"); !ok {
+		t.Fatal("second record not present after atomic save")
+	}
+}
+
+// TestSave_PreservesOnMidWriteFailure simulates a failure between
+// the rename staging and the final placement by setting the parent
+// directory read-only — the rename fails, but the original file is
+// preserved rather than truncated. This was the crash-corruption
+// class that the pre-hardening os.WriteFile path allowed.
+func TestSave_PreservesOnMidWriteFailure(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root ignores directory permissions; test is meaningless")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+
+	good := NewStore(path)
+	good.RecordInstall("keep", "1.0", "brew")
+	if err := good.Save(); err != nil {
+		t.Fatalf("initial Save: %v", err)
+	}
+	originalBytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Strip write permission on the directory so os.Rename fails.
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+
+	bad := NewStore(path)
+	bad.RecordInstall("should-not-persist", "9.9", "brew")
+	if err := bad.Save(); err == nil {
+		t.Fatal("expected Save to fail when directory is read-only")
+	}
+
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(originalBytes) {
+		t.Fatalf(
+			"original state.json was mutated by failed Save; "+
+				"before=%q after=%q", originalBytes, after,
+		)
+	}
+}

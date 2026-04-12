@@ -29,14 +29,23 @@ func (b *Brew) Install(ctx context.Context, genericNames ...string) error {
 	return nil
 }
 
+// IsInstalled reports whether every mapped package exists in the
+// brew prefix. A generic name that MapName deliberately resolves
+// to an empty slice (e.g. "build-essential" on macOS) is treated
+// as satisfied rather than not-installed — the tool is
+// "not applicable" on this platform, which is the pre-install
+// invariant the caller actually wants.
 func (b *Brew) IsInstalled(genericName string) bool {
 	names := b.MapName(genericName)
+	if len(names) == 0 {
+		return true
+	}
 	for _, pkg := range names {
 		if _, err := b.runner.RunProbe(context.Background(), "brew", "list", pkg); err != nil {
 			return false
 		}
 	}
-	return len(names) > 0
+	return true
 }
 
 func (b *Brew) UpdateAll(ctx context.Context) error {
