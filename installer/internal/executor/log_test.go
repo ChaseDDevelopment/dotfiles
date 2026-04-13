@@ -62,6 +62,52 @@ func TestNewLogFile(t *testing.T) {
 			t.Fatal("expected error for invalid path, got nil")
 		}
 	})
+
+	t.Run("truncates existing log from prior run", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.log")
+
+		// First run: write a sentinel line and close.
+		lf1, err := NewLogFile(path)
+		if err != nil {
+			t.Fatalf("first NewLogFile() error = %v", err)
+		}
+		lf1.Write("from first run")
+		if err := lf1.Close(); err != nil {
+			t.Fatalf("first Close() error = %v", err)
+		}
+
+		// Second run: reopen the same path; must wipe prior content.
+		lf2, err := NewLogFile(path)
+		if err != nil {
+			t.Fatalf("second NewLogFile() error = %v", err)
+		}
+		if err := lf2.Close(); err != nil {
+			t.Fatalf("second Close() error = %v", err)
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile() error = %v", err)
+		}
+		content := string(data)
+
+		if strings.Contains(content, "from first run") {
+			t.Errorf(
+				"prior-run line leaked into new log; got %q",
+				content,
+			)
+		}
+		if n := strings.Count(
+			content, "Dotsetup install log started",
+		); n != 1 {
+			t.Errorf(
+				"expected exactly 1 start line, got %d; content=%q",
+				n, content,
+			)
+		}
+	})
 }
 
 func TestLogFileWrite(t *testing.T) {

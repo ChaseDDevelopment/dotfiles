@@ -14,7 +14,8 @@ type LogFile struct {
 	mu   sync.Mutex
 }
 
-// NewLogFile creates or truncates a log file at the given path.
+// NewLogFile opens path with O_CREATE|O_TRUNC|O_WRONLY so every
+// installer run starts with a fresh log (no append across runs).
 func NewLogFile(path string) (*LogFile, error) {
 	f, err := os.Create(path)
 	if err != nil {
