@@ -24,6 +24,13 @@ import (
 // error pages, or empty segments returned by non-redirect responses.
 var tagPattern = regexp.MustCompile(`^v?\d`)
 
+var latestVersionClient = &http.Client{
+	Timeout: 15 * time.Second,
+	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
 // URLPattern identifies the GitHub release URL format.
 type URLPattern int
 
@@ -65,14 +72,7 @@ type Config struct {
 // by following the /releases/latest redirect.
 func LatestVersion(repo string, stripV bool) (string, error) {
 	url := fmt.Sprintf("https://github.com/%s/releases/latest", repo)
-
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	resp, err := client.Head(url)
+	resp, err := latestVersionClient.Head(url)
 	if err != nil {
 		return "", fmt.Errorf("HEAD %s: %w", url, err)
 	}

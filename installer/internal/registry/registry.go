@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	toolsOnce  sync.Once
-	cachedAll  []Tool
-	lookupMap  map[string]*Tool
+	toolsOnce sync.Once
+	cachedAll []Tool
+	lookupMap map[string]*Tool
 )
 
 func initTools() {
@@ -374,13 +374,21 @@ func executeScript(
 	); err != nil {
 		return fmt.Errorf("download script: %w", err)
 	}
+	return executeScriptFile(ctx, cfg, tmpFile, ic)
+}
 
+func executeScriptFile(
+	ctx context.Context,
+	cfg *ScriptConfig,
+	scriptPath string,
+	ic *InstallContext,
+) error {
 	shell := cfg.Shell
 	if shell == "" {
 		shell = "bash" // dash on Debian/Ubuntu can't handle bash syntax
 	}
 	args := make([]string, 0, len(cfg.Args)+1)
-	args = append(args, tmpFile)
+	args = append(args, scriptPath)
 	for _, a := range cfg.Args {
 		args = append(args, os.ExpandEnv(a))
 	}

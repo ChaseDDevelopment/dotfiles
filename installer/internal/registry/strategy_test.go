@@ -3,8 +3,6 @@ package registry
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,11 +18,11 @@ import (
 // exercise the strategy-selection loop, not real installs.
 type stubPkgMgr struct{ name string }
 
-func (s *stubPkgMgr) Name() string                               { return s.name }
-func (s *stubPkgMgr) IsInstalled(_ string) bool                  { return false }
+func (s *stubPkgMgr) Name() string                                 { return s.name }
+func (s *stubPkgMgr) IsInstalled(_ string) bool                    { return false }
 func (s *stubPkgMgr) Install(_ context.Context, _ ...string) error { return nil }
-func (s *stubPkgMgr) UpdateAll(_ context.Context) error          { return nil }
-func (s *stubPkgMgr) MapName(_ string) []string                  { return nil }
+func (s *stubPkgMgr) UpdateAll(_ context.Context) error            { return nil }
+func (s *stubPkgMgr) MapName(_ string) []string                    { return nil }
 
 var _ pkgmgr.PackageManager = (*stubPkgMgr)(nil)
 
@@ -104,30 +102,18 @@ func TestExecuteScript_NoProfileModifyInjectsEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Stand up an http server that serves probeScript as the install
-	// payload — executeScript always downloads from URL, so we need
-	// a real endpoint. Using a local listener keeps the test offline.
-	srv := httptest.NewServer(http.HandlerFunc(
-		func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
-			_, _ = w.Write([]byte(scriptBody))
-		},
-	))
-	defer srv.Close()
-
 	strategy := &InstallStrategy{
 		Method: MethodScript,
 		Script: &ScriptConfig{
-			URL:             srv.URL,
 			Args:            []string{envOut},
 			Shell:           "bash",
 			NoProfileModify: true,
 		},
 	}
-	if err := executeStrategy(
-		context.Background(), strategy, ic, ic.Platform,
+	if err := executeScriptFile(
+		context.Background(), strategy.Script, probeScript, ic,
 	); err != nil {
-		t.Fatalf("executeStrategy: %v", err)
+		t.Fatalf("executeScriptFile: %v", err)
 	}
 
 	data, err := os.ReadFile(envOut)

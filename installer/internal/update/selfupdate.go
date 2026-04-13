@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
@@ -24,6 +26,19 @@ const (
 
 const selfRepo = "ChaseDDevelopment/dotfiles"
 
+var selfUpdateSemverRe = regexp.MustCompile(
+	`(\d+)\.(\d+)(?:\.(\d+))?(-[0-9A-Za-z.-]+)?`,
+)
+
+var (
+	latestVersionFn         = github.LatestVersion
+	fetchChecksumsFn        = github.FetchChecksums
+	verifyFileFn            = github.VerifyFile
+	executablePathFn        = os.Executable
+	verifyCosignSignatureFn = verifyCosignSignature
+	copyFileFn              = copyFile
+)
+
 // CheckSelfUpdate checks if a newer version of dotsetup is
 // available. Returns the latest version tag or "" if already
 // up to date. currentVersion should be the build-time Version
@@ -33,18 +48,73 @@ func CheckSelfUpdate(currentVersion string) (string, error) {
 		return "", nil // dev builds skip update checks
 	}
 
-	latest, err := github.LatestVersion(selfRepo, false)
+	latest, err := latestVersionFn(selfRepo, false)
 	if err != nil {
 		return "", fmt.Errorf("check update: %w", err)
 	}
 
-	// Normalize: strip leading 'v' for comparison.
-	cur := strings.TrimPrefix(currentVersion, "v")
-	lat := strings.TrimPrefix(latest, "v")
-	if cur == lat {
+	cur, curPre, err := parseUpdateVersion(currentVersion)
+	if err != nil {
+		return "", fmt.Errorf(
+			"check update: parse current version %q: %w",
+			currentVersion, err,
+		)
+	}
+	lat, latPre, err := parseUpdateVersion(latest)
+	if err != nil {
+		return "", fmt.Errorf(
+			"check update: parse latest version %q: %w",
+			latest, err,
+		)
+	}
+	if !updateVersionLess(cur, curPre, lat, latPre) {
 		return "", nil
 	}
 	return latest, nil
+}
+
+func parseUpdateVersion(s string) ([3]int, bool, error) {
+	m := selfUpdateSemverRe.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return [3]int{}, false, fmt.Errorf("not a semver-like version")
+	}
+
+	major, err := strconv.Atoi(m[1])
+	if err != nil {
+		return [3]int{}, false, fmt.Errorf("parse major: %w", err)
+	}
+	minor, err := strconv.Atoi(m[2])
+	if err != nil {
+		return [3]int{}, false, fmt.Errorf("parse minor: %w", err)
+	}
+	patch := 0
+	if m[3] != "" {
+		patch, err = strconv.Atoi(m[3])
+		if err != nil {
+			return [3]int{}, false, fmt.Errorf("parse patch: %w", err)
+		}
+	}
+	return [3]int{major, minor, patch}, m[4] != "", nil
+}
+
+func updateVersionLess(
+	cur [3]int,
+	curPre bool,
+	latest [3]int,
+	latestPre bool,
+) bool {
+	for i := 0; i < 3; i++ {
+		if cur[i] < latest[i] {
+			return true
+		}
+		if cur[i] > latest[i] {
+			return false
+		}
+	}
+	if curPre && !latestPre {
+		return true
+	}
+	return false
 }
 
 // SelfUpdate downloads, integrity-verifies, and replaces the
@@ -91,7 +161,7 @@ func SelfUpdate(
 	// Fetch and parse the manifest first. If signing fails, we fail
 	// here before touching the filesystem with a binary we can't
 	// verify.
-	sums, err := github.FetchChecksums(ctx, sumsURL)
+	sums, err := fetchChecksumsFn(ctx, sumsURL)
 	if err != nil {
 		return fmt.Errorf(
 			"fetch release checksums (SHA256SUMS is required for "+
@@ -113,11 +183,11 @@ func SelfUpdate(
 	// matching SHA256SUMS entry — cosign's keyless signatures are
 	// rooted in GitHub OIDC for a specific workflow+tag and can't
 	// be silently regenerated without that OIDC context.
-	if err := verifyCosignSignature(ctx, runner, selfRepo, latest); err != nil {
+	if err := verifyCosignSignatureFn(ctx, runner, selfRepo, latest); err != nil {
 		return fmt.Errorf("update signature check failed: %w", err)
 	}
 
-	exe, err := os.Executable()
+	exe, err := executablePathFn()
 	if err != nil {
 		return fmt.Errorf("find current binary: %w", err)
 	}
@@ -132,7 +202,7 @@ func SelfUpdate(
 
 	// Integrity gate. Verify BEFORE chmod/rename so a tampered
 	// binary never becomes executable.
-	if err := github.VerifyFile(tmpFile, expected); err != nil {
+	if err := verifyFileFn(tmpFile, expected); err != nil {
 		cleanupTmp(runner, tmpFile)
 		return fmt.Errorf("update integrity check failed: %w", err)
 	}
@@ -149,7 +219,7 @@ func SelfUpdate(
 	// this fails — without a backup a bad replace leaves the user
 	// with a broken/missing binary and no way back.
 	backupFile := exe + ".old"
-	if err := copyFile(exe, backupFile); err != nil {
+	if err := copyFileFn(exe, backupFile); err != nil {
 		cleanupTmp(runner, tmpFile)
 		return fmt.Errorf(
 			"backup current binary before update: %w", err,
@@ -292,4 +362,3 @@ func copyFile(src, dst string) error {
 	}
 	return os.WriteFile(dst, data, info.Mode())
 }
-

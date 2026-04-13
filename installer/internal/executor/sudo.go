@@ -10,7 +10,7 @@ import (
 
 // sudoKeepaliveInterval is how often the keepalive goroutine
 // refreshes the sudo credential cache.
-const sudoKeepaliveInterval = 4 * time.Minute
+var sudoKeepaliveInterval = 4 * time.Minute
 
 // HasSudo reports whether the sudo command exists on PATH.
 func HasSudo() bool {

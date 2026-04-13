@@ -98,15 +98,25 @@ type Platform struct {
 	Warnings []string
 }
 
+var (
+	goosFn         = func() string { return runtime.GOOS }
+	goarchFn       = func() string { return runtime.GOARCH }
+	hasCommandFn   = HasCommand
+	osReleasePath  = "/etc/os-release"
+	macOSVersionFn = macOSVersion
+	linuxDistroFn  = linuxDistro
+	detectPkgMgrFn = detectPackageManager
+)
+
 // Detect probes the current system and returns a Platform description.
 func Detect() (*Platform, error) {
 	p := &Platform{}
 
-	switch runtime.GOOS {
+	switch goosFn() {
 	case "darwin":
 		p.OS = MacOS
 		p.OSName = "macOS"
-		ver, err := macOSVersion()
+		ver, err := macOSVersionFn()
 		if err != nil {
 			// Not fatal — most install strategies don't branch on
 			// OSVersion — but collect the reason so distro-specific
@@ -119,7 +129,7 @@ func Detect() (*Platform, error) {
 		p.OSVersion = ver
 	case "linux":
 		p.OS = Linux
-		name, version, err := linuxDistro()
+		name, version, err := linuxDistroFn()
 		if err != nil {
 			p.Warnings = append(p.Warnings,
 				fmt.Sprintf("detect linux distro: %v", err),
@@ -128,22 +138,22 @@ func Detect() (*Platform, error) {
 		p.OSName = name
 		p.OSVersion = version
 	default:
-		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+		return nil, fmt.Errorf("unsupported OS: %s", goosFn())
 	}
 
-	switch runtime.GOARCH {
+	switch goarchFn() {
 	case "amd64":
 		p.Arch = AMD64
 	case "arm64":
 		p.Arch = ARM64
 	default:
-		return nil, fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
+		return nil, fmt.Errorf("unsupported architecture: %s", goarchFn())
 	}
 
-	p.PackageManager = detectPackageManager()
-	p.HasNala = HasCommand("nala")
-	p.HasYay = HasCommand("yay")
-	p.HasParu = HasCommand("paru")
+	p.PackageManager = detectPkgMgrFn()
+	p.HasNala = hasCommandFn("nala")
+	p.HasYay = hasCommandFn("yay")
+	p.HasParu = hasCommandFn("paru")
 
 	return p, nil
 }
@@ -171,9 +181,9 @@ func macOSVersion() (string, error) {
 }
 
 func linuxDistro() (name, version string, err error) {
-	data, err := os.ReadFile("/etc/os-release")
+	data, err := os.ReadFile(osReleasePath)
 	if err != nil {
-		return "Linux", "", fmt.Errorf("read /etc/os-release: %w", err)
+		return "Linux", "", fmt.Errorf("read %s: %w", osReleasePath, err)
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.HasPrefix(line, "NAME=") {
@@ -198,28 +208,28 @@ func detectPackageManager() PkgManagerType {
 	// (casks are macOS-only) when the tool registry offers a
 	// homebrew strategy. Brew is only the preferred choice on
 	// darwin.
-	if runtime.GOOS == "darwin" && HasCommand("brew") {
+	if goosFn() == "darwin" && hasCommandFn("brew") {
 		return PkgBrew
 	}
-	if HasCommand("apt-get") {
+	if hasCommandFn("apt-get") {
 		return PkgApt
 	}
-	if HasCommand("dnf") {
+	if hasCommandFn("dnf") {
 		return PkgDnf
 	}
-	if HasCommand("yum") {
+	if hasCommandFn("yum") {
 		return PkgYum
 	}
-	if HasCommand("pacman") {
+	if hasCommandFn("pacman") {
 		return PkgPacman
 	}
-	if HasCommand("zypper") {
+	if hasCommandFn("zypper") {
 		return PkgZypper
 	}
 	// Linux with brew (linuxbrew) as last resort — the registry's
 	// apt/pacman/dnf strategies will be empty on systems without
 	// those, so fall back to brew rather than erroring out.
-	if HasCommand("brew") {
+	if hasCommandFn("brew") {
 		return PkgBrew
 	}
 	return PkgNone

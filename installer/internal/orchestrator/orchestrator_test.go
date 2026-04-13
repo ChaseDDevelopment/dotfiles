@@ -2,6 +2,8 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,6 +11,7 @@ import (
 	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/engine"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/registry"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/state"
@@ -40,6 +43,32 @@ func (s *stubPkgMgr) MapName(generic string) []string {
 	return []string{generic}
 }
 
+type batchPkgMgr struct {
+	stubPkgMgr
+	err          error
+	installed    map[string]bool
+	installCalls int
+}
+
+func (b *batchPkgMgr) Install(
+	_ context.Context, names ...string,
+) error {
+	b.installCalls++
+	if b.installed == nil {
+		b.installed = map[string]bool{}
+	}
+	for _, name := range names {
+		if b.err == nil {
+			b.installed[name] = true
+		}
+	}
+	return b.err
+}
+
+func (b *batchPkgMgr) IsInstalled(name string) bool {
+	return b.installed[name]
+}
+
 // newTestBuildConfig creates a BuildConfig suitable for testing.
 // It uses a stub package manager, real platform detection, a
 // temp-dir-backed runner, and an in-memory state store.
@@ -67,12 +96,121 @@ func newTestBuildConfig(t *testing.T) *BuildConfig {
 
 	return &BuildConfig{
 		Runner:   runner,
-		PkgMgr:  &stubPkgMgr{name: "brew"},
+		PkgMgr:   &stubPkgMgr{name: "brew"},
 		Platform: plat,
 		State:    st,
 		RootDir:  dir,
 		DryRun:   true,
 	}
+}
+
+func TestBatchHelpers(t *testing.T) {
+	t.Run("runOnce partial failure maps failed generics", func(t *testing.T) {
+		mgr := &batchPkgMgr{
+			stubPkgMgr: stubPkgMgr{name: "apt"},
+			err: &pkgmgr.BatchFailure{
+				FailedNames: []string{"b"},
+				Wrapped:     errors.New("partial"),
+			},
+		}
+		var bs batchState
+		bs.runOnce(context.Background(), mgr, []string{"a", "b"})
+		if mgr.installCalls != 1 {
+			t.Fatalf("installCalls = %d, want 1", mgr.installCalls)
+		}
+		if _, ok := bs.failedGenerics["b"]; !ok {
+			t.Fatalf("failedGenerics = %#v, want b present", bs.failedGenerics)
+		}
+	})
+
+	t.Run("runBatchedInstall records success and fallbacks failed tool", func(t *testing.T) {
+		bc := newTestBuildConfig(t)
+		bc.Runner.DryRun = true
+		store := bc.State
+		mgr := &batchPkgMgr{stubPkgMgr: stubPkgMgr{name: "brew"}, installed: map[string]bool{}}
+		ic := &registry.InstallContext{Runner: bc.Runner, PkgMgr: mgr, Platform: bc.Platform}
+		bs := &batchState{}
+
+		okTool := &registry.Tool{Name: "ok", Command: "ok"}
+		okEntry := &batchEntry{
+			tool: *okTool,
+			strategy: &registry.InstallStrategy{
+				Method: registry.MethodPackageManager,
+			},
+			genericPkg: "ok",
+		}
+		if err := runBatchedInstall(context.Background(), okTool, okEntry, ic, bc.Platform, bs, []string{"ok"}, store); err != nil {
+			t.Fatalf("runBatchedInstall success: %v", err)
+		}
+		if mgr.installCalls != 1 {
+			t.Fatalf("installCalls = %d, want 1", mgr.installCalls)
+		}
+		if _, ok := store.LookupTool("ok"); !ok {
+			t.Fatal("expected state record for successful batch install")
+		}
+
+		fallbackCalled := false
+		mgr = &batchPkgMgr{
+			stubPkgMgr: stubPkgMgr{name: "brew"},
+			err: &pkgmgr.BatchFailure{
+				FailedNames: []string{"fail"},
+				Wrapped:     errors.New("partial"),
+			},
+			installed: map[string]bool{},
+		}
+		ic = &registry.InstallContext{Runner: bc.Runner, PkgMgr: mgr, Platform: bc.Platform}
+		bs = &batchState{}
+		failTool := &registry.Tool{
+			Name: "fail", Command: "fail",
+			Strategies: []registry.InstallStrategy{
+				{Method: registry.MethodPackageManager, Package: "fail"},
+				{Method: registry.MethodCustom, CustomFunc: func(_ context.Context, _ *registry.InstallContext) error {
+					fallbackCalled = true
+					return nil
+				}},
+			},
+		}
+		failEntry := &batchEntry{
+			tool:       *failTool,
+			strategy:   &registry.InstallStrategy{Method: registry.MethodPackageManager, Package: "fail"},
+			genericPkg: "fail",
+		}
+		if err := runBatchedInstall(context.Background(), failTool, failEntry, ic, bc.Platform, bs, []string{"fail"}, store); err != nil {
+			t.Fatalf("runBatchedInstall fallback: %v", err)
+		}
+		if !fallbackCalled {
+			t.Fatal("expected fallback strategy to run for failed batch tool")
+		}
+	})
+
+	t.Run("runBatchedInstall propagates fatal apt", func(t *testing.T) {
+		bc := newTestBuildConfig(t)
+		mgr := &batchPkgMgr{stubPkgMgr: stubPkgMgr{name: "apt"}, err: fmt.Errorf("wrapped: %w", pkgmgr.ErrAptFatal)}
+		ic := &registry.InstallContext{Runner: bc.Runner, PkgMgr: mgr, Platform: bc.Platform}
+		bs := &batchState{}
+		tool := &registry.Tool{Name: "fatal", Command: "fatal"}
+		entry := &batchEntry{
+			tool:       *tool,
+			strategy:   &registry.InstallStrategy{Method: registry.MethodPackageManager, Package: "fatal"},
+			genericPkg: "fatal",
+		}
+		err := runBatchedInstall(context.Background(), tool, entry, ic, bc.Platform, bs, []string{"fatal"}, bc.State)
+		if err == nil || !strings.Contains(err.Error(), "fatal condition") {
+			t.Fatalf("expected fatal apt error, got %v", err)
+		}
+	})
+
+	t.Run("resource helpers", func(t *testing.T) {
+		if !hasResource([]engine.Resource{engine.ResDpkg}, engine.ResDpkg) {
+			t.Fatal("expected hasResource true")
+		}
+		if _, ok := pkgMgrResource("brew"); !ok {
+			t.Fatal("expected brew resource")
+		}
+		if _, ok := pkgMgrResource("unknown"); ok {
+			t.Fatal("unexpected resource for unknown manager")
+		}
+	})
 }
 
 // ---------- isComponentSelected ----------

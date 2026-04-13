@@ -13,8 +13,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
-	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/state"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/tui"
 
@@ -28,6 +28,27 @@ var Version = "dev"
 // -ldflags. Empty in dev builds. Logged at session start so users
 // (and incident responders) can tell exactly which installer ran.
 var Commit = ""
+
+type teaProgram interface {
+	Run() (tea.Model, error)
+}
+
+var (
+	termIsTerminalFn   = term.IsTerminal
+	findRootDirFn      = findRootDir
+	detectPlatformFn   = platform.Detect
+	needsSudoFn        = executor.NeedsSudo
+	preAuthFn          = executor.PreAuth
+	hasSudoFn          = executor.HasSudo
+	newLogFileFn       = executor.NewLogFile
+	startKeepaliveFn   = executor.StartKeepalive
+	pkgmgrNewFn        = pkgmgr.New
+	stateDefaultPathFn = state.DefaultPath
+	stateLoadFn        = state.Load
+	stateNewStoreFn    = state.NewStore
+	newAppFn           = func(cfg *tui.AppConfig) tea.Model { return tui.NewApp(cfg) }
+	newTeaProgramFn    = func(model tea.Model) teaProgram { return tea.NewProgram(model) }
+)
 
 func main() {
 	if os.Getenv("HOME") == "" {
@@ -48,18 +69,18 @@ func main() {
 		os.Exit(0)
 	}
 
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if !termIsTerminalFn(int(os.Stdin.Fd())) {
 		fmt.Fprintln(os.Stderr, "Error: dotsetup requires an interactive terminal.")
 		os.Exit(1)
 	}
 
-	rootDir, err := findRootDir()
+	rootDir, err := findRootDirFn()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	plat, err := platform.Detect()
+	plat, err := detectPlatformFn()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -70,19 +91,19 @@ func main() {
 	// cache so long-running installs don't hit timeouts. Fail
 	// fast if auth doesn't succeed — sudo prompts inside the alt
 	// screen are hidden and every sudo task would silently error.
-	if executor.NeedsSudo() {
-		if err := executor.PreAuth(); err != nil {
+	if needsSudoFn() {
+		if err := preAuthFn(); err != nil {
 			fmt.Fprintf(os.Stderr,
 				"Error: sudo authentication failed: %v\n", err,
 			)
 			os.Exit(1)
 		}
-	} else if executor.HasSudo() {
+	} else if hasSudoFn() {
 		fmt.Fprintln(os.Stderr,
 			"[sudo] Credentials already available.",
 		)
 	}
-	logFile, err := executor.NewLogFile(filepath.Join(rootDir, "install.log"))
+	logFile, err := newLogFileFn(filepath.Join(rootDir, "install.log"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -105,7 +126,7 @@ func main() {
 		context.Background(),
 	)
 	defer cancelSudo()
-	stopSudo := executor.StartKeepalive(sudoCtx, logFile)
+	stopSudo := startKeepaliveFn(sudoCtx, logFile)
 	defer stopSudo()
 
 	runner := executor.NewRunner(logFile, false)
@@ -118,14 +139,14 @@ func main() {
 		defer ttyFile.Close()
 	}
 
-	mgr, err := pkgmgr.New(plat, runner)
+	mgr, err := pkgmgrNewFn(plat, runner)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	statePath := state.DefaultPath()
-	installState, err := state.Load(statePath)
+	statePath := stateDefaultPathFn()
+	installState, err := stateLoadFn(statePath)
 	if err != nil {
 		if errors.Is(err, state.ErrCorrupt) {
 			// Preserve the corrupt file so the user can inspect it
@@ -149,7 +170,7 @@ func main() {
 			)
 			fmt.Fprintln(os.Stderr, msg)
 			logFile.Write(msg)
-			installState = state.NewStore(statePath)
+			installState = stateNewStoreFn(statePath)
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: load state: %v\n", err)
 			os.Exit(1)
@@ -169,8 +190,8 @@ func main() {
 	tui.Version = Version
 	tui.Commit = Commit
 
-	app := tui.NewApp(cfg)
-	p := tea.NewProgram(app)
+	app := newAppFn(cfg)
+	p := newTeaProgramFn(app)
 	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

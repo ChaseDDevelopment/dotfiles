@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
@@ -297,7 +296,7 @@ func installYaziApt(ctx context.Context, ic *InstallContext) error {
 	}
 
 	// Download prebuilt deb from GitHub Releases.
-	version, err := github.LatestVersion("sxyazi/yazi", true)
+	version, err := latestVersionFn("sxyazi/yazi", true)
 	if err != nil {
 		return fmt.Errorf("fetch yazi version: %w", err)
 	}

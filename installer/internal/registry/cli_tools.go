@@ -72,7 +72,7 @@ func cliTools() []Tool {
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "eza"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "eza-community/eza", Pattern: github.PatternTargetTriple,
-					Binary: "eza", StripVPrefix:true, LibC: "gnu",
+					Binary: "eza", StripVPrefix: true, LibC: "gnu",
 				}},
 				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "eza"},
 			},
@@ -142,7 +142,7 @@ func cliTools() []Tool {
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "git-delta"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "dandavison/delta", Pattern: github.PatternVersionPrefixed,
-					Binary: "delta", StripVPrefix:false, LibC: "musl",
+					Binary: "delta", StripVPrefix: false, LibC: "musl",
 				}},
 				{Method: MethodCargo, Crate: "git-delta"},
 			},
@@ -155,7 +155,7 @@ func cliTools() []Tool {
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "lazygit"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "jesseduffield/lazygit", Pattern: github.PatternCustomOSArch,
-					Binary: "lazygit", StripVPrefix:true,
+					Binary: "lazygit", StripVPrefix: true,
 				}},
 			},
 		},
@@ -166,7 +166,7 @@ func cliTools() []Tool {
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "xh"},
 				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
 					Repo: "ducaale/xh", Pattern: github.PatternVersionPrefixed,
-					Binary: "xh", StripVPrefix:false, LibC: "musl",
+					Binary: "xh", StripVPrefix: false, LibC: "musl",
 				}},
 				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "xh"},
 			},
@@ -457,7 +457,7 @@ func isNerdFontInstalled() bool {
 }
 
 func installNerdFontLinux(ctx context.Context, ic *InstallContext) error {
-	version, err := github.LatestVersion("ryanoasis/nerd-fonts", true)
+	version, err := latestVersionFn("ryanoasis/nerd-fonts", true)
 	if err != nil {
 		return fmt.Errorf("resolve nerd-fonts latest version: %w", err)
 	}

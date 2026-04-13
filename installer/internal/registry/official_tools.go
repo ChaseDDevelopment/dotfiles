@@ -9,6 +9,8 @@ import (
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 )
 
+var latestVersionFn = github.LatestVersion
+
 func officialInstallerTools() []Tool {
 	return []Tool{
 		// nvm — Node Version Manager (shell function, not a binary)
@@ -81,7 +83,7 @@ func installNvm(ctx context.Context, ic *InstallContext) error {
 	// Fetch latest nvm version dynamically. A silent fallback to a
 	// hardcoded tag would violate the "always latest" policy and
 	// hide rate-limits or network issues from the user.
-	nvmTag, err := github.LatestVersion("nvm-sh/nvm", false)
+	nvmTag, err := latestVersionFn("nvm-sh/nvm", false)
 	if err != nil {
 		return fmt.Errorf("resolve latest nvm version: %w", err)
 	}
