@@ -256,6 +256,48 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		}
 	}
 
+	// Nuke cached shell init output so the next shell start
+	// regenerates with the current .zshrc flags. _cached_init only
+	// invalidates on binary-mtime changes; flag-only changes (e.g.
+	// `zoxide init zsh` → `zoxide init zsh --cmd cd`) otherwise
+	// reuse stale cache forever.
+	bestEffort(sc, "clear zsh init caches", func() error {
+		return clearZshInitCaches(home, sc.Runner)
+	})
+
+	return nil
+}
+
+// clearZshInitCaches removes every *.zsh file in ~/.cache/zsh so
+// the next shell start regenerates cached init output with the
+// current .zshrc. Runs at the end of setupZsh — the one place
+// that owns both the .zshrc symlink and the cache directory.
+func clearZshInitCaches(home string, runner *executor.Runner) error {
+	cacheDir := filepath.Join(home, ".cache", "zsh")
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", cacheDir, err)
+	}
+	var cleared []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".zsh") {
+			continue
+		}
+		path := filepath.Join(cacheDir, e.Name())
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove %s: %w", path, err)
+		}
+		cleared = append(cleared, e.Name())
+	}
+	if len(cleared) > 0 && runner != nil && runner.Log != nil {
+		runner.Log.Write(fmt.Sprintf(
+			"zsh: cleared %d cached init file(s): %s",
+			len(cleared), strings.Join(cleared, ", "),
+		))
+	}
 	return nil
 }
 
@@ -302,6 +344,19 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		}
 	}
 
+	// Remove the legacy lazy.nvim plugin directory from a prior
+	// nvim setup. The current config uses vim.pack (native to 0.12)
+	// which clones into site/pack/core/opt/, so the lazy/ tree is
+	// unused cruft that can shadow the active plugins depending on
+	// runtimepath order.
+	lazyDir := filepath.Join(home, ".local", "share", "nvim", "lazy")
+	if _, err := os.Stat(lazyDir); err == nil {
+		sc.Runner.EmitVerbose("Removing stale lazy.nvim plugin dir")
+		bestEffort(sc, "remove stale ~/.local/share/nvim/lazy", func() error {
+			return os.RemoveAll(lazyDir)
+		})
+	}
+
 	// Build blink.cmp fuzzy matcher if available.
 	blinkDir := filepath.Join(home, ".local", "share", "nvim", "site", "pack", "core", "opt", "blink.cmp")
 	if _, err := os.Stat(blinkDir); err == nil && platform.HasCommand("cargo") {
@@ -311,11 +366,19 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	// Pre-install plugins headlessly so first launch is fast.
+	// Install missing plugins + pull updates to tracked branch tips.
+	// vim.pack.add (called from init.lua) only clones what's missing
+	// — it never updates. Without this explicit vim.pack.update call
+	// every re-install silently no-ops on the plugin set, leaving
+	// pinned versions stale indefinitely. force=true suppresses the
+	// confirmation prompt that would otherwise hang headless mode.
 	if platform.HasCommand("nvim") {
-		sc.Runner.EmitVerbose("Syncing Neovim plugins (headless)")
-		bestEffort(sc, "headless nvim plugin sync failed", func() error {
-			return sc.Runner.Run(ctx, "nvim", "--headless", "+q")
+		sc.Runner.EmitVerbose("Syncing Neovim plugins (headless update)")
+		bestEffort(sc, "headless nvim plugin update failed", func() error {
+			return sc.Runner.Run(ctx, "nvim", "--headless",
+				"+lua vim.pack.update(nil, {force = true})",
+				"+q",
+			)
 		})
 	}
 
