@@ -55,6 +55,12 @@ type BuildResult struct {
 	PlanRows          []PlanRow
 	AlreadyInstalled  int
 	AlreadyConfigured int
+
+	// Names behind the counts above. The summary UI renders these as
+	// a manifest so a clean no-op run shows the user exactly which
+	// tools and components were inspected, not just the totals.
+	AlreadyInstalledNames  []string
+	AlreadyConfiguredNames []string
 }
 
 // isComponentSelected checks whether a component name appears in
@@ -74,11 +80,13 @@ func (bc *BuildConfig) isComponentSelected(name string) bool {
 // BuildInstallTasks creates the task graph for a fresh install.
 func BuildInstallTasks(bc *BuildConfig) BuildResult {
 	var (
-		tasks      []engine.Task
-		rows       []PlanRow
-		toolIDs    []string
+		tasks       []engine.Task
+		rows        []PlanRow
+		toolIDs     []string
 		alreadyInst int
 		alreadyCfg  int
+		instNames   []string
+		cfgNames    []string
 	)
 
 	runner := bc.Runner
@@ -137,10 +145,16 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			status := registry.CheckInstalled(&t)
 			if !bc.ForceReinstall && status == registry.StatusInstalled {
 				alreadyInst++
+				instNames = append(instNames, t.Name)
 				rows = append(rows, PlanRow{
 					Component: t.Name, Action: "Package",
 					Status: "already installed",
 				})
+				if runner != nil && runner.Log != nil {
+					runner.Log.Write(fmt.Sprintf(
+						"SKIP: %s — already installed", t.Name,
+					))
+				}
 				continue
 			}
 			planStatus := "would install"
@@ -264,10 +278,16 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		status := config.InspectComponent(comp.Name, bc.RootDir)
 		if status == "already configured" && !bc.ForceReinstall {
 			alreadyCfg++
+			cfgNames = append(cfgNames, comp.Name)
 			rows = append(rows, PlanRow{
 				Component: comp.Name, Action: "Setup",
 				Status: "already configured",
 			})
+			if runner != nil && runner.Log != nil {
+				runner.Log.Write(fmt.Sprintf(
+					"SKIP: %s — already configured", comp.Name,
+				))
+			}
 			continue
 		}
 		if status == "would replace" {
@@ -394,10 +414,12 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 	}
 
 	return BuildResult{
-		Tasks:             tasks,
-		PlanRows:          rows,
-		AlreadyInstalled:  alreadyInst,
-		AlreadyConfigured: alreadyCfg,
+		Tasks:                  tasks,
+		PlanRows:               rows,
+		AlreadyInstalled:       alreadyInst,
+		AlreadyConfigured:      alreadyCfg,
+		AlreadyInstalledNames:  instNames,
+		AlreadyConfiguredNames: cfgNames,
 	}
 }
 

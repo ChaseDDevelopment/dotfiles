@@ -22,6 +22,13 @@ type summaryModel struct {
 	logPath          string // path to install.log for display
 	alreadyInstalled  int   // tools skipped because already present
 	alreadyConfigured int   // components skipped because configs match
+
+	// Names behind the counts above, rendered as dim manifest blocks
+	// beneath the Results table so a clean no-op run still tells the
+	// user exactly which tools and components were inspected instead
+	// of leaving them to trust an opaque "46 already installed" pill.
+	alreadyInstalledNames  []string
+	alreadyConfiguredNames []string
 	startTime        time.Time
 	endTime          time.Time
 	viewport         viewport.Model
@@ -121,6 +128,13 @@ func (m summaryModel) completionView(width, height int) string {
 	}
 	b.WriteString(panelGap("\n\n"))
 
+	// Filter out no-op housekeeping steps before the rest of this
+	// view reasons about the results. The drift sweep succeeds
+	// silently when there is no drift; counting it as "installed" or
+	// even rendering its row on a clean run confused users into
+	// thinking an install happened when nothing actually changed.
+	visibleSteps := m.visibleSteps()
+
 	// Categorize results. Skipped is distinct from failed — a
 	// skipped step didn't run (usually because a dependency failed,
 	// or `git pull` couldn't advance) whereas failed ran and errored.
@@ -130,7 +144,7 @@ func (m summaryModel) completionView(width, height int) string {
 	configured := 0
 	failed := 0
 	skipped := 0
-	for _, s := range m.steps {
+	for _, s := range visibleSteps {
 		switch {
 		case s.action == "skipped":
 			skipped++
@@ -210,57 +224,19 @@ func (m summaryModel) completionView(width, height int) string {
 	// When in doctor mode, build the table body separately so it can
 	// be placed inside a viewport for scrolling.
 	var tableBody strings.Builder
-	if len(m.steps) > 0 {
+	if len(visibleSteps) > 0 {
 		b.WriteString(panelGap("\n\n"))
 		b.WriteString(stepStyle.Render("  Results"))
 		b.WriteString(panelGap("\n"))
 		b.WriteString(thinRule(w))
 		b.WriteString(panelGap("\n"))
 
-		const (
-			compW     = 20
-			actionW   = 12
-			durationW = 8
-		)
-		statusW := w - 10 - compW - actionW - durationW
-		if statusW < 10 {
-			statusW = 10
-		}
+		compW, statusW, durationW := resultsColumnWidths(w, visibleSteps)
 
-		for _, s := range m.steps {
-			var statusCell string
-			switch {
-			case !s.success:
-				detail := "failed"
-				if s.err != nil {
-					msg := s.err.Error()
-					maxLen := statusW - 2
-					if maxLen > 0 && len(msg) > maxLen {
-						msg = msg[:maxLen-1] + "…"
-					}
-					detail = msg
-				}
-				statusCell = errorStyle.Width(statusW).Render(detail)
-			case s.action == "install":
-				statusCell = successStyle.Width(statusW).Render("installed")
-			case s.action == "configure":
-				statusCell = successStyle.Width(statusW).Render("configured")
-			default:
-				statusCell = dimStyle.Width(statusW).Render(s.status)
-			}
-			durationCell := ""
-			if d, ok := m.durations[s.label]; ok {
-				durationCell = dimStyle.Width(durationW).
-					Render(formatDuration(d))
-			} else {
-				durationCell = dimStyle.Width(durationW).Render("")
-			}
-			row := panelGap("  ") +
-				tableCellStyle.Width(compW).Render(s.label) +
-				tableCellStyle.Width(actionW).Render(s.action) +
-				statusCell +
-				durationCell + panelGap("\n")
-			tableBody.WriteString(row)
+		for _, s := range visibleSteps {
+			tableBody.WriteString(renderResultRow(
+				s, m.durations, compW, statusW, durationW,
+			))
 		}
 	}
 
@@ -270,6 +246,31 @@ func (m summaryModel) completionView(width, height int) string {
 		b.WriteString(m.viewport.View())
 	} else {
 		b.WriteString(tableBody.String())
+	}
+
+	// Already-installed / already-configured manifest blocks. Counts
+	// alone don't tell the user what was actually checked — if the
+	// screen says "46 already installed" with nothing else, they
+	// can't tell whether the installer even inspected the tools they
+	// cared about. Listing names here turns the summary into a
+	// verifiable manifest without flooding the Results table.
+	if len(m.alreadyInstalledNames) > 0 {
+		b.WriteString(panelGap("\n"))
+		b.WriteString(renderAlreadyBlock(
+			w,
+			fmt.Sprintf("Already installed (%d)",
+				len(m.alreadyInstalledNames)),
+			m.alreadyInstalledNames,
+		))
+	}
+	if len(m.alreadyConfiguredNames) > 0 {
+		b.WriteString(panelGap("\n"))
+		b.WriteString(renderAlreadyBlock(
+			w,
+			fmt.Sprintf("Already configured (%d)",
+				len(m.alreadyConfiguredNames)),
+			m.alreadyConfiguredNames,
+		))
 	}
 
 	// Best-effort warnings — failures from post-install hooks that
@@ -599,51 +600,147 @@ func (m *summaryModel) initDoctorViewport(width, height int) {
 // content, matching the same format as completionView's table.
 func (m summaryModel) doctorTableRows(width int) string {
 	w := contentWidth(width)
-	const (
-		compW     = 20
-		actionW   = 12
-		durationW = 8
-	)
-	statusW := w - 10 - compW - actionW - durationW
-	if statusW < 10 {
-		statusW = 10
-	}
+	steps := m.visibleSteps()
+	compW, statusW, durationW := resultsColumnWidths(w, steps)
 
 	var b strings.Builder
-	for _, s := range m.steps {
-		var statusCell string
-		switch {
-		case !s.success:
-			detail := "failed"
-			if s.err != nil {
-				msg := s.err.Error()
-				maxLen := statusW - 2
-				if maxLen > 0 && len(msg) > maxLen {
-					msg = msg[:maxLen-1] + "…"
-				}
-				detail = msg
-			}
-			statusCell = errorStyle.Width(statusW).Render(detail)
-		case s.action == "install":
-			statusCell = successStyle.Width(statusW).Render("installed")
-		case s.action == "configure":
-			statusCell = successStyle.Width(statusW).Render("configured")
-		default:
-			statusCell = dimStyle.Width(statusW).Render(s.status)
-		}
-		durationCell := ""
-		if d, ok := m.durations[s.label]; ok {
-			durationCell = dimStyle.Width(durationW).
-				Render(formatDuration(d))
-		} else {
-			durationCell = dimStyle.Width(durationW).Render("")
-		}
-		b.WriteString(panelGap("  "))
-		b.WriteString(tableCellStyle.Width(compW).Render(s.label))
-		b.WriteString(tableCellStyle.Width(actionW).Render(s.action))
-		b.WriteString(statusCell)
-		b.WriteString(durationCell)
+	for _, s := range steps {
+		b.WriteString(strings.TrimRight(renderResultRow(
+			s, m.durations, compW, statusW, durationW,
+		), "\n"))
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// visibleSteps returns m.steps with silent-success housekeeping tasks
+// filtered out. A successful sweep-repo-drift with no associated
+// warning means there was no drift to restore; showing a row for it
+// or counting it as "installed" misrepresents what the run did.
+func (m summaryModel) visibleSteps() []stepResult {
+	if len(m.steps) == 0 {
+		return nil
+	}
+	repoWarned := false
+	if m.warnings != nil {
+		for _, w := range m.warnings.Snapshot() {
+			if w.Component == "Repo" {
+				repoWarned = true
+				break
+			}
+		}
+	}
+	out := make([]stepResult, 0, len(m.steps))
+	for _, s := range m.steps {
+		if s.id == "sweep-repo-drift" && s.success && !repoWarned {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// resultsColumnWidths returns (name, status, duration) column widths
+// sized to the longest label in the step set. Callers are responsible
+// for rendering within the returned widths — labels exceeding compW
+// get truncated in renderResultRow.
+func resultsColumnWidths(
+	w int, steps []stepResult,
+) (compW, statusW, durationW int) {
+	const (
+		minCompW  = 14
+		maxCompW  = 40
+		durationW2 = 8
+		minStatusW = 12
+	)
+	durationW = durationW2
+	compW = minCompW
+	for _, s := range steps {
+		if l := len(s.label); l+2 > compW {
+			compW = l + 2
+		}
+	}
+	if compW > maxCompW {
+		compW = maxCompW
+	}
+	statusW = w - 10 - compW - durationW
+	if statusW < minStatusW {
+		// Terminal is narrow; reclaim width from the name column
+		// before letting status shrink past readability.
+		over := minStatusW - statusW
+		if compW-over >= minCompW {
+			compW -= over
+			statusW = minStatusW
+		} else {
+			statusW = minStatusW
+		}
+	}
+	return compW, statusW, durationW
+}
+
+// renderResultRow emits one row of the Results table: truncated name
+// (compW), status (statusW), duration (durationW). The action column
+// was removed; status already encodes the action via its label and
+// color, so repeating it was noise.
+func renderResultRow(
+	s stepResult,
+	durations map[string]time.Duration,
+	compW, statusW, durationW int,
+) string {
+	label := s.label
+	if len(label) > compW-2 && compW > 3 {
+		label = label[:compW-3] + "…"
+	}
+
+	var statusCell string
+	switch {
+	case !s.success:
+		detail := "failed"
+		if s.err != nil {
+			msg := s.err.Error()
+			maxLen := statusW - 2
+			if maxLen > 0 && len(msg) > maxLen {
+				msg = msg[:maxLen-1] + "…"
+			}
+			detail = msg
+		}
+		statusCell = errorStyle.Width(statusW).Render(detail)
+	case s.action == "install":
+		statusCell = successStyle.Width(statusW).Render("installed")
+	case s.action == "configure":
+		statusCell = successStyle.Width(statusW).Render("configured")
+	case s.action == "sweep":
+		statusCell = successStyle.Width(statusW).
+			Render("configs restored")
+	default:
+		statusCell = dimStyle.Width(statusW).Render(s.status)
+	}
+
+	durationCell := dimStyle.Width(durationW).Render("")
+	if d, ok := durations[s.label]; ok {
+		durationCell = dimStyle.Width(durationW).
+			Render(formatDuration(d))
+	}
+
+	return panelGap("  ") +
+		tableCellStyle.Width(compW).Render(label) +
+		statusCell +
+		durationCell + panelGap("\n")
+}
+
+// renderAlreadyBlock renders a "Already installed (N)" heading
+// followed by a dim soft-wrapped list of names. Width is set on the
+// body style so lipgloss wraps long lists instead of overflowing the
+// panel.
+func renderAlreadyBlock(w int, heading string, names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	body := lipgloss.NewStyle().
+		Foreground(catOverlay1).
+		Background(catSurface0).
+		Width(w - 4).
+		Render("  " + strings.Join(names, ", "))
+	return stepStyle.Render("  "+heading) +
+		panelGap("\n") + body + panelGap("\n")
 }

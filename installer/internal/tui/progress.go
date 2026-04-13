@@ -26,8 +26,9 @@ const (
 
 // stepResult tracks the outcome of one install step.
 type stepResult struct {
+	id      string // engine task ID, used for special-case filtering
 	label   string
-	action  string // "install", "configure", "cleanup"
+	action  string // "install", "configure", "cleanup", "sweep"
 	status  string // "installed", "configured", "no changes", "failed"
 	success bool
 	err     error
@@ -126,28 +127,37 @@ func (m *progressModel) markActive(id, label string) {
 func (m *progressModel) markDone(id string, err error) {
 	name := m.nameForID(id)
 	action := "install"
-	if strings.HasPrefix(id, "setup-") {
+	switch {
+	case strings.HasPrefix(id, "setup-"):
 		action = "configure"
-	} else if strings.HasPrefix(id, "cleanup-") {
+	case strings.HasPrefix(id, "cleanup-"):
 		action = "cleanup"
+	case strings.HasPrefix(id, "sweep-"):
+		// Drift sweeps and similar housekeeping tasks are not installs.
+		// Classifying them as "install" would inflate the "N installed"
+		// count on the summary screen after a no-op run.
+		action = "sweep"
 	}
 
 	if err != nil {
 		m.toolStatuses[name] = statusFailed
 		m.steps = append(m.steps, stepResult{
-			label: name, action: action,
+			id: id, label: name, action: action,
 			status: "failed", success: false, err: err,
 		})
 	} else {
 		m.toolStatuses[name] = statusDone
 		status := "installed"
-		if action == "configure" {
+		switch action {
+		case "configure":
 			status = "configured"
-		} else if action == "cleanup" {
+		case "cleanup":
 			status = "cleaned"
+		case "sweep":
+			status = "swept"
 		}
 		m.steps = append(m.steps, stepResult{
-			label: name, action: action,
+			id: id, label: name, action: action,
 			status: status, success: true,
 		})
 	}
@@ -168,6 +178,7 @@ func (m *progressModel) markSkipped(id, label, reason string) {
 	}
 	m.toolStatuses[name] = statusSkipped
 	m.steps = append(m.steps, stepResult{
+		id:      id,
 		label:   name,
 		action:  "skipped",
 		status:  reason,

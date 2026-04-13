@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/orchestrator"
 )
 
@@ -488,5 +489,130 @@ func TestSummaryModel_DoctorViewWithViewport(t *testing.T) {
 	view := m.completionView(80, 30)
 	if view == "" {
 		t.Error("doctor completion view with viewport returned empty")
+	}
+}
+
+// TestVisibleSteps_HidesNoOpSweep pins the rule that a successful
+// sweep-repo-drift step disappears from the Results table when the
+// run recorded no Repo warning — that combination means the sweep
+// ran, found no drift, and the row would otherwise surface a
+// misleading "1 installed" on a clean no-op run.
+func TestVisibleSteps_HidesNoOpSweep(t *testing.T) {
+	t.Parallel()
+	m := newSummaryModel(false)
+	m.warnings = config.NewTrackedFailures()
+	m.steps = []stepResult{
+		{
+			id: "zsh", label: "zsh", action: "install",
+			status: "installed", success: true,
+		},
+		{
+			id: "sweep-repo-drift", label: "Restoring repo configs",
+			action: "sweep", status: "swept", success: true,
+		},
+	}
+
+	visible := m.visibleSteps()
+	if len(visible) != 1 || visible[0].id != "zsh" {
+		t.Fatalf(
+			"no-op sweep should be filtered out; got %+v", visible,
+		)
+	}
+
+	// When the sweep actually restored files, it records a Repo
+	// warning. The row must then reappear so the user sees the work.
+	m.warnings.Record(
+		"Repo", "drift sweep",
+		errors.New("originals saved to /tmp/backup"),
+	)
+	visible = m.visibleSteps()
+	if len(visible) != 2 {
+		t.Fatalf(
+			"sweep should be visible when Repo warning exists; "+
+				"got %+v", visible,
+		)
+	}
+}
+
+// TestCompletionView_ShowsAlreadyManifest verifies the manifest block
+// is rendered when names are present, so a clean no-op run gives the
+// user a verifiable list of what was inspected rather than just a
+// count pill.
+func TestCompletionView_ShowsAlreadyManifest(t *testing.T) {
+	t.Parallel()
+	m := newSummaryModel(false)
+	m.warnings = config.NewTrackedFailures()
+	m.alreadyInstalled = 3
+	m.alreadyInstalledNames = []string{"bat", "eza", "fd"}
+	m.alreadyConfigured = 2
+	m.alreadyConfiguredNames = []string{"zsh", "tmux"}
+
+	view := m.completionView(100, 40)
+	for _, want := range []string{
+		"Already installed (3)",
+		"bat", "eza", "fd",
+		"Already configured (2)",
+		"zsh", "tmux",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("completion view missing %q", want)
+		}
+	}
+}
+
+// TestResultsColumnWidths covers the narrow and long-label code
+// paths, ensuring the status column never collapses below its
+// minimum and the name column tracks the longest label up to the
+// 40-char cap.
+func TestResultsColumnWidths(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		w        int
+		steps    []stepResult
+		wantComp int
+	}{
+		{
+			name:     "short labels use floor",
+			w:        100,
+			steps:    []stepResult{{label: "zsh"}},
+			wantComp: 14,
+		},
+		{
+			name: "grows to fit longest label",
+			w:    100,
+			steps: []stepResult{
+				{label: "Restoring repo configs"},
+			},
+			wantComp: 24,
+		},
+		{
+			name: "cap at 40 for absurd labels",
+			w:    200,
+			steps: []stepResult{
+				{label: strings.Repeat("x", 80)},
+			},
+			wantComp: 40,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			compW, statusW, durationW := resultsColumnWidths(
+				tc.w, tc.steps,
+			)
+			if compW != tc.wantComp {
+				t.Errorf(
+					"compW = %d, want %d", compW, tc.wantComp,
+				)
+			}
+			if statusW < 12 {
+				t.Errorf("statusW = %d, must be >= 12", statusW)
+			}
+			if durationW != 8 {
+				t.Errorf("durationW = %d, want 8", durationW)
+			}
+		})
 	}
 }

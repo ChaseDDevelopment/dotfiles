@@ -947,6 +947,12 @@ func (m *AppModel) applyResult(r orchestrator.BuildResult) []engine.Task {
 	m.config.PlanRows = append(m.config.PlanRows, r.PlanRows...)
 	m.summary.alreadyInstalled += r.AlreadyInstalled
 	m.summary.alreadyConfigured += r.AlreadyConfigured
+	m.summary.alreadyInstalledNames = append(
+		m.summary.alreadyInstalledNames, r.AlreadyInstalledNames...,
+	)
+	m.summary.alreadyConfiguredNames = append(
+		m.summary.alreadyConfiguredNames, r.AlreadyConfiguredNames...,
+	)
 	return r.Tasks
 }
 
