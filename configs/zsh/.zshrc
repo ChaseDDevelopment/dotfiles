@@ -142,7 +142,7 @@ fi
 
 # Zoxide (smart cd)
 if (( $+commands[zoxide] )); then
-    _cached_init "zoxide" "${commands[zoxide]}" zoxide init zsh
+    _cached_init "zoxide" "${commands[zoxide]}" zoxide init zsh --cmd cd
 fi
 
 # Atuin (better history)

@@ -1,4 +1,8 @@
 require("nvim-treesitter").setup()
+
+vim.treesitter.language.register("bash", "zsh")
+vim.treesitter.language.register("json", "jsonc")
+
 require("nvim-treesitter").install({
 	"lua",
 	"python",
@@ -12,7 +16,6 @@ require("nvim-treesitter").install({
 	"dockerfile",
 	"tsx",
 	"c_sharp",
-	"jsonc",
 	"toml",
 	"xml",
 	"html",
