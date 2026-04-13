@@ -47,6 +47,7 @@ vim.pack.add({
 	"https://github.com/tris203/precognition.nvim",
 	"https://github.com/Weyaaron/nvim-training",
 	"https://github.com/coder/claudecode.nvim",
+	"https://github.com/christoomey/vim-tmux-navigator",
 })
 require("plugins/catppuccin")
 require("plugins/treesitter")
