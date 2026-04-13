@@ -121,13 +121,20 @@ zstyle ':fzf-tab:*' fzf-command fzf
 # Tool Integrations (cached init for fast startup)
 # ----------------------------------------------------------------------------
 
-# Cache eval-based tool inits: regenerate only when binary changes
+# Cache eval-based tool inits. Regenerate when the binary OR the
+# .zshrc changes — binary-mtime alone misses flag-only edits (e.g.
+# `zoxide init zsh` → `zoxide init zsh --cmd cd`) and would leave
+# the old init sourced forever. XDG_CACHE_HOME has a $HOME/.cache
+# fallback so this still works when the var is unset.
 _cached_init() {
     local name="$1" binary="$2"
     shift 2
-    local cache="${XDG_CACHE_HOME}/zsh/${name}.zsh"
+    local cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/${name}.zsh"
+    local rc="${ZDOTDIR:-$HOME}/.zshrc"
     [[ -d "${cache:h}" ]] || mkdir -p "${cache:h}"
-    if [[ ! -f "$cache" ]] || [[ "$binary" -nt "$cache" ]]; then
+    if [[ ! -f "$cache" ]] \
+        || [[ "$binary" -nt "$cache" ]] \
+        || [[ "$rc" -nt "$cache" ]]; then
         "$@" > "$cache" 2>/dev/null
     fi
     source "$cache"
