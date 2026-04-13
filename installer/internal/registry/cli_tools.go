@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 )
@@ -379,19 +380,46 @@ func installGhCLI(ctx context.Context, ic *InstallContext) error {
 		return fmt.Errorf("gh: chmod keyring: %w", err)
 	}
 
-	// 3. Add GitHub's apt repo. The arch is read at runtime via
-	//    `dpkg --print-architecture` so the same script works on
-	//    amd64/arm64 hosts.
+	// 3. Add GitHub's apt repo. Resolve the arch in Go (via
+	//    `dpkg --print-architecture`) and write the file from Go
+	//    via a tmp file + `sudo install`. The previous path passed
+	//    the line through `bash -c "echo '...' | sudo tee ..."`,
+	//    which suppressed `$(dpkg --print-architecture)` because it
+	//    sat inside single quotes — so the literal `$(...)` string
+	//    ended up in the .list file, breaking every subsequent
+	//    `nala update`. Sidestepping the shell removes the quoting
+	//    surface entirely.
+	archOut, err := exec.CommandContext(
+		ctx, "dpkg", "--print-architecture",
+	).Output()
+	if err != nil {
+		return fmt.Errorf("gh: detect arch: %w", err)
+	}
+	arch := strings.TrimSpace(string(archOut))
+	if arch == "" {
+		return fmt.Errorf("gh: dpkg returned empty arch")
+	}
 	repoLine := fmt.Sprintf(
-		`deb [arch=$(dpkg --print-architecture) signed-by=%s] https://cli.github.com/packages stable main`,
-		keyringPath,
+		"deb [arch=%s signed-by=%s] https://cli.github.com/packages stable main\n",
+		arch, keyringPath,
 	)
-	tee := fmt.Sprintf(
-		`echo '%s' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null`,
-		repoLine,
-	)
-	if err := ic.Runner.RunShell(ctx, tee); err != nil {
-		return fmt.Errorf("gh: add apt source: %w", err)
+	const listPath = "/etc/apt/sources.list.d/github-cli.list"
+	tmp, err := os.CreateTemp("", "github-cli-*.list")
+	if err != nil {
+		return fmt.Errorf("gh: create temp list: %w", err)
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.WriteString(repoLine); err != nil {
+		tmp.Close()
+		return fmt.Errorf("gh: write temp list: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("gh: close temp list: %w", err)
+	}
+	if err := ic.Runner.Run(
+		ctx, "sudo", "install", "-m", "0644", tmp.Name(), listPath,
+	); err != nil {
+		return fmt.Errorf("gh: install apt source: %w", err)
 	}
 
 	// 4. Install via the managed PkgMgr. Install's implementation
