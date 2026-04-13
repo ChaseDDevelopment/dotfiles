@@ -129,3 +129,65 @@ func TestClassifyAptErrNilPassthrough(t *testing.T) {
 		t.Fatalf("expected nil, got %v", got)
 	}
 }
+
+// TestInstallArgsFlagOrder guards against the regression that
+// broke dock's install run: nala requires `-o` to come AFTER the
+// `install` subcommand. Placing it before exits 2 in ~1s with a
+// CLI parse error; apt-get accepts either position. One test,
+// both modes.
+func TestInstallArgsFlagOrder(t *testing.T) {
+	cases := []struct {
+		name    string
+		useNala bool
+		pkgs    []string
+		want    []string
+	}{
+		{
+			name:    "nala single package",
+			useNala: true,
+			pkgs:    []string{"ffmpeg"},
+			want: []string{
+				"nala", "install",
+				"-o", "DPkg::Lock::Timeout=60",
+				"-y", "ffmpeg",
+			},
+		},
+		{
+			name:    "nala multi package",
+			useNala: true,
+			pkgs:    []string{"ffmpeg", "imagemagick", "poppler-utils"},
+			want: []string{
+				"nala", "install",
+				"-o", "DPkg::Lock::Timeout=60",
+				"-y", "ffmpeg", "imagemagick", "poppler-utils",
+			},
+		},
+		{
+			name:    "apt-get fallback",
+			useNala: false,
+			pkgs:    []string{"curl"},
+			want: []string{
+				"apt-get", "install",
+				"-o", "DPkg::Lock::Timeout=60",
+				"-y", "curl",
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			a := &Apt{useNala: c.useNala}
+			got := a.installArgs(c.pkgs)
+			if len(got) != len(c.want) {
+				t.Fatalf("len mismatch: got %v, want %v", got, c.want)
+			}
+			for i := range got {
+				if got[i] != c.want[i] {
+					t.Errorf(
+						"arg[%d] = %q, want %q (full: %v)",
+						i, got[i], c.want[i], got,
+					)
+				}
+			}
+		})
+	}
+}

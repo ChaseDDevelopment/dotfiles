@@ -91,15 +91,16 @@ func (a *Apt) cmd() string {
 	return "apt-get"
 }
 
-// installArgs builds the install command for one or more packages,
-// prepending the lock-timeout option so concurrent system apt
-// invocations (unattended-upgrades, etc.) don't cause us to fail
-// immediately on a transient lock.
+// installArgs builds the install command for one or more packages.
+// The lock-timeout option sits AFTER the `install` subcommand —
+// nala only accepts `-o` in that position (while apt-get accepts
+// it anywhere). Placing it after `install` keeps both CLIs happy.
 func (a *Apt) installArgs(pkgs []string) []string {
 	args := []string{
 		a.cmd(),
+		"install",
 		"-o", fmt.Sprintf("DPkg::Lock::Timeout=%d", dpkgLockTimeoutSec),
-		"install", "-y",
+		"-y",
 	}
 	return append(args, pkgs...)
 }
