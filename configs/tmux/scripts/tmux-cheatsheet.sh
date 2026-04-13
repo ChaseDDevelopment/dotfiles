@@ -50,8 +50,8 @@ row() {
     sep
     row "c"       "new window"      "|"       "split horiz"    "h"       "pane left"
     row "n"       "next window"     "-"       "split vert"     "j"       "pane down"
-    row "p"       "prev window"     "\""      "split vert"     "k"       "pane up"
-    row "&"       "kill window"     "%"       "split horiz"    "l"       "pane right"
+    row "p"       "prev window"     ""        ""               "k"       "pane up"
+    row "&"       "kill window"     ""        ""               "l"       "pane right"
     row ","       "rename window"   ""        ""               ""        ""
     printf '\n'
 
