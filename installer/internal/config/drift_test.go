@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
@@ -161,5 +162,45 @@ func TestBackupAndReset_EmptyPathsNoop(t *testing.T) {
 	}
 	if bm.Exists() {
 		t.Error("backup manager should not have created a dir for noop call")
+	}
+}
+
+func TestBackupAndReset_ClearsStagedDrift(t *testing.T) {
+	dir := seedRepo(t)
+	target := filepath.Join(dir, "configs", "zsh", ".zshrc")
+	mutated := "# original\nexport STAGED=1\n"
+	if err := os.WriteFile(target, []byte(mutated), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("git", "add", "configs/zsh/.zshrc")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, out)
+	}
+
+	bm := backup.NewManager(false)
+	if _, err := BackupAndReset(dir, bm, []string{"configs/zsh/.zshrc"}); err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "# original\n" {
+		t.Fatalf("working tree not restored to HEAD: %q", content)
+	}
+
+	status := exec.Command(
+		"git", "status", "--porcelain=v1", "--", "configs/zsh/.zshrc",
+	)
+	status.Dir = dir
+	out, err := status.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git status failed: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("expected clean git status, got %q", string(out))
 	}
 }

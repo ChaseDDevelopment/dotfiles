@@ -59,9 +59,9 @@ func DetectRepoDrift(rootDir string) ([]string, error) {
 
 // BackupAndReset saves each repo-relative path through the backup
 // manager (timestamped dir, existing restore flow works), then
-// runs `git -C rootDir checkout -- <paths>` to drop the working-
-// tree changes. Returns the backup directory so callers can cite
-// it in user-visible messages.
+// restores both the index and working tree to HEAD for those
+// paths. Returns the backup directory so callers can cite it in
+// user-visible messages.
 //
 // Only call this with paths from DetectRepoDrift — this function
 // does NOT re-validate scope. Passing paths outside configs/ would
@@ -82,13 +82,15 @@ func BackupAndReset(
 			)
 		}
 	}
-	// git checkout can accept many pathspecs but we keep them
-	// explicit per-call so an arg-list-too-long error is the
-	// outlier case, not the default.
-	args := append([]string{"-C", rootDir, "checkout", "--"}, paths...)
+	// Clear both staged and unstaged drift so the caller can retry
+	// a blocked fast-forward pull against a fully clean tree.
+	args := append([]string{
+		"-C", rootDir,
+		"restore", "--staged", "--worktree", "--source=HEAD", "--",
+	}, paths...)
 	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 		return bm.Dir(), fmt.Errorf(
-			"git checkout: %w\n%s", err, strings.TrimSpace(string(out)),
+			"git restore: %w\n%s", err, strings.TrimSpace(string(out)),
 		)
 	}
 	return bm.Dir(), nil
