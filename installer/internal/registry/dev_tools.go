@@ -286,12 +286,14 @@ func InstallNeovimApt(ctx context.Context, ic *InstallContext) error {
 }
 
 func installYaziApt(ctx context.Context, ic *InstallContext) error {
-	// Install all companion packages in a single command.
+	// Install all companion packages in a single command. Errors
+	// here are propagated — swallowing them masks dpkg-interrupted
+	// and lock-held states that the caller's retry/classifier needs
+	// to see. The yazi .deb install that follows would just fail
+	// identically anyway.
 	deps := []string{"ffmpeg", "p7zip-full", "jq", "poppler-utils", "imagemagick"}
 	if err := ic.PkgMgr.Install(ctx, deps...); err != nil {
-		ic.Runner.Log.Write(fmt.Sprintf(
-			"WARNING: optional deps install failed: %v", err,
-		))
+		return fmt.Errorf("yazi companion deps: %w", err)
 	}
 
 	// Download prebuilt deb from GitHub Releases.

@@ -260,7 +260,7 @@ func TestContextCancellation(t *testing.T) {
 }
 
 func TestResourceSemaphoreSerializes(t *testing.T) {
-	// Two tasks sharing ResApt should not run concurrently.
+	// Two tasks sharing ResDpkg should not run concurrently.
 	var concurrent atomic.Int32
 	var maxConcurrent atomic.Int32
 
@@ -278,9 +278,9 @@ func TestResourceSemaphoreSerializes(t *testing.T) {
 	}
 
 	tasks := []Task{
-		{ID: "a", Label: "A", Resources: []Resource{ResApt}, Run: run},
-		{ID: "b", Label: "B", Resources: []Resource{ResApt}, Run: run},
-		{ID: "c", Label: "C", Resources: []Resource{ResApt}, Run: run},
+		{ID: "a", Label: "A", Resources: []Resource{ResDpkg}, Run: run},
+		{ID: "b", Label: "B", Resources: []Resource{ResDpkg}, Run: run},
+		{ID: "c", Label: "C", Resources: []Resource{ResDpkg}, Run: run},
 	}
 
 	ch := Run(context.Background(), tasks, 5)
@@ -471,7 +471,7 @@ func TestSelfCycleDetection(t *testing.T) {
 }
 
 func TestResourceSemaphoreNoLeakOnCancel(t *testing.T) {
-	// "blocker" holds ResCargo. "multi" needs ResApt + ResCargo.
+	// "blocker" holds ResCargo. "multi" needs ResDpkg + ResCargo.
 	// "setup" gates "multi" so it only dispatches after blocker
 	// has acquired ResCargo. Cancel context while "multi" is
 	// blocked waiting for ResCargo.
@@ -499,7 +499,7 @@ func TestResourceSemaphoreNoLeakOnCancel(t *testing.T) {
 		{
 			ID: "multi", Label: "Multi",
 			DependsOn: []string{"setup"},
-			Resources: []Resource{ResApt, ResCargo},
+			Resources: []Resource{ResDpkg, ResCargo},
 			Run: func(_ context.Context) error {
 				t.Error("multi should not have run")
 				return nil
@@ -510,7 +510,7 @@ func TestResourceSemaphoreNoLeakOnCancel(t *testing.T) {
 	ch := Run(ctx, tasks, 5)
 	// Wait for blocker to confirm it holds ResCargo.
 	<-blockerRunning
-	// Give multi time to acquire ResApt and block on ResCargo.
+	// Give multi time to acquire ResDpkg and block on ResCargo.
 	time.Sleep(50 * time.Millisecond)
 	cancel()
 

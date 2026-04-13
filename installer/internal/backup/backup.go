@@ -22,11 +22,14 @@ type Manager struct {
 }
 
 // NewManager creates a backup manager with a timestamped directory.
+// The timestamp includes nanoseconds so two installer runs started
+// in the same second (CI, rapid user retry) don't collide on the
+// same backup path and silently overwrite each other.
 func NewManager(dryRun bool) *Manager {
 	return &Manager{
 		dir: filepath.Join(
 			os.Getenv("HOME"),
-			fmt.Sprintf(".dotfiles-backup-%s", time.Now().Format("20060102-150405")),
+			fmt.Sprintf(".dotfiles-backup-%s", time.Now().Format("20060102-150405.000000000")),
 		),
 		dryRun: dryRun,
 	}

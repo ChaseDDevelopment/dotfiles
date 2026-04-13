@@ -28,6 +28,7 @@ const (
 	PhaseOptionsMenu
 	PhaseComponentPicker
 	PhaseBackupPicker
+	PhaseDpkgRepair
 	PhaseInstalling
 	PhaseFailurePrompt
 	PhaseSummary
@@ -95,6 +96,14 @@ type AppModel struct {
 	// the failure prompt to display which tool failed.
 	failedTaskLabel string
 	failedTaskErr   error
+
+	// dpkgState is populated when the pre-flight dpkg health probe
+	// flags an inconsistent state. It holds the reason text + audit
+	// output that the PhaseDpkgRepair modal displays.
+	dpkgState pkgmgr.DpkgState
+	// dpkgApt references the concrete Apt manager so the modal can
+	// set UserApprovedRepair based on user choice.
+	dpkgApt *pkgmgr.Apt
 
 	startTime time.Time
 }
@@ -166,6 +175,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateComponentPicker(msg)
 	case PhaseBackupPicker:
 		return m.updateBackupPicker(msg)
+	case PhaseDpkgRepair:
+		return m.updateDpkgRepair(msg)
 	case PhaseInstalling:
 		return m.updateInstalling(msg)
 	case PhaseFailurePrompt:
@@ -205,6 +216,8 @@ func (m AppModel) View() tea.View {
 		content = m.picker.View(w)
 	case PhaseBackupPicker:
 		content = m.backupPicker.View(w)
+	case PhaseDpkgRepair:
+		content = m.dpkgRepairView(w)
 	case PhaseInstalling:
 		content = m.progress.View(w)
 	case PhaseFailurePrompt:
@@ -442,6 +455,142 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progress, cmd = m.progress.Update(msg)
 		return m, cmd
 	}
+}
+
+// preflightDpkgHealth runs a read-only dpkg audit for apt-based
+// systems. If the audit reports inconsistency, the method captures
+// state + switches to PhaseDpkgRepair so the user can authorize a
+// repair before any apt install runs. Returns (cmd, true) when the
+// engine should be blocked; (nil, false) when the probe passes or
+// the manager isn't apt.
+func (m *AppModel) preflightDpkgHealth() (tea.Cmd, bool) {
+	apt, ok := m.config.PkgMgr.(*pkgmgr.Apt)
+	if !ok {
+		return nil, false
+	}
+	// Consent flag resets per-session — the user must re-authorize
+	// for each install run even if they previously approved. This
+	// prevents a stale "yes" from a prior dotsetup invocation from
+	// silently granting repair on a fresh run.
+	apt.UserApprovedRepair = false
+	state, err := apt.DetectDpkgHealth(context.Background())
+	if err != nil {
+		// A probe failure is logged but not fatal — let the engine
+		// run; individual apt invocations still go through the
+		// classifier and retry-after-heal path.
+		if m.config.Runner != nil && m.config.Runner.Log != nil {
+			m.config.Runner.Log.Write(fmt.Sprintf(
+				"dpkg health probe failed: %v (continuing without pre-flight)",
+				err,
+			))
+		}
+		return nil, false
+	}
+	if state.Healthy {
+		return nil, false
+	}
+	m.dpkgState = state
+	m.dpkgApt = apt
+	m.phase = PhaseDpkgRepair
+	return nil, true
+}
+
+// updateDpkgRepair handles the user's decision on the pre-install
+// dpkg-repair modal. R=authorize repair, S=skip (apt tools will
+// surface as failed with a clear reason), A/ESC/Q=abort the run.
+func (m AppModel) updateDpkgRepair(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "r", "R":
+		if m.dpkgApt != nil {
+			m.dpkgApt.UserApprovedRepair = true
+		}
+		if m.config.Runner != nil && m.config.Runner.Log != nil {
+			m.config.Runner.Log.Write(
+				"dpkg doctor: user authorized repair",
+			)
+		}
+		return &m, m.runInstallTasks()
+	case "s", "S":
+		if m.dpkgApt != nil {
+			m.dpkgApt.UserApprovedRepair = false
+		}
+		if m.config.Runner != nil && m.config.Runner.Log != nil {
+			m.config.Runner.Log.Write(
+				"dpkg doctor: user declined repair; apt tools will fail",
+			)
+		}
+		return &m, m.runInstallTasks()
+	case "a", "A", "q", "Q", "esc":
+		if m.cancelEngine != nil {
+			m.cancelEngine()
+		}
+		m.summary.endTime = time.Now()
+		m.summary.criticalFailure = true
+		m.phase = PhaseSummary
+		if m.config.Runner != nil && m.config.Runner.Log != nil {
+			m.config.Runner.Log.Write(
+				"dpkg doctor: user aborted; no tool tasks ran",
+			)
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// dpkgRepairView renders the repair-consent modal. The reason text
+// comes from DetectDpkgHealth — `dpkg --audit` output summarized,
+// with stale /var/lib/dpkg/updates entries called out separately.
+func (m AppModel) dpkgRepairView(width int) string {
+	w := contentWidth(width)
+	var b strings.Builder
+
+	b.WriteString(errorStyle.Render("  ⚠  dpkg state inconsistent"))
+	b.WriteString(panelGap("\n\n"))
+
+	b.WriteString(panelGap("  "))
+	b.WriteString(selectedStyle.Render("Reason: "))
+	b.WriteString(panelGap(m.dpkgState.Reason))
+	b.WriteString(panelGap("\n"))
+
+	if m.dpkgState.AuditOutput != "" {
+		b.WriteString(panelGap("  "))
+		b.WriteString(dimStyle.Render("dpkg --audit: "))
+		summary := m.dpkgState.AuditOutput
+		if len(summary) > 240 {
+			summary = summary[:240] + "…"
+		}
+		b.WriteString(panelGap(summary))
+		b.WriteString(panelGap("\n"))
+	}
+	if len(m.dpkgState.StaleUpdates) > 0 {
+		b.WriteString(panelGap("  "))
+		b.WriteString(dimStyle.Render("Stale transactions: "))
+		b.WriteString(panelGap(strings.Join(m.dpkgState.StaleUpdates, ", ")))
+		b.WriteString(panelGap("\n"))
+	}
+	b.WriteString(panelGap("\n"))
+
+	b.WriteString(panelGap("  Running "))
+	b.WriteString(selectedStyle.Render("sudo dpkg --configure -a"))
+	b.WriteString(panelGap(" will repair it. This is the standard\n"))
+	b.WriteString(panelGap("  Debian/Ubuntu recovery and is generally safe.\n\n"))
+	b.WriteString(panelGap("  Without repair, apt-based tool installs will fail.\n\n"))
+
+	b.WriteString(panelGap("  "))
+	b.WriteString(selectedStyle.Render("[R]"))
+	b.WriteString(panelGap(" Run repair   "))
+	b.WriteString(selectedStyle.Render("[S]"))
+	b.WriteString(panelGap(" Skip (apt tools may fail)   "))
+	b.WriteString(errorStyle.Render("[A]"))
+	b.WriteString(panelGap(" Abort   "))
+	b.WriteString(dimStyle.Render("(ESC = Abort)"))
+	b.WriteString(panelGap("\n"))
+
+	return panelStyle.Width(w).Render(b.String())
 }
 
 func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -826,7 +975,21 @@ func (m *AppModel) startInstall() tea.Cmd {
 // runInstallTasks builds the engine task graph and kicks off the
 // worker pool. Split out from startInstall so we can run it after
 // syncRepoCmd returns via repoSyncedMsg.
+//
+// Before the engine starts, it runs a read-only dpkg health probe
+// on apt-based systems. If dpkg is inconsistent, the method
+// transitions to PhaseDpkgRepair and returns nil — the engine
+// will be kicked again by updateDpkgRepair once the user decides
+// whether to authorize `sudo dpkg --configure -a`.
 func (m *AppModel) runInstallTasks() tea.Cmd {
+	// Pre-flight: only for fresh install / update (other modes don't
+	// shell out to apt at session start).
+	if m.config.Mode == ModeInstall || m.config.Mode == ModeCustomInstall || m.config.Mode == ModeUpdate {
+		if cmd, blocked := m.preflightDpkgHealth(); blocked {
+			return cmd
+		}
+	}
+
 	bc := m.buildConfig()
 	var tasks []engine.Task
 

@@ -237,7 +237,12 @@ func cliTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "gh"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "github-cli"},
-				{Managers: []string{"apt"}, Method: MethodCustom, CustomFunc: installGhCLI},
+				{
+					Managers:     []string{"apt"},
+					Method:       MethodCustom,
+					CustomFunc:   installGhCLI,
+					AcquiresDpkg: true,
+				},
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "gh"},
 			},
 		},
@@ -343,14 +348,57 @@ func cliTools() []Tool {
 	}
 }
 
+// installGhCLI provisions GitHub's apt repo (keyring + sources.list)
+// then delegates the actual install to ic.PkgMgr.Install so it
+// benefits from the shared classifier, dpkg doctor retry, and
+// DPkg::Lock::Timeout handling. The earlier bash -c blob bypassed
+// all of that and hid which step actually failed when dpkg was
+// interrupted.
 func installGhCLI(ctx context.Context, ic *InstallContext) error {
-	script := `type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-sudo apt update
-sudo apt install gh -y`
-	return ic.Runner.RunShell(ctx, script)
+	// 1. Ensure curl is installed via the managed PkgMgr — same
+	//    classifier/retry path as every other apt invocation.
+	if _, err := exec.LookPath("curl"); err != nil {
+		if err := ic.PkgMgr.Install(ctx, "curl"); err != nil {
+			return fmt.Errorf("gh: install curl: %w", err)
+		}
+	}
+
+	// 2. Download the keyring.
+	const keyringURL = "https://cli.github.com/packages/githubcli-archive-keyring.gpg"
+	const keyringPath = "/usr/share/keyrings/githubcli-archive-keyring.gpg"
+	script := fmt.Sprintf(
+		"curl -fsSL %s | sudo dd of=%s",
+		keyringURL, keyringPath,
+	)
+	if err := ic.Runner.RunShell(ctx, script); err != nil {
+		return fmt.Errorf("gh: download keyring: %w", err)
+	}
+	if err := ic.Runner.Run(
+		ctx, "sudo", "chmod", "go+r", keyringPath,
+	); err != nil {
+		return fmt.Errorf("gh: chmod keyring: %w", err)
+	}
+
+	// 3. Add GitHub's apt repo. The arch is read at runtime via
+	//    `dpkg --print-architecture` so the same script works on
+	//    amd64/arm64 hosts.
+	repoLine := fmt.Sprintf(
+		`deb [arch=$(dpkg --print-architecture) signed-by=%s] https://cli.github.com/packages stable main`,
+		keyringPath,
+	)
+	tee := fmt.Sprintf(
+		`echo '%s' | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null`,
+		repoLine,
+	)
+	if err := ic.Runner.RunShell(ctx, tee); err != nil {
+		return fmt.Errorf("gh: add apt source: %w", err)
+	}
+
+	// 4. Install via the managed PkgMgr. Install's implementation
+	//    runs `apt-get update` once per session via ensureUpdated,
+	//    so adding the new repo before this call is what makes the
+	//    gh package visible.
+	return ic.PkgMgr.Install(ctx, "gh")
 }
 
 func isNerdFontInstalled() bool {

@@ -10,13 +10,28 @@ import (
 )
 
 // Resource identifies a shared system resource that must be accessed
-// exclusively (e.g., dpkg lock for apt, cargo build directory).
+// exclusively. Tasks holding different resources run concurrently up
+// to the worker-pool cap — so cross-manager parallelism (apt + cargo,
+// brew + cargo) falls out naturally.
+//
+//	Resource     Serializes                          Reason
+//	ResDpkg      apt, apt-get, nala, dpkg -i         Shared /var/lib/dpkg/lock-frontend
+//	ResRpm       dnf, yum, zypper                    Shared rpm database lock
+//	ResPacman    pacman                              Shared pacman db lock
+//	ResBrew      brew                                Shared brew cellar lock
+//	ResCargo     cargo                               Shared ~/.cargo/registry lock
+//
+// Adding a new package manager means (a) a new Resource constant
+// here, (b) a slot in scheduler.resSems, and (c) orchestrator
+// resource-assignment logic mapping the manager to that Resource.
 type Resource string
 
 const (
-	ResApt   Resource = "apt"
-	ResBrew  Resource = "brew"
-	ResCargo Resource = "cargo"
+	ResDpkg   Resource = "dpkg"
+	ResRpm    Resource = "rpm"
+	ResPacman Resource = "pacman"
+	ResBrew   Resource = "brew"
+	ResCargo  Resource = "cargo"
 )
 
 // TaskState tracks the lifecycle of a single task.

@@ -106,6 +106,19 @@ func (r *Runner) RunWithEnv(
 	return err
 }
 
+// RunWithEnvAndOutput is RunWithEnv + RunWithOutput: lets callers
+// pass per-invocation env (e.g. TERM=dumb to strip the Rich progress
+// box from nala's stderr) while still receiving combined output for
+// error classification.
+func (r *Runner) RunWithEnvAndOutput(
+	ctx context.Context,
+	extraEnv []string,
+	name string,
+	args ...string,
+) (string, error) {
+	return r.runCmd(ctx, "", extraEnv, name, false, args...)
+}
+
 // RunProbe executes a command without logging FAILED on non-zero exit.
 // Use for commands where non-zero exit is an expected outcome.
 func (r *Runner) RunProbe(

@@ -15,18 +15,25 @@ type Brew struct {
 func (b *Brew) Name() string { return "brew" }
 
 func (b *Brew) Install(ctx context.Context, genericNames ...string) error {
-	for _, generic := range genericNames {
-		names := b.MapName(generic)
-		if len(names) == 0 {
-			continue // skip packages not relevant to brew
-		}
-		for _, pkg := range names {
-			if err := b.runner.Run(ctx, "brew", "install", pkg); err != nil {
-				return fmt.Errorf("brew install %s: %w", pkg, err)
-			}
-		}
+	if len(genericNames) == 0 {
+		return nil
 	}
-	return nil
+	pkgs := dedupeNames(b.MapName, genericNames)
+	if len(pkgs) == 0 {
+		// Every caller-supplied name MapName'd to an empty slice
+		// (e.g. "build-essential" on macOS). Nothing to install.
+		return nil
+	}
+	args := append([]string{"brew", "install"}, pkgs...)
+	out, err := b.runner.RunWithOutput(ctx, args[0], args[1:]...)
+	if err == nil {
+		return nil
+	}
+	return attribute(
+		fmt.Errorf("brew install: %w (output: %s)", err, out),
+		genericNames,
+		b.IsInstalled,
+	)
 }
 
 // IsInstalled reports whether every mapped package exists in the

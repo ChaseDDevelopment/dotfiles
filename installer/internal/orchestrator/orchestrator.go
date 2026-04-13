@@ -5,7 +5,10 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
+	"sync"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
@@ -83,6 +86,26 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 	plat := bc.Platform
 	mgrName := mgr.Name()
 
+	// Insert the dpkg-doctor pseudo-task for apt-based systems. It
+	// probes `dpkg --audit` + `/var/lib/dpkg/updates/` once, and
+	// (per the current interim without the TUI modal) runs
+	// `sudo dpkg --configure -a` if unhealthy. Every tool task
+	// whose resource set includes ResDpkg takes the doctor as a
+	// dependency so it always runs first under the same semaphore.
+	var dpkgDoctorID string
+	if apt, ok := mgr.(*pkgmgr.Apt); ok && !bc.SkipPackages {
+		dpkgDoctorID = "dpkg-doctor"
+		tasks = append(tasks, engine.Task{
+			ID:        dpkgDoctorID,
+			Label:     "Checking dpkg health",
+			Critical:  true,
+			Resources: []engine.Resource{engine.ResDpkg},
+			Run: func(ctx context.Context) error {
+				return apt.EnsureHealthy(ctx)
+			},
+		})
+	}
+
 	if !bc.SkipPackages {
 		tools := registry.AllTools()
 
@@ -98,7 +121,15 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			}
 		}
 
-		// Pass 2: create install tasks.
+		// Pass 2: partition tools into batch-eligible (first
+		// applicable strategy is MethodPackageManager under the
+		// active manager) vs individual. Collecting the batch set
+		// BEFORE creating tasks means each tool in a bucket can
+		// share a single pkgmgr invocation via batchState.runOnce.
+		var toInstall []registry.Tool
+		bucket := make([]batchEntry, 0) // preserves registry order
+		bs := &batchState{}
+
 		for _, t := range tools {
 			if !registry.ShouldInstall(&t, plat) {
 				continue
@@ -123,9 +154,44 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 				Component: t.Name, Action: "Package",
 				Status: planStatus,
 			})
+			toInstall = append(toInstall, t)
+			if s := registry.FirstPkgMgrStrategy(&t, mgrName); s != nil && s.Package != "" {
+				bucket = append(bucket, batchEntry{
+					tool:       t,
+					strategy:   s,
+					genericPkg: s.Package,
+				})
+			}
+		}
 
+		// Build the deduplicated generic-name list for the batch
+		// install. Order matches bucket order so mock-runner tests
+		// see a stable shell command.
+		var bucketGenerics []string
+		seen := make(map[string]bool)
+		for _, e := range bucket {
+			if !seen[e.genericPkg] {
+				seen[e.genericPkg] = true
+				bucketGenerics = append(bucketGenerics, e.genericPkg)
+			}
+		}
+
+		// Dependency injection: tools that touch dpkg must wait for
+		// the doctor pseudo-task. We detect dpkg-touching via the
+		// task's computed Resources set (which includes ResDpkg
+		// whenever a MethodPackageManager[apt] strategy, an apt
+		// Managers entry, or AcquiresDpkg applies).
+		_ = dpkgDoctorID // silence unused when SkipPackages is true on brew
+
+		// Per-tool task bodies. For tools in the bucket, the first
+		// task to run executes the shared batch install via
+		// sync.Once; the others wait on the Once and then fan out
+		// per-tool post-install + RecordInstall (for successes) or
+		// ExecuteInstallSkippingPkgMgr (for partial-batch failures)
+		// — without re-invoking the package manager.
+		for _, t := range toInstall {
+			t := t
 			taskID := t.Command
-
 			var deps []string
 			for _, dep := range t.DependsOn {
 				if !installedSet[dep] {
@@ -133,32 +199,56 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 				}
 			}
 
+			// Find whether this tool is batched; if so, capture its
+			// generic pkgmgr name + strategy for the closure.
+			var entry *batchEntry
+			for i := range bucket {
+				if bucket[i].tool.Command == t.Command {
+					entry = &bucket[i]
+					break
+				}
+			}
+
+			run := func(ctx context.Context) error {
+				ic := &registry.InstallContext{
+					Runner:         runner,
+					PkgMgr:         mgr,
+					Platform:       plat,
+					ForceReinstall: bc.ForceReinstall,
+				}
+				if entry != nil {
+					return runBatchedInstall(
+						ctx, &t, entry, ic, plat, bs,
+						bucketGenerics, bc.State,
+					)
+				}
+				// Non-batched tool — existing per-tool path.
+				if err := registry.ExecuteInstall(
+					ctx, &t, ic, plat,
+				); err != nil {
+					return err
+				}
+				if bc.State != nil {
+					ver := registry.InstalledVersion(&t)
+					bc.State.RecordInstall(
+						t.Name, ver, "install",
+					)
+				}
+				return nil
+			}
+
+			resources := resourcesForTool(&t, mgrName)
+			if dpkgDoctorID != "" && hasResource(resources, engine.ResDpkg) {
+				deps = append(deps, dpkgDoctorID)
+			}
+
 			tasks = append(tasks, engine.Task{
 				ID:        taskID,
 				Label:     fmt.Sprintf("Installing %s", t.Name),
 				Critical:  t.Critical,
 				DependsOn: deps,
-				Resources: resourcesForTool(&t, mgrName),
-				Run: func(ctx context.Context) error {
-					ic := &registry.InstallContext{
-						Runner:         runner,
-						PkgMgr:         mgr,
-						Platform:       plat,
-						ForceReinstall: bc.ForceReinstall,
-					}
-					if err := registry.ExecuteInstall(
-						ctx, &t, ic, plat,
-					); err != nil {
-						return err
-					}
-					if bc.State != nil {
-						ver := registry.InstalledVersion(&t)
-						bc.State.RecordInstall(
-							t.Name, ver, "install",
-						)
-					}
-					return nil
-				},
+				Resources: resources,
+				Run:       run,
 			})
 			toolIDs = append(toolIDs, taskID)
 		}
@@ -466,37 +556,228 @@ func BuildDoctorTasks(bc *BuildConfig) BuildResult {
 	return BuildResult{Tasks: tasks}
 }
 
-// resourcesForTool determines which engine resources a tool needs
-// based on its first applicable install strategy.
+// resourcesForTool returns the UNION of engine resources that any
+// applicable strategy for this tool might acquire. Computing the
+// union (rather than stopping at the first strategy) is what makes
+// fallthrough safe: if strategy 0 is apt and strategy 1 is a script
+// that itself shells out to apt, the task must hold ResDpkg
+// regardless of which strategy ultimately runs — otherwise the
+// fallthrough path races other apt work concurrently.
+//
+// Each strategy contributes:
+//   - The pkgmgr-native resource for MethodPackageManager under the
+//     active manager (ResDpkg/ResRpm/ResPacman/ResBrew).
+//   - ResCargo for MethodCargo.
+//   - ResDpkg when AcquiresDpkg is explicitly declared on the
+//     strategy (e.g. MethodCustom that embeds `sudo apt install`).
+//   - Legacy: MethodCustom with "apt"/"brew" in Managers still maps
+//     to the matching resource for backward compatibility with
+//     strategy definitions that predate AcquiresDpkg.
 func resourcesForTool(
 	t *registry.Tool,
 	mgrName string,
 ) []engine.Resource {
+	set := make(map[engine.Resource]struct{})
+	add := func(r engine.Resource) { set[r] = struct{}{} }
+
 	for _, s := range t.Strategies {
 		if !s.AppliesTo(mgrName) {
 			continue
 		}
 		switch s.Method {
 		case registry.MethodPackageManager:
-			if mgrName == "apt" {
-				return []engine.Resource{engine.ResApt}
-			}
-			if mgrName == "brew" {
-				return []engine.Resource{engine.ResBrew}
+			if r, ok := pkgMgrResource(mgrName); ok {
+				add(r)
 			}
 		case registry.MethodCargo:
-			return []engine.Resource{engine.ResCargo}
-		case registry.MethodCustom:
+			add(engine.ResCargo)
+		case registry.MethodCustom, registry.MethodScript:
+			// Honor the explicit AcquiresDpkg flag regardless of
+			// which managers the strategy is gated on — scripts
+			// can legitimately target any manager and still shell
+			// out to apt for a pre-install step.
+			if s.AcquiresDpkg {
+				add(engine.ResDpkg)
+			}
+			// Legacy Managers-based detection for MethodCustom:
+			// kept so existing strategy declarations don't silently
+			// change behavior mid-refactor.
 			for _, m := range s.Managers {
-				if m == "apt" && mgrName == "apt" {
-					return []engine.Resource{engine.ResApt}
-				}
-				if m == "brew" && mgrName == "brew" {
-					return []engine.Resource{engine.ResBrew}
+				if r, ok := pkgMgrResource(m); ok && m == mgrName {
+					add(r)
 				}
 			}
 		}
+	}
+
+	if len(set) == 0 {
 		return nil
 	}
+	out := make([]engine.Resource, 0, len(set))
+	for r := range set {
+		out = append(out, r)
+	}
+	// Sort for deterministic ordering — makes test assertions and
+	// log output stable.
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// batchEntry describes one tool's participation in the shared
+// per-manager batch install bucket.
+type batchEntry struct {
+	tool       registry.Tool
+	strategy   *registry.InstallStrategy
+	genericPkg string
+}
+
+// batchState coordinates the cross-tool package-manager batch
+// install. The first batched tool task to execute runs the shared
+// install via sync.Once; the rest wait on the Once and then consult
+// failedGenerics (populated only on partial failure) to decide
+// whether they install cleanly or need fallback strategies.
+//
+// Fields after once.Do completes are immutable, so reads from the
+// per-tool tasks don't need additional locking.
+type batchState struct {
+	once           sync.Once
+	err            error
+	failedGenerics map[string]struct{} // nil = total failure (all failed)
+}
+
+// runOnce is the sync.Once body: invokes the manager's batch install
+// exactly once for the whole bucket, then classifies the outcome so
+// per-tool tasks can consume it without re-entering.
+func (b *batchState) runOnce(
+	ctx context.Context,
+	mgr pkgmgr.PackageManager,
+	generics []string,
+) {
+	b.once.Do(func() {
+		if len(generics) == 0 {
+			return
+		}
+		err := mgr.Install(ctx, generics...)
+		b.err = err
+		if err == nil {
+			return
+		}
+		var bf *pkgmgr.BatchFailure
+		if errors.As(err, &bf) {
+			b.failedGenerics = make(map[string]struct{}, len(bf.FailedNames))
+			for _, n := range bf.FailedNames {
+				b.failedGenerics[n] = struct{}{}
+			}
+			return
+		}
+		// Total-failure path: every caller-supplied generic is
+		// unconfirmed. Leave failedGenerics nil as a sentinel for
+		// "all failed" — per-tool tasks then probe IsInstalled to
+		// distinguish actual-installs-despite-error from true
+		// failures that must fall through.
+		b.failedGenerics = nil
+	})
+}
+
+// runBatchedInstall is the Run closure for a per-tool task whose
+// first applicable strategy is the shared batch's MethodPackageManager.
+// It ensures the batch ran (via sync.Once), then routes this
+// specific tool to one of three outcomes:
+//
+//  1. Batch installed everything cleanly → fire this tool's
+//     PostInstall + record install.
+//  2. Partial batch failure and THIS tool was in the failed subset,
+//     OR total failure and this tool is not actually present →
+//     run fallback strategies (skipping MethodPackageManager so we
+//     don't re-attempt the just-failed pkgmgr path).
+//  3. Classified error that's terminal (ErrAptFatal) → propagate;
+//     no cargo/GitHub fallthrough on fatal apt conditions.
+func runBatchedInstall(
+	ctx context.Context,
+	t *registry.Tool,
+	entry *batchEntry,
+	ic *registry.InstallContext,
+	p *platform.Platform,
+	bs *batchState,
+	generics []string,
+	st *state.Store,
+) error {
+	bs.runOnce(ctx, ic.PkgMgr, generics)
+
+	failedThisTool := false
+	switch {
+	case bs.err == nil:
+		// happy path
+	case bs.failedGenerics != nil:
+		_, failedThisTool = bs.failedGenerics[entry.genericPkg]
+	default:
+		// Total batch failure. This tool might still be installed
+		// (e.g. the shell errored on pkg 3 of 5 after 1+2 already
+		// applied) — probe before assuming failure.
+		failedThisTool = !ic.PkgMgr.IsInstalled(entry.genericPkg)
+	}
+
+	if !failedThisTool {
+		// Success path (clean or despite-error): post-install + record.
+		if err := registry.RunPostInstall(ctx, entry.strategy, ic); err != nil {
+			return fmt.Errorf(
+				"%s: post-install after batch install: %w",
+				t.Name, err,
+			)
+		}
+		if st != nil {
+			ver := registry.InstalledVersion(t)
+			st.RecordInstall(t.Name, ver, "install")
+		}
+		return nil
+	}
+
+	// Failure path for this tool. If the batch classified as
+	// fatal-apt, honor that — do NOT fall through to cargo or
+	// GitHub. The user is expected to fix the underlying apt state.
+	if errors.Is(bs.err, pkgmgr.ErrAptFatal) {
+		return fmt.Errorf(
+			"%s: apt reported a fatal condition; "+
+				"not attempting fallback strategies: %w",
+			t.Name, bs.err,
+		)
+	}
+
+	if err := registry.ExecuteInstallSkippingPkgMgr(ctx, t, ic, p); err != nil {
+		return err
+	}
+	if st != nil {
+		ver := registry.InstalledVersion(t)
+		st.RecordInstall(t.Name, ver, "install")
+	}
 	return nil
+}
+
+// hasResource reports whether r appears in rs. Used to decide
+// whether a tool task should take the dpkg-doctor as a dependency.
+func hasResource(rs []engine.Resource, r engine.Resource) bool {
+	for _, x := range rs {
+		if x == r {
+			return true
+		}
+	}
+	return false
+}
+
+// pkgMgrResource maps a manager name (as used in
+// InstallStrategy.Managers and platform detection) to its
+// corresponding engine resource. dnf/yum/zypper all share the rpm
+// database and therefore the same semaphore.
+func pkgMgrResource(mgrName string) (engine.Resource, bool) {
+	switch mgrName {
+	case "apt":
+		return engine.ResDpkg, true
+	case "brew":
+		return engine.ResBrew, true
+	case "pacman":
+		return engine.ResPacman, true
+	case "dnf", "yum", "zypper":
+		return engine.ResRpm, true
+	}
+	return "", false
 }

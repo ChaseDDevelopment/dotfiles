@@ -768,7 +768,7 @@ func TestResourcesForTool(t *testing.T) {
 				},
 			},
 			mgrName: "apt",
-			want:    []engine.Resource{engine.ResApt},
+			want:    []engine.Resource{engine.ResDpkg},
 		},
 		{
 			name: "cargo method",
@@ -806,7 +806,7 @@ func TestResourcesForTool(t *testing.T) {
 				},
 			},
 			mgrName: "apt",
-			want:    []engine.Resource{engine.ResApt},
+			want:    []engine.Resource{engine.ResDpkg},
 		},
 		{
 			name: "strategy not applicable",
@@ -868,7 +868,7 @@ func TestResourcesForTool(t *testing.T) {
 			want:    []engine.Resource{engine.ResCargo},
 		},
 		{
-			name: "pacman is not brew or apt",
+			name: "pacman maps to ResPacman",
 			tool: registry.Tool{
 				Strategies: []registry.InstallStrategy{
 					{
@@ -877,7 +877,52 @@ func TestResourcesForTool(t *testing.T) {
 				},
 			},
 			mgrName: "pacman",
-			want:    nil,
+			want:    []engine.Resource{engine.ResPacman},
+		},
+		{
+			name: "dnf maps to ResRpm",
+			tool: registry.Tool{
+				Strategies: []registry.InstallStrategy{
+					{Method: registry.MethodPackageManager},
+				},
+			},
+			mgrName: "dnf",
+			want:    []engine.Resource{engine.ResRpm},
+		},
+		{
+			name: "yum and zypper share ResRpm",
+			tool: registry.Tool{
+				Strategies: []registry.InstallStrategy{
+					{Method: registry.MethodPackageManager},
+				},
+			},
+			mgrName: "zypper",
+			want:    []engine.Resource{engine.ResRpm},
+		},
+		{
+			name: "script with AcquiresDpkg reserves ResDpkg even under brew manager",
+			tool: registry.Tool{
+				Strategies: []registry.InstallStrategy{
+					{
+						Method:       registry.MethodScript,
+						AcquiresDpkg: true,
+					},
+				},
+			},
+			mgrName: "brew",
+			want:    []engine.Resource{engine.ResDpkg},
+		},
+		{
+			name: "apt + cargo strategies union to {ResDpkg, ResCargo}",
+			tool: registry.Tool{
+				Strategies: []registry.InstallStrategy{
+					{Method: registry.MethodPackageManager},
+					{Method: registry.MethodCargo},
+				},
+			},
+			mgrName: "apt",
+			// Sorted alphabetically: cargo < dpkg
+			want: []engine.Resource{engine.ResCargo, engine.ResDpkg},
 		},
 	}
 

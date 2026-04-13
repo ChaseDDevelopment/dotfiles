@@ -2,12 +2,14 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"sync"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/pkgmgr"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
@@ -136,16 +138,99 @@ func CheckInstalled(t *Tool) ToolStatus {
 //     binary of different provenance (e.g., brew-installed tool
 //     clobbered by a GitHub release tarball).
 func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platform.Platform) error {
+	return executeInstallFiltered(ctx, t, ic, p, nil)
+}
+
+// ExecuteInstallSkippingPkgMgr runs the strategy loop but skips any
+// MethodPackageManager entries. Used by the orchestrator's batch
+// fan-out when the pkgmgr install already ran (successfully or not)
+// as part of a per-manager batch task — re-running it per tool would
+// duplicate work for successes and re-fail identically for failures.
+func ExecuteInstallSkippingPkgMgr(ctx context.Context, t *Tool, ic *InstallContext, p *platform.Platform) error {
+	return executeInstallFiltered(ctx, t, ic, p, func(s *InstallStrategy) bool {
+		return s.Method == MethodPackageManager
+	})
+}
+
+// dpkgHealer is the capability interface registry uses to trigger a
+// dpkg repair between strategy attempts when the underlying error
+// is a recoverable dpkg state. Only *pkgmgr.Apt implements it.
+type dpkgHealer interface {
+	RunDpkgConfigureAll(ctx context.Context) error
+}
+
+// executeInstallFiltered is the shared strategy-loop body with an
+// optional skip predicate.
+//
+// Error classification (Phase A4 of the robustness plan):
+//
+//   - errors.Is(err, pkgmgr.ErrDpkgInterrupted) or ErrDpkgLocked:
+//     attempt a one-shot repair via the PackageManager's healer
+//     capability, then retry the SAME strategy exactly once.
+//     A per-strategy attempt counter caps retries so a persistently
+//     broken dpkg surfaces as terminal rather than looping.
+//   - errors.Is(err, pkgmgr.ErrAptFatal): FAIL the tool immediately.
+//     Falling through to cargo/GitHub on fatal apt conditions
+//     (held packages, hash mismatch, …) silently changes the
+//     user's binary provenance — they picked apt, they get apt,
+//     or they get a diagnostic.
+//   - Any other error: preserve existing fallthrough to the next
+//     applicable strategy.
+func executeInstallFiltered(
+	ctx context.Context,
+	t *Tool,
+	ic *InstallContext,
+	p *platform.Platform,
+	skip func(*InstallStrategy) bool,
+) error {
 	mgrName := ic.PkgMgr.Name()
 
 	var lastErr error
-	for _, strategy := range t.Strategies {
+	for i := range t.Strategies {
+		strategy := t.Strategies[i]
 		if !strategy.AppliesTo(mgrName) {
 			continue
 		}
+		if skip != nil && skip(&strategy) {
+			continue
+		}
 
-		if err := executeStrategy(ctx, &strategy, ic, p); err != nil {
+		var err error
+		for attempt := 1; attempt <= 2; attempt++ {
+			err = executeStrategy(ctx, &strategy, ic, p)
+			if err == nil {
+				break
+			}
+			// Recoverable dpkg state → heal + retry once.
+			if attempt == 1 && isRecoverableDpkg(err) {
+				if healer, ok := ic.PkgMgr.(dpkgHealer); ok {
+					ic.Runner.Log.Write(fmt.Sprintf(
+						"Strategy %d hit recoverable dpkg error for %s: %v; invoking dpkg doctor",
+						strategy.Method, t.Name, err,
+					))
+					if healErr := healer.RunDpkgConfigureAll(ctx); healErr != nil {
+						ic.Runner.Log.Write(fmt.Sprintf(
+							"dpkg repair failed for %s: %v",
+							t.Name, healErr,
+						))
+						break
+					}
+					continue // retry same strategy
+				}
+			}
+			break
+		}
+
+		if err != nil {
 			lastErr = err
+			// ErrAptFatal is terminal — no fallthrough.
+			if errors.Is(err, pkgmgr.ErrAptFatal) {
+				return fmt.Errorf(
+					"%s: apt reported a fatal condition; "+
+						"not attempting fallback strategies: %w",
+					t.Name, err,
+				)
+			}
 			ic.Runner.Log.Write(fmt.Sprintf(
 				"Strategy %d failed for %s: %v, trying next",
 				strategy.Method, t.Name, err,
@@ -156,17 +241,15 @@ func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platfor
 		// Strategy succeeded. Post-install errors are terminal for
 		// this tool — the binary is already in place, so falling
 		// through would double-install.
-		for _, pa := range strategy.PostInstall {
-			if paErr := executePostAction(ctx, &pa, ic); paErr != nil {
-				ic.Runner.Log.Write(fmt.Sprintf(
-					"Strategy %d post-install failed for %s: %v",
-					strategy.Method, t.Name, paErr,
-				))
-				return fmt.Errorf(
-					"%s: post-install after strategy %d: %w",
-					t.Name, strategy.Method, paErr,
-				)
-			}
+		if err := RunPostInstall(ctx, &strategy, ic); err != nil {
+			ic.Runner.Log.Write(fmt.Sprintf(
+				"Strategy %d post-install failed for %s: %v",
+				strategy.Method, t.Name, err,
+			))
+			return fmt.Errorf(
+				"%s: post-install after strategy %d: %w",
+				t.Name, strategy.Method, err,
+			)
 		}
 		return nil
 	}
@@ -174,6 +257,47 @@ func ExecuteInstall(ctx context.Context, t *Tool, ic *InstallContext, p *platfor
 		return fmt.Errorf("all install strategies failed for %s: %w", t.Name, lastErr)
 	}
 	return fmt.Errorf("no applicable install strategies for %s", t.Name)
+}
+
+// isRecoverableDpkg reports whether err indicates a dpkg state the
+// doctor can repair (interrupted transaction or held lock) —
+// distinct from fatal apt conditions (unmet deps, hash mismatch)
+// which require human intervention.
+func isRecoverableDpkg(err error) bool {
+	return errors.Is(err, pkgmgr.ErrDpkgInterrupted) ||
+		errors.Is(err, pkgmgr.ErrDpkgLocked)
+}
+
+// RunPostInstall runs every PostAction declared on the strategy.
+// Exposed so the orchestrator's batch fan-out can invoke post-install
+// for each tool in a successfully batched bucket without re-running
+// the strategy itself.
+func RunPostInstall(ctx context.Context, s *InstallStrategy, ic *InstallContext) error {
+	for _, pa := range s.PostInstall {
+		if err := executePostAction(ctx, &pa, ic); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FirstPkgMgrStrategy returns the first strategy applicable under
+// mgrName whose method is MethodPackageManager, or nil if the tool
+// has no batch-eligible strategy. Used by the orchestrator to
+// partition tools into per-manager batch buckets.
+func FirstPkgMgrStrategy(t *Tool, mgrName string) *InstallStrategy {
+	for i := range t.Strategies {
+		s := &t.Strategies[i]
+		if !s.AppliesTo(mgrName) {
+			continue
+		}
+		if s.Method == MethodPackageManager {
+			return s
+		}
+		// A non-pkgmgr strategy comes first — not batch-eligible.
+		return nil
+	}
+	return nil
 }
 
 func executeStrategy(ctx context.Context, s *InstallStrategy, ic *InstallContext, p *platform.Platform) error {

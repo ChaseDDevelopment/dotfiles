@@ -9,10 +9,13 @@ import (
 
 // genericMgr is a data-driven PackageManager for simple
 // distributions that follow the same install/check/update pattern.
+// installFn now receives the full package slice so each manager can
+// emit a single multi-pkg shell invocation (one `pacman -S a b c`,
+// one `dnf install a b c`, etc.) rather than looping one-per-call.
 type genericMgr struct {
 	runner    *executor.Runner
 	name      string
-	installFn func(ctx context.Context, r *executor.Runner, pkg string) error
+	installFn func(ctx context.Context, r *executor.Runner, pkgs []string) error
 	checkFn   func(r *executor.Runner, pkg string) bool
 	updateFn  func(ctx context.Context, r *executor.Runner) error
 	nameMap   map[string][]string
@@ -24,14 +27,19 @@ func (g *genericMgr) Install(
 	ctx context.Context,
 	genericNames ...string,
 ) error {
-	for _, generic := range genericNames {
-		for _, pkg := range g.MapName(generic) {
-			if err := g.installFn(ctx, g.runner, pkg); err != nil {
-				return fmt.Errorf(
-					"%s install %s: %w", g.name, pkg, err,
-				)
-			}
-		}
+	if len(genericNames) == 0 {
+		return nil
+	}
+	pkgs := dedupeNames(g.MapName, genericNames)
+	if len(pkgs) == 0 {
+		return nil
+	}
+	if err := g.installFn(ctx, g.runner, pkgs); err != nil {
+		return attribute(
+			fmt.Errorf("%s install: %w", g.name, err),
+			genericNames,
+			g.IsInstalled,
+		)
 	}
 	return nil
 }
@@ -62,8 +70,9 @@ func newPacman(runner *executor.Runner) PackageManager {
 	return &genericMgr{
 		runner: runner,
 		name:   "pacman",
-		installFn: func(ctx context.Context, r *executor.Runner, pkg string) error {
-			return r.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", pkg)
+		installFn: func(ctx context.Context, r *executor.Runner, pkgs []string) error {
+			args := append([]string{"sudo", "pacman", "-S", "--needed", "--noconfirm"}, pkgs...)
+			return r.Run(ctx, args[0], args[1:]...)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
 			_, err := r.RunProbe(context.Background(), "pacman", "-Q", pkg)
@@ -86,8 +95,9 @@ func newDnf(runner *executor.Runner) PackageManager {
 	return &genericMgr{
 		runner: runner,
 		name:   "dnf",
-		installFn: func(ctx context.Context, r *executor.Runner, pkg string) error {
-			return r.Run(ctx, "sudo", "dnf", "install", "-y", pkg)
+		installFn: func(ctx context.Context, r *executor.Runner, pkgs []string) error {
+			args := append([]string{"sudo", "dnf", "install", "-y"}, pkgs...)
+			return r.Run(ctx, args[0], args[1:]...)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
 			_, err := r.RunProbe(context.Background(), "dnf", "list", "installed", pkg)
@@ -110,8 +120,9 @@ func newYum(runner *executor.Runner) PackageManager {
 	return &genericMgr{
 		runner: runner,
 		name:   "yum",
-		installFn: func(ctx context.Context, r *executor.Runner, pkg string) error {
-			return r.Run(ctx, "sudo", "yum", "install", "-y", pkg)
+		installFn: func(ctx context.Context, r *executor.Runner, pkgs []string) error {
+			args := append([]string{"sudo", "yum", "install", "-y"}, pkgs...)
+			return r.Run(ctx, args[0], args[1:]...)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
 			_, err := r.RunProbe(context.Background(), "yum", "list", "installed", pkg)
@@ -134,8 +145,9 @@ func newZypper(runner *executor.Runner) PackageManager {
 	return &genericMgr{
 		runner: runner,
 		name:   "zypper",
-		installFn: func(ctx context.Context, r *executor.Runner, pkg string) error {
-			return r.Run(ctx, "sudo", "zypper", "install", "-y", pkg)
+		installFn: func(ctx context.Context, r *executor.Runner, pkgs []string) error {
+			args := append([]string{"sudo", "zypper", "--non-interactive", "install"}, pkgs...)
+			return r.Run(ctx, args[0], args[1:]...)
 		},
 		checkFn: func(r *executor.Runner, pkg string) bool {
 			_, err := r.RunProbe(context.Background(), "zypper", "se", "--installed-only", pkg)

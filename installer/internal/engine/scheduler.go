@@ -124,11 +124,14 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 			}
 		}
 
-		// Resource semaphores — one slot per resource type.
+		// Resource semaphores — one slot per resource type. See the
+		// Resource doc comment for the manager→resource table.
 		resSems := map[Resource]chan struct{}{
-			ResApt:   make(chan struct{}, 1),
-			ResBrew:  make(chan struct{}, 1),
-			ResCargo: make(chan struct{}, 1),
+			ResDpkg:   make(chan struct{}, 1),
+			ResRpm:    make(chan struct{}, 1),
+			ResPacman: make(chan struct{}, 1),
+			ResBrew:   make(chan struct{}, 1),
+			ResCargo:  make(chan struct{}, 1),
 		}
 
 		// Global worker semaphore.

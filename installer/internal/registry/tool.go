@@ -94,6 +94,15 @@ type InstallStrategy struct {
 	// MethodCustom fields
 	CustomFunc func(ctx context.Context, ic *InstallContext) error
 
+	// AcquiresDpkg signals that this strategy shells out to apt,
+	// apt-get, nala, or dpkg and therefore must hold the dpkg
+	// resource semaphore during execution, even if the primary
+	// Method is not MethodPackageManager. Declare this explicitly
+	// for MethodScript / MethodCustom strategies that internally
+	// invoke apt — auto-detection via string-grep is too fragile
+	// (misses add-apt-repository, apt-key, locale variants).
+	AcquiresDpkg bool
+
 	// PostInstall actions run after a successful install.
 	PostInstall []PostAction
 }
