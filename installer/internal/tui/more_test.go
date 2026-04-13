@@ -165,10 +165,34 @@ func TestRunInstallTasksAndFailurePromptHelpers(t *testing.T) {
 	tf := config.NewTrackedFailures()
 	tf.Record("Zsh", "compile", errors.New("boom"))
 	app.summary.warnings = tf
-	app.failedTaskErr = errors.New("critical failure")
-	if !strings.Contains(app.failurePromptView(80), "failed") {
-		// smoke test only: non-empty prompt for rendering path
-		t.Fatalf("failurePromptView should render non-empty content")
+	app.failedTaskLabel = "Zsh"
+	app.failedTaskErr = errors.New("critical failure: compile died")
+	view := app.failurePromptView(80)
+	// The rendered prompt must surface (a) the failed task label,
+	// (b) the underlying error text, and (c) the remediation hint
+	// listing the [c]ontinue / [a]bort options. Any missing piece
+	// would mislead the user on a live failure.
+	if !strings.Contains(view, "failed") {
+		t.Fatalf("failurePromptView missing 'failed': %s", view)
+	}
+	if !strings.Contains(view, "Zsh") {
+		t.Fatalf("failurePromptView missing task label 'Zsh': %s", view)
+	}
+	if !strings.Contains(view, "compile died") {
+		t.Fatalf(
+			"failurePromptView missing error detail 'compile died': %s",
+			view,
+		)
+	}
+	if !strings.Contains(view, "Continue without it") {
+		t.Fatalf(
+			"failurePromptView missing [c] remediation hint: %s", view,
+		)
+	}
+	if !strings.Contains(view, "Abort install") {
+		t.Fatalf(
+			"failurePromptView missing [a] remediation hint: %s", view,
+		)
 	}
 
 	app = NewApp(newTestConfig())

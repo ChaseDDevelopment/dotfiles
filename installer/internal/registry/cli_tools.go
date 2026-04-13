@@ -490,6 +490,15 @@ func installNerdFontLinux(ctx context.Context, ic *InstallContext) error {
 	return nil
 }
 
+// Category C — env-bound real-shell branches.
+// installTailspin's curl + tar + `sudo install` chain (lines 519-535)
+// shells out to system binaries we can't safely fake at the privileged
+// layer (sudo install -m 755 ... /usr/local/bin/tspin). Argv-shape
+// coverage exists via the PATH-stub harness in
+// installers_test.go::TestAdditionalRegistryInstallersAndHelpers; the
+// real failure modes (curl 404, tar corrupt archive, sudo not in
+// sudoers) can only surface against a non-dry-run runner with elevated
+// privileges and remote network, both out of scope for unit tests.
 // installTailspin downloads the tailspin binary from GitHub Releases.
 // Asset naming uses "tailspin-{triple}" (dash separator, project name)
 // which doesn't match any standard URL pattern.

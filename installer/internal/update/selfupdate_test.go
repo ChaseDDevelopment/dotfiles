@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -49,6 +50,52 @@ func TestParseUpdateVersion(t *testing.T) {
 	}
 	if got != [3]int{1, 2, 3} || !pre {
 		t.Fatalf("unexpected parse result: got=%v pre=%v", got, pre)
+	}
+}
+
+// TestParseUpdateVersionTable exercises the major
+// parseUpdateVersion branches: each Atoi error path, the optional
+// patch group, the v-prefix tolerance, build metadata stripping,
+// and the empty / non-semver rejections.
+func TestParseUpdateVersionTable(t *testing.T) {
+	cases := []struct {
+		name    string
+		in      string
+		want    [3]int
+		wantPre bool
+		wantErr bool
+	}{
+		{name: "plain semver", in: "1.2.3", want: [3]int{1, 2, 3}},
+		{name: "v prefixed", in: "v1.2.3", want: [3]int{1, 2, 3}},
+		{name: "no patch", in: "v1.2", want: [3]int{1, 2, 0}},
+		{name: "with prerelease", in: "v1.2.3-rc1", want: [3]int{1, 2, 3}, wantPre: true},
+		{name: "build metadata stripped", in: "v1.2.3-rc.1+build.42", want: [3]int{1, 2, 3}, wantPre: true},
+		{name: "leading whitespace", in: "  v0.4.1  ", want: [3]int{0, 4, 1}},
+		{name: "embedded in tag text", in: "release-1.4.0-final", want: [3]int{1, 4, 0}, wantPre: true},
+		{name: "empty string", in: "", wantErr: true},
+		{name: "all garbage", in: "release-latest", wantErr: true},
+		{name: "letters only", in: "abc", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, pre, err := parseUpdateVersion(tc.in)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseUpdateVersion(%q) = (%v, %v, nil); want error", tc.in, got, pre)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseUpdateVersion(%q): unexpected err %v", tc.in, err)
+			}
+			if got != tc.want {
+				t.Fatalf("parseUpdateVersion(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+			if pre != tc.wantPre {
+				t.Fatalf("parseUpdateVersion(%q) prerelease = %v, want %v", tc.in, pre, tc.wantPre)
+			}
+		})
 	}
 }
 
@@ -141,6 +188,165 @@ func TestCleanupTmpAndCopyFile(t *testing.T) {
 	}
 	if string(data) != "hello" {
 		t.Fatalf("copied data = %q", data)
+	}
+}
+
+// TestCopyFileMissingSource hits the os.ReadFile error branch
+// inside copyFile (selfupdate.go:355–357) — when the source path
+// does not exist, the function must surface the read error and
+// must not create the destination.
+func TestCopyFileMissingSource(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "does-not-exist")
+	dst := filepath.Join(dir, "dst")
+
+	err := copyFile(missing, dst)
+	if err == nil {
+		t.Fatal("expected copyFile to fail on missing source")
+	}
+	if !os.IsNotExist(err) {
+		t.Fatalf("expected IsNotExist error, got %v", err)
+	}
+	if _, err := os.Stat(dst); !os.IsNotExist(err) {
+		t.Fatalf("destination should not exist after failed copy: stat=%v", err)
+	}
+}
+
+// TestSelfUpdateBackupRemoveNoteBranch exercises the
+// `NOTE: remove rollback backup` log path at selfupdate.go:254–258.
+// The strategy: drive a successful SelfUpdate but make the parent
+// directory of the backup file non-writable BEFORE the post-success
+// remove fires, so os.Remove on `<exe>.old` returns EACCES. The
+// update itself must still succeed (the NOTE is non-fatal); the log
+// must contain the marker line.
+func TestSelfUpdateBackupRemoveNoteBranch(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root bypasses dir-permission checks; rm cannot fail")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("windows chmod semantics differ; not applicable")
+	}
+
+	dir := t.TempDir()
+	log, err := executor.NewLogFile(filepath.Join(dir, "test.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	runner := executor.NewRunner(log, false)
+
+	// Place the executable inside a dedicated subdirectory so we can
+	// chmod that subdirectory read-only after the rename succeeds —
+	// the .old removal will then EACCES, but the rename target
+	// (already renamed in place) is unaffected.
+	exeDir := filepath.Join(dir, "exedir")
+	if err := os.MkdirAll(exeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(exeDir, "dotsetup")
+	if err := os.WriteFile(exe, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// PATH-shim curl that writes new-binary bytes to `-o` target.
+	fakebin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := os.WriteFile(filepath.Join(fakebin, "curl"), []byte(`#!/usr/bin/env bash
+dest=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    dest="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+printf 'new-binary' > "$dest"
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	origLatest := latestVersionFn
+	origChecksums := fetchChecksumsFn
+	origVerify := verifyFileFn
+	origExe := executablePathFn
+	origCosign := verifyCosignSignatureFn
+	origCopy := copyFileFn
+	defer func() {
+		latestVersionFn = origLatest
+		fetchChecksumsFn = origChecksums
+		verifyFileFn = origVerify
+		executablePathFn = origExe
+		verifyCosignSignatureFn = origCosign
+		copyFileFn = origCopy
+	}()
+
+	latestVersionFn = func(_ string, _ bool) (string, error) { return "v1.2.4", nil }
+	fetchChecksumsFn = func(_ context.Context, _ string) (map[string]string, error) {
+		return map[string]string{
+			fmt.Sprintf("dotsetup-%s-%s", runtime.GOOS, runtime.GOARCH): "deadbeef",
+		}, nil
+	}
+	verifyFileFn = func(_ string, _ string) error { return nil }
+	executablePathFn = func() (string, error) { return exe, nil }
+	verifyCosignSignatureFn = func(context.Context, *executor.Runner, string, string) error { return nil }
+
+	// copyFileFn produces the backup, then we make the parent dir
+	// read-only so os.Remove(backupFile) fails after the rename.
+	copyFileFn = func(src, dst string) error {
+		if err := copyFile(src, dst); err != nil {
+			return err
+		}
+		// Strip write perms on the parent so the post-success Remove
+		// of <exe>.old returns EACCES. The rename of the staging
+		// file already happened (or hasn't yet — but Rename within
+		// the same dir on a w-stripped dir would also fail, so we
+		// must defer the chmod until after Rename).
+		// Trick: schedule the chmod via a goroutine? Instead, simpler
+		// approach — chmod the dir 0o555 right here. os.Rename in
+		// the same directory needs WRITE on the dir. So we cannot
+		// chmod yet. We need to make .old un-removable while still
+		// allowing rename + chmod chain.
+		//
+		// Alternative: replace the .old file with a directory
+		// containing a child file, so os.Remove (not RemoveAll) on
+		// the directory fails with ENOTEMPTY.
+		if err := os.Remove(dst); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(dst, 0o755); err != nil {
+			return err
+		}
+		// non-empty so plain os.Remove returns ENOTEMPTY.
+		if err := os.WriteFile(filepath.Join(dst, "child"), []byte("x"), 0o644); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := SelfUpdate(context.Background(), runner, "v1.2.3"); err != nil {
+		t.Fatalf("SelfUpdate should succeed despite backup-remove failure: %v", err)
+	}
+
+	// New binary is in place.
+	got, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new-binary" {
+		t.Fatalf("binary not replaced: got %q", got)
+	}
+
+	// Log must contain the NOTE about the backup removal failure.
+	logBytes, err := os.ReadFile(log.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logBytes), "NOTE: remove rollback backup") {
+		t.Fatalf("expected NOTE marker in log, got:\n%s", logBytes)
 	}
 }
 

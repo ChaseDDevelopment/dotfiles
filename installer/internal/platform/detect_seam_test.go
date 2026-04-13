@@ -66,6 +66,14 @@ func TestLinuxDistroAndDetectWithSeams(t *testing.T) {
 	}
 }
 
+// TestDetectPackageManagerWithSeams is the sole branch-coverage test
+// for detectPackageManager. It exists because the function is a
+// static if-ladder keyed on exact binary-name string literals
+// ("apt-get", "dnf", "pacman", ...). A typo in any of those literals
+// would silently regress package-manager detection, so driving every
+// branch via the hasCommandFn seam catches that class of bug. It
+// does NOT attempt to assert anything beyond the mapping itself —
+// the if-ladder is the specification.
 func TestDetectPackageManagerWithSeams(t *testing.T) {
 	origGOOS := goosFn
 	origHasCommand := hasCommandFn
@@ -74,15 +82,73 @@ func TestDetectPackageManagerWithSeams(t *testing.T) {
 		hasCommandFn = origHasCommand
 	}()
 
-	goosFn = func() string { return "linux" }
-	hasCommandFn = func(name string) bool { return name == "brew" || name == "apt-get" }
-	if got := detectPackageManager(); got != PkgApt {
-		t.Fatalf("detectPackageManager linux = %v, want apt", got)
+	cases := []struct {
+		name    string
+		goos    string
+		present map[string]bool
+		want    PkgManagerType
+	}{
+		{
+			name:    "linux apt-get wins over brew",
+			goos:    "linux",
+			present: map[string]bool{"brew": true, "apt-get": true},
+			want:    PkgApt,
+		},
+		{
+			name:    "darwin prefers brew",
+			goos:    "darwin",
+			present: map[string]bool{"brew": true, "apt-get": true},
+			want:    PkgBrew,
+		},
+		{
+			name:    "linux dnf",
+			goos:    "linux",
+			present: map[string]bool{"dnf": true},
+			want:    PkgDnf,
+		},
+		{
+			name:    "linux yum",
+			goos:    "linux",
+			present: map[string]bool{"yum": true},
+			want:    PkgYum,
+		},
+		{
+			name:    "linux pacman",
+			goos:    "linux",
+			present: map[string]bool{"pacman": true},
+			want:    PkgPacman,
+		},
+		{
+			name:    "linux zypper",
+			goos:    "linux",
+			present: map[string]bool{"zypper": true},
+			want:    PkgZypper,
+		},
+		{
+			name:    "linux brew fallback when no native mgr",
+			goos:    "linux",
+			present: map[string]bool{"brew": true},
+			want:    PkgBrew,
+		},
+		{
+			name:    "linux no supported manager",
+			goos:    "linux",
+			present: map[string]bool{},
+			want:    PkgNone,
+		},
 	}
 
-	goosFn = func() string { return "darwin" }
-	hasCommandFn = func(name string) bool { return name == "brew" || name == "apt-get" }
-	if got := detectPackageManager(); got != PkgBrew {
-		t.Fatalf("detectPackageManager darwin = %v, want brew", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			goosFn = func() string { return tc.goos }
+			present := tc.present
+			hasCommandFn = func(name string) bool { return present[name] }
+			if got := detectPackageManager(); got != tc.want {
+				t.Fatalf(
+					"detectPackageManager(%s, %v) = %v, want %v",
+					tc.goos, present, got, tc.want,
+				)
+			}
+		})
 	}
 }

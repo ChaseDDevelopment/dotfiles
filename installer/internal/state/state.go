@@ -1,3 +1,15 @@
+// Package state persists tool-install records to disk via an
+// atomic write-temp-then-rename strategy.
+//
+// Test-coverage note (Category C — environmental syscall paths):
+// The tmp-file syscall paths inside Save (tmp.Write / tmp.Chmod /
+// tmp.Sync / tmp.Close on the freshly-created tmp file, lines
+// 119–146 below) are not reachable on POSIX without an injected
+// filesystem-fault layer. The project has explicitly declined to
+// add such an fs-fault abstraction solely for these error returns;
+// in production they fire on ENOSPC, EIO, and similar conditions
+// and surface via the wrapped error chain. The wrapping itself is
+// trivially correct by inspection.
 package state
 
 import (

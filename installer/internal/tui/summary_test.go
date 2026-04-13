@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,10 +225,16 @@ func TestSummaryModel_InitDoctorViewportSmallList(t *testing.T) {
 		},
 	}
 
-	// With very few steps, viewport should not be needed.
+	// With very few steps, viewport should not be needed and the
+	// rendered completion view must still surface the step label.
 	m.initDoctorViewport(80, 40)
-	// viewportReady can be false if steps fit in available rows.
-	// Just verify it does not panic.
+	if m.viewportReady {
+		t.Fatal("viewportReady should stay false when steps fit inline")
+	}
+	out := m.completionView(80, 40)
+	if !strings.Contains(out, "zsh") {
+		t.Fatalf("completion view missing step label: %q", out)
+	}
 }
 
 func TestSummaryModel_InitDoctorViewportLargeList(t *testing.T) {

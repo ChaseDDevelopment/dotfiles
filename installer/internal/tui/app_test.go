@@ -1360,10 +1360,26 @@ func TestAppModel_SummaryViewportScrollForward(t *testing.T) {
 	}
 	app.summary.initViewport(80, 40)
 
+	before := app.summary.viewport.YOffset()
 	// Send a down arrow to the summary viewport.
 	model, _ := app.Update(specialKeyPress(tea.KeyDown))
-	_ = model.(AppModel)
-	// Just verify it doesn't panic.
+	updated := model.(AppModel)
+	after := updated.summary.viewport.YOffset()
+	if after <= before {
+		t.Fatalf(
+			"KeyDown should advance summary viewport YOffset: before=%d after=%d",
+			before, after,
+		)
+	}
+	// Phase must stay on summary (viewport scroll doesn't navigate).
+	if updated.phase != PhaseSummary {
+		t.Fatalf("scroll must not change phase, got %v", updated.phase)
+	}
+	// Rendered view should include at least one plan row marker.
+	v := updated.View()
+	if v.Content == "" {
+		t.Fatal("summary view empty after scroll")
+	}
 }
 
 func TestAppModel_SummaryBackspace(t *testing.T) {

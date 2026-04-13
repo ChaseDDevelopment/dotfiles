@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -388,6 +389,62 @@ func TestSave_AtomicReplacesExisting(t *testing.T) {
 	}
 	if _, ok := loaded.LookupTool("second"); !ok {
 		t.Fatal("second record not present after atomic save")
+	}
+}
+
+// TestSave_MkdirAllError_PreservesOriginal asserts that when the
+// MkdirAll call inside Save fails (because the parent path is
+// occupied by a regular file, not a directory), Save returns the
+// raw MkdirAll error and never touches a pre-existing state.json.
+// This covers the error branch at state.go:106–108 and guards
+// against a regression where the error were silently swallowed.
+func TestSave_MkdirAllError_PreservesOriginal(t *testing.T) {
+	dir := t.TempDir()
+	// Pre-create a regular file at the path that would otherwise be
+	// the parent directory. MkdirAll on a path whose ancestor is a
+	// non-directory returns syscall.ENOTDIR.
+	blockingFile := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blockingFile, []byte("not-a-dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// state.json would live inside `blocker/state.json` — but
+	// `blocker` is a file, so MkdirAll(parent) must fail.
+	statePath := filepath.Join(blockingFile, "state.json")
+	s := NewStore(statePath)
+	s.RecordInstall("nvim", "0.10.0", "github-release")
+
+	err := s.Save()
+	if err == nil {
+		t.Fatal("expected Save to fail when parent path is a regular file")
+	}
+	if !strings.Contains(err.Error(), "not a directory") &&
+		!strings.Contains(err.Error(), "ENOTDIR") &&
+		!strings.Contains(err.Error(), "mkdir") {
+		// Most POSIX systems report "not a directory"; macOS may
+		// stringify slightly differently. Accept any of the obvious
+		// markers so this test isn't brittle across platforms.
+		t.Fatalf("expected MkdirAll-style error, got: %v", err)
+	}
+
+	// The blocker file's contents must be untouched — Save must not
+	// have written through it or replaced it.
+	got, err := os.ReadFile(blockingFile)
+	if err != nil {
+		t.Fatalf("blocker file disappeared: %v", err)
+	}
+	if string(got) != "not-a-dir" {
+		t.Fatalf("blocker file mutated: got %q, want %q", got, "not-a-dir")
+	}
+
+	// The would-be state path must not exist.
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		// On macOS, Stat against a path whose parent is a file
+		// returns ENOTDIR rather than ENOENT — both are acceptable
+		// here; the key point is no real state.json materialized.
+		if err == nil {
+			t.Fatalf("Save should not have created %s", statePath)
+		}
 	}
 }
 

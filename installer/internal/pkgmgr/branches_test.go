@@ -13,24 +13,25 @@ import (
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
-// TestNames covers the trivial 0%-coverage Name() methods across
-// managers so a wrong-identifier regression is caught.
-func TestNames(t *testing.T) {
-	runner, _ := newPkgRunner(t)
-	if got := (&Brew{runner: runner}).Name(); got != "brew" {
-		t.Fatalf("Brew.Name = %q", got)
-	}
-	for _, tc := range []struct {
-		pm   PackageManager
+// TestManagerNamesMatchConsumerSwitches pins the exact string each
+// manager returns from Name(). These strings are the case-keys in
+// update/updater.go and orchestrator/orchestrator.go switches — a
+// typo here would silently route past every case and skip work.
+func TestManagerNamesMatchConsumerSwitches(t *testing.T) {
+	cases := []struct {
 		want string
+		mgr  PackageManager
 	}{
-		{newPacman(runner), "pacman"},
-		{newDnf(runner), "dnf"},
-		{newYum(runner), "yum"},
-		{newZypper(runner), "zypper"},
-	} {
-		if tc.pm.Name() != tc.want {
-			t.Fatalf("Name = %q, want %q", tc.pm.Name(), tc.want)
+		{"apt", &Apt{}},
+		{"brew", &Brew{}},
+		{"pacman", newPacman(nil)},
+		{"dnf", newDnf(nil)},
+		{"yum", newYum(nil)},
+		{"zypper", newZypper(nil)},
+	}
+	for _, tc := range cases {
+		if got := tc.mgr.Name(); got != tc.want {
+			t.Errorf("Name() = %q, want %q (case-key in updater/orchestrator switches)", got, tc.want)
 		}
 	}
 }
@@ -330,6 +331,302 @@ func TestAptRunDpkgConfigureAllFailure(t *testing.T) {
 	// sync.Once caches the error → subsequent call returns same err.
 	if err := a.RunDpkgConfigureAll(context.Background()); err == nil {
 		t.Fatal("expected cached repair error on second call")
+	}
+}
+
+// TestAptInstallPartialFailureProducesBatchFailure drives the
+// `attribute` fan-out: the apt stub exits non-zero with output that
+// classifies as ErrAptFatal, but dpkg-query reports that one of the
+// two packages IS installed. The returned error must be a
+// *BatchFailure whose FailedNames lists only the genuinely-failed
+// generic name (not both) and whose Wrapped error still errors.Is
+// ErrAptFatal so the orchestrator's recoverable-vs-fatal branch
+// still fires correctly.
+func TestAptInstallPartialFailureProducesBatchFailure(t *testing.T) {
+	runner, dir := newPkgRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(
+		"PATH",
+		bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	// apt-get install: emit a "held packages" line (classifies as
+	// ErrAptFatal) then exit non-zero. The update subcommand must
+	// still succeed so ensureUpdated doesn't short-circuit.
+	writeExec(t, bin, "apt-get", `#!/bin/sh
+if [ "$1" = "update" ]; then
+  exit 0
+fi
+echo 'The following held packages have been kept back:'
+exit 100
+`)
+	// sudo forwards to argv so apt-get stub above runs.
+	writeExec(t, bin, "sudo", `#!/bin/sh
+exec "$@"
+`)
+	// dpkg-query: report "curl" installed, "htop" not. The pkg
+	// name is the final positional arg after `-W -f=${Status}`.
+	writeExec(t, bin, "dpkg-query", `#!/bin/sh
+eval pkg=\$$#
+case "$pkg" in
+  curl) printf 'install ok installed' ;;
+  *) exit 1 ;;
+esac
+`)
+
+	a := NewApt(runner, false)
+	err := a.Install(context.Background(), "curl", "htop")
+	if err == nil {
+		t.Fatal("expected error from Install")
+	}
+	var bf *BatchFailure
+	if !errors.As(err, &bf) {
+		t.Fatalf(
+			"expected *BatchFailure, got %T: %v", err, err,
+		)
+	}
+	if len(bf.FailedNames) != 1 || bf.FailedNames[0] != "htop" {
+		t.Errorf(
+			"FailedNames = %v, want [htop]", bf.FailedNames,
+		)
+	}
+	if !errors.Is(err, ErrAptFatal) {
+		t.Errorf(
+			"BatchFailure wrap should classify as ErrAptFatal, got %v",
+			err,
+		)
+	}
+}
+
+// TestAptInstallTotalFailureReturnsClassifiedNotBatch asserts the
+// "every generic failed" path returns the classified error directly
+// (not wrapped in BatchFailure). This gates the orchestrator's
+// recoverable-vs-fatal short-circuit: wrapping a single-tool total
+// failure in BatchFailure would force the fan-out fallback to
+// redo work pointlessly.
+func TestAptInstallTotalFailureReturnsClassifiedNotBatch(t *testing.T) {
+	runner, dir := newPkgRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(
+		"PATH",
+		bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	// 404 classifies as ErrAptFatal via the "hash sum mismatch"
+	// neighborhood of patterns — use Release file which is in the
+	// classifier.
+	writeExec(t, bin, "apt-get", `#!/bin/sh
+if [ "$1" = "update" ]; then
+  exit 0
+fi
+echo 'E: Release file for http://archive/... is not valid yet'
+exit 100
+`)
+	writeExec(t, bin, "sudo", `#!/bin/sh
+exec "$@"
+`)
+	// Both packages absent.
+	writeExec(t, bin, "dpkg-query", `#!/bin/sh
+exit 1
+`)
+
+	a := NewApt(runner, false)
+	err := a.Install(context.Background(), "curl", "htop")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var bf *BatchFailure
+	if errors.As(err, &bf) {
+		t.Fatalf(
+			"total failure should NOT wrap in BatchFailure; got %v",
+			err,
+		)
+	}
+	if !errors.Is(err, ErrAptFatal) {
+		t.Errorf("expected ErrAptFatal, got %v", err)
+	}
+}
+
+// TestAptInstallRecoverableDpkgLock replays the "dpkg lock held"
+// output, which must classify as ErrDpkgLocked (recoverable) — NOT
+// ErrAptFatal. A regression that lumps dpkg-lock into the fatal
+// bucket would break the orchestrator's retry semantics.
+func TestAptInstallRecoverableDpkgLock(t *testing.T) {
+	runner, dir := newPkgRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(
+		"PATH",
+		bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	writeExec(t, bin, "apt-get", `#!/bin/sh
+if [ "$1" = "update" ]; then exit 0; fi
+echo 'E: Could not get lock /var/lib/dpkg/lock-frontend'
+exit 100
+`)
+	writeExec(t, bin, "sudo", `#!/bin/sh
+exec "$@"
+`)
+	writeExec(t, bin, "dpkg-query", `#!/bin/sh
+exit 1
+`)
+
+	a := NewApt(runner, false)
+	err := a.Install(context.Background(), "curl")
+	if err == nil {
+		t.Fatal("expected lock error")
+	}
+	if !errors.Is(err, ErrDpkgLocked) {
+		t.Errorf("expected ErrDpkgLocked, got %v", err)
+	}
+	if errors.Is(err, ErrAptFatal) {
+		t.Errorf(
+			"lock must NOT classify as fatal — would break retry "+
+				"logic; got %v", err,
+		)
+	}
+}
+
+// TestAptEnsureHealthyRepairRunsOnce drives the dirty → repair →
+// clean sequence end-to-end: the first `dpkg --audit` exits non-zero
+// (dirty), `sudo dpkg --configure -a` runs exactly once, and the
+// post-repair `dpkg --audit` exits clean so EnsureHealthy returns
+// nil. Calling EnsureHealthy a second time on the now-clean system
+// must not re-run the repair — the sync.Once invariant.
+func TestAptEnsureHealthyRepairRunsOnce(t *testing.T) {
+	runner, dir := newPkgRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(
+		"PATH",
+		bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	stateFile := filepath.Join(dir, "healthy")
+	repairCountFile := filepath.Join(dir, "repair-count")
+	writeExec(t, bin, "dpkg", `#!/bin/sh
+if [ "$1" = "--audit" ]; then
+  if [ -f "`+stateFile+`" ]; then
+    exit 0
+  fi
+  echo 'package is broken'
+  exit 1
+fi
+exit 0
+`)
+	writeExec(t, bin, "sudo", `#!/bin/sh
+if [ "$1" = "dpkg" ] && [ "$2" = "--configure" ] && [ "$3" = "-a" ]; then
+  echo 1 >> `+repairCountFile+`
+  : > "`+stateFile+`"
+  exit 0
+fi
+exec "$@"
+`)
+
+	a := NewApt(runner, false)
+	if err := a.EnsureHealthy(context.Background()); err != nil {
+		t.Fatalf("first EnsureHealthy: %v", err)
+	}
+	if err := a.EnsureHealthy(context.Background()); err != nil {
+		t.Fatalf("second EnsureHealthy: %v", err)
+	}
+	data, err := os.ReadFile(repairCountFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(string(data), "1"); count != 1 {
+		t.Errorf(
+			"expected exactly 1 repair invocation, got %d",
+			count,
+		)
+	}
+}
+
+// TestAptEnsureHealthyStillDirtyAfterRepair: if repair succeeds but
+// the re-probe still reports dirty, EnsureHealthy must return an
+// error (never silent-heal) rather than claim success.
+func TestAptEnsureHealthyStillDirtyAfterRepair(t *testing.T) {
+	runner, dir := newPkgRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(
+		"PATH",
+		bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	// dpkg --audit ALWAYS reports dirty; configure -a "succeeds".
+	writeExec(t, bin, "dpkg", `#!/bin/sh
+if [ "$1" = "--audit" ]; then
+  echo 'still broken'
+  exit 1
+fi
+exit 0
+`)
+	writeExec(t, bin, "sudo", `#!/bin/sh
+exec "$@"
+`)
+
+	a := NewApt(runner, false)
+	err := a.EnsureHealthy(context.Background())
+	if err == nil {
+		t.Fatal(
+			"expected EnsureHealthy to return error when dpkg " +
+				"stays dirty after repair — never silent-heal",
+		)
+	}
+	if !strings.Contains(err.Error(), "still inconsistent") {
+		t.Errorf(
+			"error should describe remaining inconsistency, got %v",
+			err,
+		)
+	}
+}
+
+// TestAptIsInstalledRejectsRcState covers the empty-names and
+// partial-installed branches of IsInstalled. A package that maps to
+// multiple real names (e.g. nodejs -> nodejs,npm) must report false
+// if ANY of the underlying names is absent — otherwise a half-
+// installed tool re-invokes its install path and compounds breakage.
+func TestAptIsInstalledRejectsRcState(t *testing.T) {
+	runner, dir := newPkgRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(
+		"PATH",
+		bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	// dpkg-query: "nodejs" installed, "npm" returns rc-style status.
+	writeExec(t, bin, "dpkg-query", `#!/bin/sh
+eval pkg=\$$#
+case "$pkg" in
+  nodejs) printf 'install ok installed' ;;
+  npm) printf 'deinstall ok config-files' ;;
+  *) exit 1 ;;
+esac
+`)
+	a := NewApt(runner, false)
+	if a.IsInstalled("nodejs") {
+		t.Error(
+			"nodejs should report NOT installed when npm is in rc state",
+		)
+	}
+	// Sanity: something the mapper returns an empty slice for isn't
+	// in the default map, so MapName returns [name]. Use a name not
+	// in the override map to prove the default path.
+	if a.IsInstalled("this-is-not-installed") {
+		t.Error(
+			"unknown package reported installed",
+		)
 	}
 }
 

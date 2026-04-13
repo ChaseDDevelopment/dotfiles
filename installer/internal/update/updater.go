@@ -1,5 +1,17 @@
 package update
 
+// Test-coverage note (Category C — environmental syscall paths):
+//   - The AUR-helper (yay/paru) discovery branches inside
+//     updateNeovim (lines ~209–224) require those binaries to be
+//     installed and a real Arch package database; they cannot be
+//     exercised meaningfully in the cross-platform CI matrix.
+//   - The Chmod / bash-exec paths inside runDownloadedScript
+//     (lines ~270–289) depend on a writable /tmp + an executable
+//     bash that downloads a real Microsoft installer script. These
+//     are integration-scope and intentionally not unit-tested; the
+//     argv composition is inspected via code review rather than
+//     stubbed shell shims.
+
 import (
 	"context"
 	"fmt"

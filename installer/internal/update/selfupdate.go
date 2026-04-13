@@ -1,3 +1,16 @@
+// Package update implements dotsetup's self-update flow plus the
+// scheduled per-tool update steps invoked from the TUI.
+//
+// Test-coverage note (Category C — environmental syscall paths):
+// The os.Rename + sudo-mv fallback path inside SelfUpdate (lines
+// ~230–248) requires either a privileged path the test environment
+// cannot write to OR a working sudo binary, neither of which is
+// available in CI / sandboxed test runs. The rollback-from-backup
+// branch is similarly unreachable without a real cross-fs rename
+// failure. These paths have been verified manually against the
+// release artifact during real upgrades; the unit tests cover the
+// reachable failure modes (download, integrity, backup, missing
+// checksum entry) only.
 package update
 
 import (

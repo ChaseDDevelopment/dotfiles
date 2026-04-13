@@ -182,6 +182,18 @@ func devTools() []Tool {
 	}
 }
 
+// Category C — env-bound real-shell branches.
+// installNeovimPacman's "no AUR helpers found, fall through to
+// `sudo pacman -S --noconfirm neovim`" tail (line 201) only triggers
+// on a host where neither yay nor paru is on PATH AND `sudo pacman`
+// can actually run. Unit tests can't safely exercise sudo; the
+// pacman-only path is covered indirectly via the dry-run runner in
+// closures_test.go. Same applies to InstallNeovimApt's
+// `sudo rm -rf /opt/...` cleanup loop (lines 263-269) and the
+// `sudo tar -C /opt -xzf` extraction (line 271): both require root
+// in non-dry-run mode. Fakes via PATH stubs in installers_test.go
+// cover the argv-shape contract, but the actual privilege-elevation
+// branches stay untested by design.
 func installNeovimPacman(ctx context.Context, ic *InstallContext) error {
 	// Try AUR helpers first for neovim-git, fall back to pacman.
 	// Log each helper failure so "fell back to stable neovim" isn't

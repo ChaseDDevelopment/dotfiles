@@ -107,6 +107,120 @@ func TestFindRootDirFromEnvAndDefaults(t *testing.T) {
 	}
 }
 
+// TestFindRootDir_HomeSymlinkDefault verifies the strategy-4
+// default-locations scan resolves a symlinked `~/dotfiles` to its
+// real path. Regression guard: if the implementation switched to a
+// Lstat-based check, symlinked dotfiles directories (a common
+// multi-machine setup) would silently fall through to the
+// not-found branch.
+func TestFindRootDir_HomeSymlinkDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DOTFILES_DIR", "")
+
+	// Real repo sits outside HOME; ~/dotfiles is a symlink to it.
+	realRepo := filepath.Join(t.TempDir(), "real-dotfiles")
+	if err := os.MkdirAll(filepath.Join(realRepo, "configs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(home, "dotfiles")
+	if err := os.Symlink(realRepo, link); err != nil {
+		t.Skipf("symlink not supported on this fs: %v", err)
+	}
+
+	// Chdir to a leaf with no configs/ ancestors so strategies 2/3
+	// definitely miss and we exercise strategy 4.
+	leaf := t.TempDir()
+	t.Chdir(leaf)
+
+	got, err := findRootDir()
+	if err != nil {
+		t.Fatalf("findRootDir: %v", err)
+	}
+	// hasConfigs follows the symlink via os.Stat — the returned
+	// path is the symlink path itself (strategy 4 does not call
+	// EvalSymlinks). The important behavior is that the symlinked
+	// dotfiles directory is discovered.
+	if got != link {
+		t.Fatalf("findRootDir = %q, want %q (symlink path)", got, link)
+	}
+	resolved, err := filepath.EvalSymlinks(got)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", got, err)
+	}
+	// macOS prefixes tmpdirs with /private; resolve both sides
+	// before comparing so the test isn't platform-brittle.
+	wantResolved, err := filepath.EvalSymlinks(realRepo)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", realRepo, err)
+	}
+	if resolved != wantResolved {
+		t.Fatalf("resolved = %q, want %q", resolved, wantResolved)
+	}
+}
+
+// TestFindRootDir_CWDWalkStrategy3 covers strategy 3 (main.go:
+// 230–237): when HOME is empty (defaults skip), DOTFILES_DIR is
+// unset, and the binary's directory has no configs/, findRootDir
+// must walk up from CWD until it finds a configs/-bearing parent.
+func TestFindRootDir_CWDWalkStrategy3(t *testing.T) {
+	// Empty HOME so the strategy-4 default scan finds nothing.
+	emptyHome := t.TempDir()
+	t.Setenv("HOME", emptyHome)
+	t.Setenv("DOTFILES_DIR", "")
+
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, "configs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	deep := filepath.Join(repo, "a", "b", "c", "d")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(deep)
+
+	got, err := findRootDir()
+	if err != nil {
+		t.Fatalf("findRootDir: %v", err)
+	}
+	// The CWD walk on macOS may surface either the real or
+	// /private-prefixed temp path depending on getcwd resolution.
+	gotResolved, _ := filepath.EvalSymlinks(got)
+	wantResolved, _ := filepath.EvalSymlinks(repo)
+	if gotResolved != wantResolved {
+		t.Fatalf("findRootDir = %q (resolved %q), want %q (resolved %q)",
+			got, gotResolved, repo, wantResolved)
+	}
+}
+
+// TestFindRootDir_NotFound exercises the final error return at
+// main.go:252–255 when every strategy whiffs: HOME points to an
+// empty tmpdir (no defaults match), DOTFILES_DIR is unset, and CWD
+// has no configs/-bearing ancestor.
+func TestFindRootDir_NotFound(t *testing.T) {
+	emptyHome := t.TempDir()
+	t.Setenv("HOME", emptyHome)
+	t.Setenv("DOTFILES_DIR", "")
+
+	// Chdir into a tmpdir tree with zero configs/ ancestors.
+	leaf := t.TempDir()
+	t.Chdir(leaf)
+
+	got, err := findRootDir()
+	if err == nil {
+		t.Fatalf("expected error, got %q", got)
+	}
+	if got != "" {
+		t.Fatalf("expected empty path on error, got %q", got)
+	}
+	if !strings.Contains(err.Error(), "cannot find dotfiles root") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if !strings.Contains(err.Error(), "DOTFILES_DIR") {
+		t.Fatalf("error should mention DOTFILES_DIR escape hatch: %v", err)
+	}
+}
+
 func TestMainProcessVersionAndHomeError(t *testing.T) {
 	t.Run("version exits zero", func(t *testing.T) {
 		cmd := exec.Command(os.Args[0], "-test.run=TestMainHelperProcess", "--", "-version")
@@ -145,6 +259,7 @@ func TestMainProcessStartupErrorsAndRecovery(t *testing.T) {
 		{name: "platform detect failure", scenario: "platform", wantSub: "platform detect failed", wantError: true},
 		{name: "sudo auth failure", scenario: "sudoauth", wantSub: "sudo authentication failed", wantError: true},
 		{name: "cached sudo note", scenario: "hassudo", wantSub: "Credentials already available", wantError: false},
+		{name: "cached sudo only no preauth", scenario: "hassudo-cached-only", wantSub: "[sudo] Credentials already available.", wantError: false},
 		{name: "log file failure", scenario: "logfile", wantSub: "log open failed", wantError: true},
 		{name: "pkg manager failure", scenario: "pkgmgr", wantSub: "pkg manager unavailable", wantError: true},
 		{name: "state load failure", scenario: "state-load", wantSub: "load state: state read failed", wantError: true},
@@ -155,13 +270,14 @@ func TestMainProcessStartupErrorsAndRecovery(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
+			scratch := t.TempDir()
 			cmd := exec.Command(os.Args[0], "-test.run=TestMainHelperProcess", "--")
 			cmd.Env = append(
 				os.Environ(),
 				"GO_WANT_MAIN_HELPER=1",
 				"HOME="+home,
 				"GO_MAIN_SCENARIO="+tc.scenario,
-				"GO_MAIN_TMP="+t.TempDir(),
+				"GO_MAIN_TMP="+scratch,
 			)
 			out, err := cmd.CombinedOutput()
 			if tc.wantError && err == nil {
@@ -172,6 +288,71 @@ func TestMainProcessStartupErrorsAndRecovery(t *testing.T) {
 			}
 			if !strings.Contains(string(out), tc.wantSub) {
 				t.Fatalf("output %q missing %q", out, tc.wantSub)
+			}
+
+			// For success scenarios assert observable recovery side
+			// effects (audit complaint: original test only checked
+			// stdout substrings).
+			if !tc.wantError {
+				logPath := filepath.Join(scratch, "helper.log")
+				logBytes, err := os.ReadFile(logPath)
+				if err != nil {
+					t.Fatalf("scenario %q: log file not created: %v", tc.scenario, err)
+				}
+				if len(logBytes) == 0 {
+					t.Fatalf("scenario %q: log file empty (no startup writes)", tc.scenario)
+				}
+
+				if tc.scenario == "hassudo-cached-only" {
+					// Helper sentinel-panics if preAuth is invoked,
+					// so reaching this point already proves the
+					// else-branch was taken. Additionally assert the
+					// startup message landed on stderr (combined
+					// output) and the install.log got the version
+					// banner — proving downstream control flow ran
+					// after the cached-credentials notice.
+					if !strings.Contains(string(out), "[sudo] Credentials already available.") {
+						t.Fatalf("missing exact stderr line; got %q", out)
+					}
+					if !strings.Contains(string(logBytes), "dotsetup version=") {
+						t.Fatalf("install.log missing version banner: %q", logBytes)
+					}
+				}
+
+				if tc.scenario == "recover-corrupt" {
+					// Recovery should have renamed the corrupt
+					// state.json to a .bak-* sibling and logged a
+					// WARNING line so the user can inspect later.
+					entries, err := os.ReadDir(scratch)
+					if err != nil {
+						t.Fatalf("read scratch: %v", err)
+					}
+					var foundBak, foundFresh bool
+					for _, e := range entries {
+						if strings.HasPrefix(e.Name(), "state.json.bak-") {
+							foundBak = true
+							raw, err := os.ReadFile(filepath.Join(scratch, e.Name()))
+							if err != nil {
+								t.Fatalf("read backup: %v", err)
+							}
+							if !strings.Contains(string(raw), "{invalid") {
+								t.Fatalf("recover-corrupt: backup did not preserve original payload: %q", raw)
+							}
+						}
+						if e.Name() == "state.json" {
+							foundFresh = true
+						}
+					}
+					if !foundBak {
+						t.Fatalf("recover-corrupt: no state.json.bak-* file produced; entries=%v", entries)
+					}
+					if foundFresh {
+						t.Fatalf("recover-corrupt: stale state.json still present (rename did not happen)")
+					}
+					if !strings.Contains(string(logBytes), "WARNING: state file corrupt") {
+						t.Fatalf("recover-corrupt: log missing WARNING line; got=%q", logBytes)
+					}
+				}
 			}
 		})
 	}
@@ -219,6 +400,19 @@ func TestMainHelperProcess(t *testing.T) {
 			preAuthFn = func() error { return fmt.Errorf("prompt failed") }
 		case "hassudo":
 			hasSudoFn = func() bool { return true }
+		case "hassudo-cached-only":
+			// needsSudoFn=false, hasSudoFn=true: control flow must
+			// take the `else if hasSudoFn()` branch and emit the
+			// "Credentials already available" line WITHOUT ever
+			// calling preAuth (which would block on a real prompt).
+			// We sentinel preAuth with a panic so any accidental
+			// call surfaces as a non-zero exit + crash trace, not a
+			// silent test pass.
+			needsSudoFn = func() bool { return false }
+			hasSudoFn = func() bool { return true }
+			preAuthFn = func() error {
+				panic("preAuthFn must not be called when needsSudo=false")
+			}
 		case "logfile":
 			newLogFileFn = func(string) (*executor.LogFile, error) {
 				return nil, fmt.Errorf("log open failed")

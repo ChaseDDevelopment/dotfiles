@@ -77,6 +77,12 @@ type TaskStartedMsg struct {
 	Label string
 }
 
+// The four isEngineEvent marker methods below report 0% in `go test
+// -cover` because empty function bodies have no countable statements,
+// even though the runtime dispatches them (verified by
+// scheduler_invariants_test.go::TestEventMarkers). This is a Go
+// cover-tool quirk, not missing test coverage — do not "fix" it by
+// adding a body just to bump the number.
 func (TaskStartedMsg) isEngineEvent() {}
 
 // TaskDoneMsg is sent when a task finishes (success or failure).

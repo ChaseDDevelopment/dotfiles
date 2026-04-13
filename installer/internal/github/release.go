@@ -31,6 +31,13 @@ var latestVersionClient = &http.Client{
 	},
 }
 
+// downloadFileFn is a package-level seam over downloadFile so tests
+// can inject errors on the three call sites (downloadTarball,
+// downloadBinary, future callers) without spinning up an HTTP
+// roundtripper. Mirrors the convention used by latestVersionClient
+// and downloadClient. Tests must save and defer-restore.
+var downloadFileFn = downloadFile
+
 // URLPattern identifies the GitHub release URL format.
 type URLPattern int
 
@@ -195,7 +202,7 @@ func downloadTarball(
 	runner Runner,
 ) error {
 	tarPath := filepath.Join(tmpDir, "archive.tar.gz")
-	if err := downloadFile(ctx, url, tarPath); err != nil {
+	if err := downloadFileFn(ctx, url, tarPath); err != nil {
 		return err
 	}
 
@@ -331,7 +338,7 @@ func downloadBinary(
 	runner Runner,
 ) error {
 	binPath := filepath.Join(tmpDir, binaryName)
-	if err := downloadFile(ctx, url, binPath); err != nil {
+	if err := downloadFileFn(ctx, url, binPath); err != nil {
 		return err
 	}
 	return installBinary(ctx, binPath, binaryName, runner)
