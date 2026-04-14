@@ -256,3 +256,8 @@ local.*
 !install.sh
 !README.md
 !LICENSE
+
+# Runtime-generated files that match re-include rules above
+# (e.g. `!configs/**/*.json`) must stay ignored. Last match wins,
+# so keep this block at the end of the file.
+configs/atuin/atuin-receipt.json
