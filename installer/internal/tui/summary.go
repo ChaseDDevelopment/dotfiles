@@ -217,8 +217,10 @@ func (m summaryModel) completionView(width, height int) string {
 	if len(parts) == 0 {
 		parts = append(parts, dimStyle.Render("No changes needed"))
 	}
-	b.WriteString(centerWrap.Render(
-		strings.Join(parts, panelGap("   "))))
+	b.WriteString(lipgloss.NewStyle().
+		Background(catSurface0).
+		Width(w - 4).
+		Render("  " + strings.Join(parts, panelGap("   "))))
 
 	// Results table — show what actually happened.
 	// When in doctor mode, build the table body separately so it can
