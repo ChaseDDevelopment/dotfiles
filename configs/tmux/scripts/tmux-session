@@ -1,0 +1,15 @@
+#!/usr/bin/env zsh
+# Wrapper invoked via `ssh host tmux-session [session-name]`. Exists
+# because `ssh host cmd` runs a non-interactive, non-login shell on the
+# remote, which only sources .zshenv — and our dotfiles put brew
+# shellenv in .zprofile (login-only) to keep non-login shells cheap.
+#
+# Sourcing .zprofile here runs just the PATH setup (brew cache is ~10ms)
+# without the .zshrc plugin tax. Cheaper than `$SHELL -lc` and avoids
+# its nested-quote fragility + MOTD / update-nag side effects.
+#
+# Findable over `ssh host cmd` because .zshenv prepends ~/.local/bin
+# to PATH for every shell.
+
+[[ -f "${ZDOTDIR:-$HOME}/.zprofile" ]] && source "${ZDOTDIR:-$HOME}/.zprofile"
+exec tmux new-session -A -s "${1:-main}"

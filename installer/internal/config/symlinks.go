@@ -28,6 +28,10 @@ func AllSymlinks() []SymlinkEntry {
 		// Tmux
 		{Source: "tmux", Target: "$HOME/.config/tmux", IsDir: true, Component: "Tmux"},
 		{Source: "tmux/tmux.conf", Target: "$HOME/.tmux.conf", IsDir: false, Component: "Tmux"},
+		// Tmux session wrapper — lands in ~/.local/bin (already on PATH
+		// via .zshenv) so `ssh host tmux-session` works from non-
+		// interactive sshd shells where brew PATH is absent.
+		{Source: "tmux/scripts/tmux-session", Target: "$HOME/.local/bin/tmux-session", IsDir: false, Component: "Tmux"},
 
 		// Neovim
 		{Source: "nvim", Target: "$HOME/.config/nvim", IsDir: true, Component: "Neovim"},

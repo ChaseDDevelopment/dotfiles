@@ -15,10 +15,21 @@ function ssht() {
     local host="$1"
     shift
 
-    # -t forces TTY allocation (required for tmux)
-    # new-session -A: attach if exists, create if not
-    # -s main: session name
-    ssh -t "$@" "$host" "tmux new-session -A -s main"
+    # -t forces TTY allocation (required for tmux).
+    #
+    # Try the tmux-session wrapper (installed to ~/.local/bin by the
+    # dotfiles installer — findable via .zshenv's PATH prepend even in
+    # non-interactive sshd shells where brew PATH is otherwise absent).
+    # Fall back to an inline PATH prefix covering common brew install
+    # locations for hosts where the installer hasn't run yet.
+    #
+    # Single-quoted so the local shell leaves $HOME / PATH alone;
+    # expansion happens on the remote. `command -v` is the right signal
+    # (cheap PATH existence check) — guards against cases where the
+    # wrapper exists but errors on source, which would otherwise leak
+    # stderr noise into the fallback path.
+    ssh -t "$@" "$host" \
+        'command -v tmux-session >/dev/null 2>&1 && exec tmux-session main || PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" exec tmux new-session -A -s main'
 
     # Reset terminal state after SSH exits
     # Fixes terminal corruption when connection drops unexpectedly
