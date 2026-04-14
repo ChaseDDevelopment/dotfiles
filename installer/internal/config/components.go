@@ -386,8 +386,33 @@ func clearZshInitCaches(home string, runner *executor.Runner) error {
 }
 
 func setupTmux(ctx context.Context, sc *SetupContext) error {
-	tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
-	tmuxPluginsDir := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins")
+	home := os.Getenv("HOME")
+	tmuxConf := filepath.Join(home, ".config", "tmux", "tmux.conf")
+	tmuxPluginsDir := filepath.Join(home, ".tmux", "plugins")
+
+	// Wipe any tmux-resurrect / tmux-continuum save state. The
+	// plugin dirs are handled by staleTmuxPlugins below, but
+	// session JSONs under XDG_DATA_HOME (and the legacy
+	// ~/.tmux/resurrect/) persist and would be silently replayed
+	// if the user ever reinstalls either plugin. Idempotent: skips
+	// when the dirs don't exist.
+	xdgData := os.Getenv("XDG_DATA_HOME")
+	if xdgData == "" {
+		xdgData = filepath.Join(home, ".local", "share")
+	}
+	for _, dir := range []string{
+		filepath.Join(xdgData, "tmux", "resurrect"),
+		filepath.Join(home, ".tmux", "resurrect"),
+	} {
+		if _, err := os.Stat(dir); err != nil {
+			continue
+		}
+		sc.Runner.EmitVerbose("Removing stale tmux-resurrect saves: " + dir)
+		saveDir := dir
+		bestEffort(sc, "remove tmux-resurrect saves", func() error {
+			return os.RemoveAll(saveDir)
+		})
+	}
 
 	// Prune plugin dirs that no longer appear in tmux.conf. TPM
 	// installs but never cleans (its `clean_plugins` script is only
