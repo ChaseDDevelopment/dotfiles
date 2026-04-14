@@ -212,6 +212,8 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 					deps = append(deps, dep)
 				}
 			}
+			// Derive implicit deps from each applicable strategy.
+			deps = appendDerivedDeps(deps, &t, mgrName, installedSet)
 
 			// Find whether this tool is batched; if so, capture its
 			// generic pkgmgr name + strategy for the closure.
@@ -784,6 +786,54 @@ func hasResource(rs []engine.Resource, r engine.Resource) bool {
 		}
 	}
 	return false
+}
+
+// containsString reports whether s is present in xs. Used for small
+// local dedup of derived dep lists where pulling in `slices.Contains`
+// would be more noise than value.
+func containsString(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+// appendDerivedDeps extends deps with implicit command-level
+// dependencies derived from t's applicable strategies. Each Method
+// with an entry in registry.MethodRequires contributes its required
+// command (e.g. MethodCargo → "cargo"); a strategy's explicit
+// Requires list contributes additively. Dependencies already in
+// installedSet or already in deps are skipped so we don't add
+// redundant edges. Exported-adjacent so orchestrator tests can
+// verify the derivation without going through BuildInstallTasks.
+func appendDerivedDeps(
+	deps []string,
+	t *registry.Tool,
+	mgrName string,
+	installedSet map[string]bool,
+) []string {
+	for _, s := range t.Strategies {
+		if !s.AppliesTo(mgrName) {
+			continue
+		}
+		needs := make([]string, 0, len(s.Requires)+1)
+		if cmd, ok := registry.MethodRequires[s.Method]; ok {
+			needs = append(needs, cmd)
+		}
+		needs = append(needs, s.Requires...)
+		for _, cmd := range needs {
+			if cmd == "" || cmd == t.Command {
+				continue
+			}
+			if installedSet[cmd] || containsString(deps, cmd) {
+				continue
+			}
+			deps = append(deps, cmd)
+		}
+	}
+	return deps
 }
 
 // pkgMgrResource maps a manager name (as used in

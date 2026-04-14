@@ -29,7 +29,7 @@ func officialInstallerTools() []Tool {
 				return false
 			},
 			Strategies: []InstallStrategy{
-				{Method: MethodCustom, CustomFunc: installNvm},
+				{Method: MethodCustom, CustomFunc: installNvm, Requires: []string{"curl"}},
 			},
 		},
 		// Node.js LTS (installed via package manager as base)
@@ -45,7 +45,7 @@ func officialInstallerTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "atuin"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "atuin"},
-				{Method: MethodCustom, CustomFunc: installAtuin},
+				{Method: MethodCustom, CustomFunc: installAtuin, Requires: []string{"curl"}},
 			},
 		},
 		// TPM — Tmux Plugin Manager (git repo, not a binary)
@@ -57,7 +57,7 @@ func officialInstallerTools() []Tool {
 				return err == nil
 			},
 			Strategies: []InstallStrategy{
-				{Method: MethodCustom, CustomFunc: installTPM},
+				{Method: MethodCustom, CustomFunc: installTPM, Requires: []string{"git"}},
 			},
 		},
 	}

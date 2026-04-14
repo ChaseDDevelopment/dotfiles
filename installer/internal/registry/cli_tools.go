@@ -127,7 +127,7 @@ func cliTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "tailspin"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "tailspin"},
-				{Method: MethodCustom, CustomFunc: installTailspin},
+				{Method: MethodCustom, CustomFunc: installTailspin, Requires: []string{"curl"}},
 				{Method: MethodCargo, Crate: "tailspin"},
 			},
 			CargoCrate: "tailspin",
@@ -243,6 +243,7 @@ func cliTools() []Tool {
 					Method:       MethodCustom,
 					CustomFunc:   installGhCLI,
 					AcquiresDpkg: true,
+					Requires:     []string{"curl"},
 				},
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "gh"},
 			},
@@ -370,7 +371,7 @@ func cliTools() []Tool {
 						return ic.Runner.Run(ctx, "brew", "install", "--cask", "font-jetbrains-mono-nerd-font")
 					},
 				},
-				{Method: MethodCustom, CustomFunc: installNerdFontLinux},
+				{Method: MethodCustom, CustomFunc: installNerdFontLinux, Requires: []string{"curl"}},
 			},
 		},
 	}

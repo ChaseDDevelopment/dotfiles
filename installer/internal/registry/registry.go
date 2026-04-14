@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
@@ -310,7 +311,7 @@ func executeStrategy(ctx context.Context, s *InstallStrategy, ic *InstallContext
 		return ic.PkgMgr.Install(ctx, pkg)
 
 	case MethodCargo:
-		return ic.Runner.Run(ctx, "cargo", "install", s.Crate)
+		return ic.Runner.Run(ctx, resolveCargo(), "install", s.Crate)
 
 	case MethodGitHubRelease:
 		if s.GitHub == nil {
@@ -429,4 +430,22 @@ func executePostAction(ctx context.Context, pa *PostAction, ic *InstallContext) 
 		ic.Runner.AddEnv("PATH", os.ExpandEnv(pa.Target)+":"+os.Getenv("PATH"))
 	}
 	return nil
+}
+
+// resolveCargo returns the cargo binary to exec. It prefers PATH,
+// falling back to $HOME/.cargo/bin/cargo — rustup installs there
+// regardless of --no-modify-path, so the binary exists even when
+// the installer's PATH was snapshotted (in main.augmentPath) before
+// rust's install strategy ran in this session.
+func resolveCargo() string {
+	if p, err := exec.LookPath("cargo"); err == nil {
+		return p
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		cand := filepath.Join(home, ".cargo", "bin", "cargo")
+		if _, err := os.Stat(cand); err == nil {
+			return cand
+		}
+	}
+	return "cargo" // let os/exec produce the real error
 }

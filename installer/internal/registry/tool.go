@@ -27,6 +27,19 @@ const (
 	MethodCustom
 )
 
+// MethodRequires maps each install method to the command-name of
+// the binary that must already exist for the method to execute.
+// The orchestrator derives implicit DependsOn edges from this table
+// so registry authors can't forget (e.g. a MethodCargo tool races
+// rust install otherwise). MethodPackageManager/MethodCustom are
+// not derivable — MethodCustom strategies declare Requires instead.
+var MethodRequires = map[InstallMethod]string{
+	MethodCargo:         "cargo",
+	MethodScript:        "curl",
+	MethodGitHubRelease: "curl",
+	MethodGitClone:      "git",
+}
+
 
 // Tool describes a single installable tool with ordered strategies.
 type Tool struct {
@@ -93,6 +106,14 @@ type InstallStrategy struct {
 
 	// MethodCustom fields
 	CustomFunc func(ctx context.Context, ic *InstallContext) error
+
+	// Requires lists command-names the strategy shells out to (e.g.
+	// "git", "curl"). MethodCustom closures are opaque to automatic
+	// derivation, so declaring Requires lets the orchestrator add
+	// the necessary DependsOn edges. Methods with entries in
+	// MethodRequires inherit that dep automatically; Requires is
+	// additive on top.
+	Requires []string
 
 	// AcquiresDpkg signals that this strategy shells out to apt,
 	// apt-get, nala, or dpkg and therefore must hold the dpkg
