@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
 func coreTools() []Tool {
@@ -257,9 +258,10 @@ func cliTools() []Tool {
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "jq"},
 			},
 		},
-		// jless — interactive JSON viewer. GitHub releases ship
-		// .zip archives; cargo fallback requires libxcb dev headers
-		// (clipboard dep) so skip it — GitHub release is enough.
+		// jless — interactive JSON viewer. GitHub only ships an
+		// x86_64-linux-gnu binary, so aarch64 Linux (e.g. Raspberry
+		// Pi) falls through to a cargo build that first pulls in
+		// the libxcb dev headers jless's clipboard crate needs.
 		{
 			Name: "jless", Command: "jless", Description: "Interactive JSON viewer",
 			Strategies: []InstallStrategy{
@@ -269,7 +271,15 @@ func cliTools() []Tool {
 					Binary: "jless", StripVPrefix: false, LibC: "gnu",
 					ArchiveFormat: "zip",
 				}},
+				{
+					Managers:     []string{"apt", "dnf", "yum"},
+					Method:       MethodCustom,
+					CustomFunc:   installJlessFromSource,
+					AcquiresDpkg: true,
+					Requires:     []string{"cargo"},
+				},
 			},
+			CargoCrate: "jless",
 		},
 		// just — command runner (modern make replacement)
 		{
@@ -570,4 +580,38 @@ func installTailspin(ctx context.Context, ic *InstallContext) error {
 		ctx, "sudo", "install", "-m", "755", binPath,
 		"/usr/local/bin/tspin",
 	)
+}
+
+// installJlessFromSource handles the one platform tuple jless leaves
+// without a working binary: aarch64 Linux. `cargo install jless`
+// pulls the `clipboard` crate, which links libxcb — so we pre-install
+// the xcb dev headers via the system package manager before cargo
+// builds. x86_64 Linux never reaches this strategy because the
+// GitHub release path succeeds first; this is the third-rung safety
+// net.
+func installJlessFromSource(ctx context.Context, ic *InstallContext) error {
+	xcbDeps := xcbDepsForPkgMgr(ic.Platform)
+	if len(xcbDeps) > 0 {
+		if err := ic.PkgMgr.Install(ctx, xcbDeps...); err != nil {
+			return fmt.Errorf("jless: install xcb dev headers: %w", err)
+		}
+	}
+	return ic.Runner.Run(ctx, resolveCargo(), "install", "jless")
+}
+
+// xcbDepsForPkgMgr returns the distro-specific package names for
+// the libxcb dev headers jless needs. Returns nil on managers
+// where jless has a prebuilt binary path (brew/pacman), so this
+// helper is safely called on any platform.
+func xcbDepsForPkgMgr(p *platform.Platform) []string {
+	if p == nil {
+		return nil
+	}
+	switch p.PackageManager {
+	case platform.PkgApt:
+		return []string{"libxcb1-dev", "libxcb-shape0-dev", "libxcb-xfixes0-dev"}
+	case platform.PkgDnf, platform.PkgYum:
+		return []string{"libxcb-devel", "xcb-util-devel"}
+	}
+	return nil
 }

@@ -233,7 +233,8 @@ func TestAllCatalogCustomFuncs_AreReachable(t *testing.T) {
 		"installNeovimPacman":  {},
 		"InstallNeovimApt":     {},
 		"installYaziApt":       {},
-		"installNerdFontLinux": {},
+		"installNerdFontLinux":    {},
+		"installJlessFromSource":  {},
 	}
 	// Tools whose anonymous closures are asserted by
 	// TestInlineCustomClosures_InvokeExpectedCommands above.
