@@ -194,6 +194,20 @@ bindkey '^x^e' edit-command-line
 bindkey '^[[1;3D' backward-word
 bindkey '^[[1;3C' forward-word
 
+# History expansion on space (!!, !$, !-2, etc.)
+bindkey ' ' magic-space
+
+# ----------------------------------------------------------------------------
+# Batch rename / copy / link via glob patterns
+# ----------------------------------------------------------------------------
+# zmv is zsh's native batch renamer. `noglob` prevents the shell from
+# expanding `*` before zmv sees it, so patterns can be typed unquoted.
+# `-W` treats `*` as capture groups in src and placeholders in dst.
+autoload -Uz zmv
+alias zmv='noglob zmv -W'
+alias zcp='noglob zmv -W -C'
+alias zln='noglob zmv -W -L'
+
 # ----------------------------------------------------------------------------
 # Source Additional Configs
 # ----------------------------------------------------------------------------
