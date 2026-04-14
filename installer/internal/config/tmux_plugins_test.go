@@ -102,6 +102,112 @@ func TestStaleTmuxPluginsMissingPaths(t *testing.T) {
 	}
 }
 
+// TestMissingTmuxPluginsDetectsUninstalled covers the fresh-install
+// case: tmux.conf declares plugins, but the corresponding dirs don't
+// exist on disk yet. The MaintainTmuxPlugins healer uses this to
+// decide whether to invoke install_plugins.sh.
+func TestMissingTmuxPluginsDetectsUninstalled(t *testing.T) {
+	tmp := t.TempDir()
+	conf := filepath.Join(tmp, "tmux.conf")
+	if err := os.WriteFile(conf, []byte(sampleTmuxConf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plugins := filepath.Join(tmp, "plugins")
+	// Only tmux-sensible is on disk; the other declared plugins
+	// (tmux, vim-tmux-navigator) are missing. tpm is excluded from
+	// the declared set by design — it's not a managed plugin.
+	for _, name := range []string{"tpm", "tmux-sensible"} {
+		if err := os.MkdirAll(filepath.Join(plugins, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	missing, err := missingTmuxPlugins(conf, plugins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(missing)
+	want := []string{"tmux", "vim-tmux-navigator"}
+	if len(missing) != len(want) {
+		t.Fatalf("missing = %v, want %v", missing, want)
+	}
+	for i := range want {
+		if missing[i] != want[i] {
+			t.Fatalf("missing = %v, want %v", missing, want)
+		}
+	}
+}
+
+// TestMissingTmuxPluginsAllPresent — happy path, every declared
+// plugin has a directory. Returns nil so MaintainTmuxPlugins
+// short-circuits without invoking install_plugins.sh.
+func TestMissingTmuxPluginsAllPresent(t *testing.T) {
+	tmp := t.TempDir()
+	conf := filepath.Join(tmp, "tmux.conf")
+	if err := os.WriteFile(conf, []byte(sampleTmuxConf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plugins := filepath.Join(tmp, "plugins")
+	for _, name := range []string{
+		"tpm", "tmux-sensible", "tmux", "vim-tmux-navigator",
+	} {
+		if err := os.MkdirAll(filepath.Join(plugins, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	missing, err := missingTmuxPlugins(conf, plugins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("expected no missing plugins, got %v", missing)
+	}
+}
+
+// TestMissingTmuxPluginsBareDir — pluginsDir exists but is empty.
+// Every declared plugin (minus tpm) should be flagged missing.
+func TestMissingTmuxPluginsBareDir(t *testing.T) {
+	tmp := t.TempDir()
+	conf := filepath.Join(tmp, "tmux.conf")
+	if err := os.WriteFile(conf, []byte(sampleTmuxConf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plugins := filepath.Join(tmp, "plugins")
+	if err := os.MkdirAll(plugins, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := missingTmuxPlugins(conf, plugins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(missing)
+	want := []string{"tmux", "tmux-sensible", "vim-tmux-navigator"}
+	if len(missing) != len(want) {
+		t.Fatalf("missing = %v, want %v", missing, want)
+	}
+	for i := range want {
+		if missing[i] != want[i] {
+			t.Fatalf("missing = %v, want %v", missing, want)
+		}
+	}
+}
+
+// TestMissingTmuxPluginsNoConf — no symlinked config yet. Not an
+// error; healer is a no-op until symlinks land.
+func TestMissingTmuxPluginsNoConf(t *testing.T) {
+	tmp := t.TempDir()
+	missing, err := missingTmuxPlugins(
+		filepath.Join(tmp, "no-conf"),
+		filepath.Join(tmp, "no-dir"),
+	)
+	if err != nil {
+		t.Fatalf("expected nil err, got %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("expected no missing entries, got %v", missing)
+	}
+}
+
 // TestStaleTmuxPluginsIgnoresFiles — something dropped a stray file
 // (screenshot, .DS_Store, etc) into ~/.tmux/plugins/. Don't try to
 // remove it — we only handle plugin dirs.

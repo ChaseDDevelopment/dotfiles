@@ -60,3 +60,43 @@ func staleTmuxPlugins(tmuxConf, pluginsDir string) ([]string, error) {
 	}
 	return stale, nil
 }
+
+// missingTmuxPlugins returns the basenames of plugins declared via
+// `set -g @plugin` in tmux.conf that don't have a corresponding
+// directory under pluginsDir. TPM is excluded — it's the manager,
+// installed separately by the tools-install phase, not via TPM
+// itself. Returns (nil, nil) when tmux.conf is missing (fresh box
+// before symlinks land); returns the full declared list when
+// pluginsDir doesn't exist (everything is "missing" in that case).
+func missingTmuxPlugins(tmuxConf, pluginsDir string) ([]string, error) {
+	confData, err := os.ReadFile(tmuxConf)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var declared []string
+	for _, m := range pluginDeclRe.FindAllStringSubmatch(string(confData), -1) {
+		// m[2] is the repo basename — TPM clones to
+		// `~/.tmux/plugins/<repo>` regardless of the org.
+		if m[2] == "tpm" {
+			continue
+		}
+		declared = append(declared, m[2])
+	}
+
+	var missing []string
+	for _, name := range declared {
+		_, err := os.Stat(filepath.Join(pluginsDir, name))
+		if err == nil {
+			continue
+		}
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		missing = append(missing, name)
+	}
+	return missing, nil
+}

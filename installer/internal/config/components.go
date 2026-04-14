@@ -389,24 +389,10 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 	home := os.Getenv("HOME")
 	tmuxConf := filepath.Join(home, ".config", "tmux", "tmux.conf")
 
-	// Install TPM plugins if TPM exists.
-	sc.Runner.EmitVerbose("Checking for TPM plugins")
-	tpmScript := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins", "tpm", "scripts", "install_plugins.sh")
-	if _, err := os.Stat(tpmScript); err == nil {
-		// Start tmux server and source config for TPM env (best-effort).
-		bestEffort(sc, "tmux server start failed", func() error {
-			return sc.Runner.RunShell(ctx,
-				fmt.Sprintf(`tmux start-server \; source-file "%s" 2>/dev/null || true`, tmuxConf))
-		})
-		bestEffort(sc, "chmod tpm script failed", func() error {
-			return sc.Runner.Run(ctx, "chmod", "+x", tpmScript)
-		})
-		bestEffort(sc, "TPM plugin install failed", func() error {
-			return sc.Runner.Run(ctx, tpmScript)
-		})
-	}
-
-	// Reload tmux config if running (best-effort).
+	// Plugin install lives in MaintainTmuxPlugins so it runs on every
+	// invocation (not just when symlinks change) and has a real dep on
+	// the tpm tool task. setupTmux now only handles the post-symlink
+	// config reload for an already-running tmux server.
 	if _, err := sc.Runner.RunProbe(ctx, "pgrep", "-x", "tmux"); err == nil {
 		bestEffort(sc, "tmux config reload failed", func() error {
 			return sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf)
@@ -417,18 +403,38 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 }
 
 // MaintainTmuxPlugins runs on every install, outside the "already
-// configured" symlink guard. It wipes tmux-resurrect/continuum save
-// files and prunes plugin dirs no longer listed in tmux.conf — both
-// of which are local-drift concerns that don't care whether symlinks
-// already match the repo. Safe to run repeatedly; no-op when nothing
-// is stale.
+// configured" symlink guard. It heals three independent kinds of
+// drift, in order:
+//
+//  1. Installs declared `@plugin` entries that aren't on disk yet.
+//     This is the fresh-install path (TPM has been cloned but no
+//     plugins under it) and the self-heal path (user removed a
+//     plugin, prior install partially failed, etc.).
+//  2. Wipes tmux-resurrect / tmux-continuum save state so removed
+//     plugins don't get silently replayed if they reappear later.
+//  3. Prunes plugin dirs no longer listed in tmux.conf. TPM
+//     installs but never cleans, so a removed `@plugin` lingers
+//     on disk with bindings still active in any running tmux
+//     server.
+//
+// Safe to run repeatedly; no-op when nothing needs healing.
 func MaintainTmuxPlugins(ctx context.Context, sc *SetupContext) error {
-	_ = ctx
+	// Tag failures with "Tmux" so summary attribution matches the
+	// component name (this isn't dispatched through SetupComponent,
+	// which is what normally sets sc.Component).
+	sc.Component = "Tmux"
+
 	home := os.Getenv("HOME")
 	tmuxConf := filepath.Join(home, ".config", "tmux", "tmux.conf")
 	tmuxPluginsDir := filepath.Join(home, ".tmux", "plugins")
 
-	// Wipe tmux-resurrect / tmux-continuum save state. The plugin
+	// 1. Install missing plugins via TPM if any are declared but
+	// absent. Skip cleanly when tmux isn't installed yet, when the
+	// config symlink hasn't landed, or when TPM itself isn't on disk
+	// — those are normal mid-install states, not failures.
+	installMissingTmuxPlugins(ctx, sc, tmuxConf, tmuxPluginsDir)
+
+	// 2. Wipe tmux-resurrect / tmux-continuum save state. The plugin
 	// dirs themselves are handled by staleTmuxPlugins below; the
 	// JSON snapshots under XDG_DATA_HOME (and legacy ~/.tmux/
 	// resurrect/) persist otherwise and would be silently replayed
@@ -451,7 +457,7 @@ func MaintainTmuxPlugins(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	// Prune plugin dirs that no longer appear in tmux.conf. TPM
+	// 3. Prune plugin dirs that no longer appear in tmux.conf. TPM
 	// installs but never cleans (its `clean_plugins` script is only
 	// bound to a key), so a plugin removed from `set -g @plugin`
 	// lingers on disk with its bindings still active in any running
@@ -477,6 +483,69 @@ func MaintainTmuxPlugins(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 	return nil
+}
+
+// installMissingTmuxPlugins compares declared `@plugin` entries in
+// tmux.conf against ~/.tmux/plugins/ and runs TPM's install_plugins.sh
+// when anything is missing. The tmux server is started + the config
+// is sourced first so TPM can read TMUX_PLUGIN_MANAGER_PATH from the
+// running server's environment (TPM's _tpm_path() requires this — if
+// it can't resolve, the script fatal-aborts).
+//
+// Pre-flight gates that legitimately short-circuit (no failure
+// recorded): tmux not on PATH, tmux.conf symlink absent, no missing
+// plugins, TPM not on disk. Anything past the gates is real work
+// whose errors must surface — the bestEffort wrappers route both to
+// install.log and the TUI summary screen.
+func installMissingTmuxPlugins(
+	ctx context.Context, sc *SetupContext, tmuxConf, tmuxPluginsDir string,
+) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		return
+	}
+
+	missing, err := missingTmuxPlugins(tmuxConf, tmuxPluginsDir)
+	if err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"tmux plugin install skipped: %v", err,
+		))
+		return
+	}
+	if len(missing) == 0 {
+		return
+	}
+
+	tpmScript := filepath.Join(
+		tmuxPluginsDir, "tpm", "scripts", "install_plugins.sh",
+	)
+	if _, err := os.Stat(tpmScript); err != nil {
+		// TPM tool task hasn't run yet (or failed). The tpm dep on
+		// maintain-tmux should normally prevent this — log so we
+		// notice if the dep regresses.
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"tmux plugin install skipped: %d plugin(s) missing but TPM not on disk at %s",
+			len(missing), tpmScript,
+		))
+		return
+	}
+
+	sc.Runner.Log.Write(fmt.Sprintf(
+		"maintain-tmux: installing %d missing plugin(s): %s",
+		len(missing), strings.Join(missing, ", "),
+	))
+
+	bestEffort(sc, "tmux server start failed", func() error {
+		return sc.Runner.Run(ctx, "tmux", "start-server")
+	})
+	bestEffort(sc, "source tmux.conf into running server failed", func() error {
+		return sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf)
+	})
+	bestEffort(sc, "chmod tpm install script failed", func() error {
+		return sc.Runner.Run(ctx, "chmod", "+x", tpmScript)
+	})
+	bestEffort(sc, "TPM plugin install failed", func() error {
+		return sc.Runner.Run(ctx, tpmScript)
+	})
 }
 
 // MaintainNeovimPlugins wipes plugin clones whose HEAD doesn't match

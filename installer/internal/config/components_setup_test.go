@@ -139,3 +139,169 @@ exit 0
 		}
 	}
 }
+
+// TestMaintainTmuxPluginsInstallsMissing verifies the fresh-install
+// healing path: when tmux.conf declares plugins that aren't on disk
+// AND TPM is on disk, MaintainTmuxPlugins must start the tmux server,
+// source the config (so TPM can read TMUX_PLUGIN_MANAGER_PATH from
+// the running server), and run install_plugins.sh — in that order.
+func TestMaintainTmuxPluginsInstallsMissing(t *testing.T) {
+	sc, home := newComponentSetup(t)
+
+	fakebin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	logPath := filepath.Join(home, "commands.log")
+	t.Setenv("COMPONENT_LOG", logPath)
+	for _, name := range []string{"tmux", "chmod"} {
+		writeTool(t, fakebin, name, `#!/bin/sh
+printf '%s %s\n' "`+name+`" "$*" >> "$COMPONENT_LOG"
+exit 0
+`)
+	}
+
+	tmuxConfDir := filepath.Join(home, ".config", "tmux")
+	if err := os.MkdirAll(tmuxConfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tmuxConf := filepath.Join(tmuxConfDir, "tmux.conf")
+	if err := os.WriteFile(tmuxConf, []byte(sampleTmuxConf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tpmScript := filepath.Join(
+		home, ".tmux", "plugins", "tpm", "scripts", "install_plugins.sh",
+	)
+	if err := os.MkdirAll(filepath.Dir(tpmScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Script writes to the shared command log so the test can assert
+	// install_plugins.sh actually ran.
+	if err := os.WriteFile(tpmScript, []byte(`#!/bin/sh
+printf 'install_plugins.sh ran\n' >> "$COMPONENT_LOG"
+exit 0
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tpmDir := filepath.Join(home, ".tmux", "plugins", "tpm")
+	if err := os.MkdirAll(tpmDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MaintainTmuxPlugins(context.Background(), sc); err != nil {
+		t.Fatalf("MaintainTmuxPlugins: %v", err)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logStr := string(data)
+	for _, want := range []string{
+		"tmux start-server",
+		"tmux source-file",
+		"chmod +x",
+		"install_plugins.sh ran",
+	} {
+		if !strings.Contains(logStr, want) {
+			t.Fatalf("expected %q in command log, got:\n%s", want, logStr)
+		}
+	}
+}
+
+// TestMaintainTmuxPluginsSkipsWhenTpmAbsent — defensive check: if the
+// tpm dep regresses and maintain-tmux fires before TPM is cloned, we
+// must NOT invoke install_plugins.sh (it doesn't exist) and must log
+// the skip so the regression is observable.
+func TestMaintainTmuxPluginsSkipsWhenTpmAbsent(t *testing.T) {
+	sc, home := newComponentSetup(t)
+
+	fakebin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	logPath := filepath.Join(home, "commands.log")
+	t.Setenv("COMPONENT_LOG", logPath)
+	writeTool(t, fakebin, "tmux", `#!/bin/sh
+printf 'tmux %s\n' "$*" >> "$COMPONENT_LOG"
+exit 0
+`)
+
+	tmuxConfDir := filepath.Join(home, ".config", "tmux")
+	if err := os.MkdirAll(tmuxConfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(tmuxConfDir, "tmux.conf"),
+		[]byte(sampleTmuxConf), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	// Note: TPM directory is intentionally NOT created.
+
+	if err := MaintainTmuxPlugins(context.Background(), sc); err != nil {
+		t.Fatalf("MaintainTmuxPlugins: %v", err)
+	}
+
+	if data, err := os.ReadFile(logPath); err == nil {
+		if strings.Contains(string(data), "tmux start-server") {
+			t.Fatalf("expected no tmux start-server when TPM absent, got:\n%s",
+				string(data))
+		}
+	}
+	if snap := sc.Failures.Snapshot(); len(snap) != 0 {
+		t.Fatalf("expected no failures recorded, got %v", snap)
+	}
+}
+
+// TestMaintainTmuxPluginsNoOpWhenAllPresent — the steady-state case:
+// nothing missing, so we don't waste cycles starting a tmux server
+// just to invoke install_plugins.sh against a no-op plugin set.
+func TestMaintainTmuxPluginsNoOpWhenAllPresent(t *testing.T) {
+	sc, home := newComponentSetup(t)
+
+	fakebin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	logPath := filepath.Join(home, "commands.log")
+	t.Setenv("COMPONENT_LOG", logPath)
+	writeTool(t, fakebin, "tmux", `#!/bin/sh
+printf 'tmux %s\n' "$*" >> "$COMPONENT_LOG"
+exit 0
+`)
+
+	tmuxConfDir := filepath.Join(home, ".config", "tmux")
+	if err := os.MkdirAll(tmuxConfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(tmuxConfDir, "tmux.conf"),
+		[]byte(sampleTmuxConf), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	pluginsDir := filepath.Join(home, ".tmux", "plugins")
+	for _, name := range []string{
+		"tpm", "tmux-sensible", "tmux", "vim-tmux-navigator",
+	} {
+		if err := os.MkdirAll(filepath.Join(pluginsDir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := MaintainTmuxPlugins(context.Background(), sc); err != nil {
+		t.Fatalf("MaintainTmuxPlugins: %v", err)
+	}
+
+	if data, err := os.ReadFile(logPath); err == nil {
+		if strings.Contains(string(data), "tmux") {
+			t.Fatalf("expected zero tmux invocations when all plugins present, got:\n%s",
+				string(data))
+		}
+	}
+}

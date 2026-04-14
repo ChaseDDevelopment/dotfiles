@@ -290,12 +290,18 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 	var maintenanceIDs []string
 	if !bc.DryRun {
 		type maintSpec struct {
-			id, label, requires string
-			run                 func(context.Context, *config.SetupContext) error
+			id, label string
+			requires  []string
+			run       func(context.Context, *config.SetupContext) error
 		}
+		// maintain-tmux requires both `tmux` (the binary, used to
+		// start a server and source the config) AND `tpm` (the plugin
+		// manager script that does the actual cloning). Without the
+		// tpm dep, on a fresh host the maintain task can race ahead
+		// of the tpm clone and silently skip plugin install.
 		specs := []maintSpec{
-			{id: "maintain-tmux", label: "Housekeeping tmux plugins", requires: "tmux", run: config.MaintainTmuxPlugins},
-			{id: "maintain-nvim", label: "Housekeeping Neovim plugins", requires: "nvim", run: config.MaintainNeovimPlugins},
+			{id: "maintain-tmux", label: "Housekeeping tmux plugins", requires: []string{"tmux", "tpm"}, run: config.MaintainTmuxPlugins},
+			{id: "maintain-nvim", label: "Housekeeping Neovim plugins", requires: []string{"nvim"}, run: config.MaintainNeovimPlugins},
 		}
 		for _, s := range specs {
 			// Only chain a dep when the required tool is scheduled
@@ -304,10 +310,12 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			// the box, no dep needed (the run closure itself probes
 			// before touching anything).
 			var deps []string
-			for _, tid := range toolIDs {
-				if tid == s.requires {
-					deps = append(deps, tid)
-					break
+			for _, req := range s.requires {
+				for _, tid := range toolIDs {
+					if tid == req {
+						deps = append(deps, tid)
+						break
+					}
 				}
 			}
 			spec := s
