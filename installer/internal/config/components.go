@@ -386,12 +386,32 @@ func clearZshInitCaches(home string, runner *executor.Runner) error {
 }
 
 func setupTmux(ctx context.Context, sc *SetupContext) error {
+	tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
+	tmuxPluginsDir := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins")
+
+	// Prune plugin dirs that no longer appear in tmux.conf. TPM
+	// installs but never cleans (its `clean_plugins` script is only
+	// bound to a key), so a plugin removed from `set -g @plugin`
+	// lingers on disk with its bindings still active in any running
+	// tmux server — that's how tmux-menus kept clobbering `|`.
+	if stale, err := staleTmuxPlugins(tmuxConf, tmuxPluginsDir); err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"tmux plugin prune skipped: %v", err,
+		))
+	} else {
+		for _, dir := range stale {
+			sc.Runner.EmitVerbose("Removing stale tmux plugin: " + dir)
+			bestEffort(sc, "remove stale tmux plugin "+filepath.Base(dir), func() error {
+				return os.RemoveAll(dir)
+			})
+		}
+	}
+
 	// Install TPM plugins if TPM exists.
 	sc.Runner.EmitVerbose("Checking for TPM plugins")
 	tpmScript := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins", "tpm", "scripts", "install_plugins.sh")
 	if _, err := os.Stat(tpmScript); err == nil {
 		// Start tmux server and source config for TPM env (best-effort).
-		tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
 		bestEffort(sc, "tmux server start failed", func() error {
 			return sc.Runner.RunShell(ctx,
 				fmt.Sprintf(`tmux start-server \; source-file "%s" 2>/dev/null || true`, tmuxConf))
@@ -406,7 +426,6 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 
 	// Reload tmux config if running (best-effort).
 	if _, err := sc.Runner.RunProbe(ctx, "pgrep", "-x", "tmux"); err == nil {
-		tmuxConf := filepath.Join(os.Getenv("HOME"), ".config", "tmux", "tmux.conf")
 		bestEffort(sc, "tmux config reload failed", func() error {
 			return sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf)
 		})
