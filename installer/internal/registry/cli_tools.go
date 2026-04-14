@@ -256,6 +256,30 @@ func cliTools() []Tool {
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "jq"},
 			},
 		},
+		// jless — interactive JSON viewer. GitHub releases ship
+		// .zip archives which the existing patterns don't handle,
+		// so we fall through to cargo on apt/dnf/yum hosts.
+		{
+			Name: "jless", Command: "jless", Description: "Interactive JSON viewer",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "jless"},
+				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "jless"},
+			},
+			CargoCrate: "jless",
+		},
+		// just — command runner (modern make replacement)
+		{
+			Name: "just", Command: "just", Description: "Command runner",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "just"},
+				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
+					Repo: "casey/just", Pattern: github.PatternVersionPrefixed,
+					Binary: "just", StripVPrefix: false, LibC: "musl",
+				}},
+				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "just"},
+			},
+			CargoCrate: "just",
+		},
 		// dust — modern disk usage analyzer
 		{
 			Name: "dust", Command: "dust", Description: "Modern disk usage analyzer",

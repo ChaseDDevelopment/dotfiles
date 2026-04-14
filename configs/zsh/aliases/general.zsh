@@ -92,3 +92,28 @@ fi
 
 # Docker compose shorthand
 alias dc='docker compose'
+
+# Suffix aliases — type a filename as a command to open it.
+#   `report.json`  → jless report.json
+#   `./notes.md`   → bat notes.md
+# Only fires when the filename is the first word; `cat file.json` is unaffected.
+if (( $+commands[bat] )); then
+    _view_cmd='bat'
+elif (( $+commands[batcat] )); then
+    _view_cmd='batcat'
+else
+    _view_cmd='less'
+fi
+for _ext in txt log md yml yaml toml ini conf; do
+    alias -s "$_ext"="$_view_cmd"
+done
+unset _ext
+
+if (( $+commands[jless] )); then
+    alias -s json='jless'
+    alias -s ndjson='jless'
+else
+    alias -s json="$_view_cmd"
+    alias -s ndjson="$_view_cmd"
+fi
+unset _view_cmd
