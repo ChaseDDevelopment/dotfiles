@@ -388,49 +388,6 @@ func clearZshInitCaches(home string, runner *executor.Runner) error {
 func setupTmux(ctx context.Context, sc *SetupContext) error {
 	home := os.Getenv("HOME")
 	tmuxConf := filepath.Join(home, ".config", "tmux", "tmux.conf")
-	tmuxPluginsDir := filepath.Join(home, ".tmux", "plugins")
-
-	// Wipe any tmux-resurrect / tmux-continuum save state. The
-	// plugin dirs are handled by staleTmuxPlugins below, but
-	// session JSONs under XDG_DATA_HOME (and the legacy
-	// ~/.tmux/resurrect/) persist and would be silently replayed
-	// if the user ever reinstalls either plugin. Idempotent: skips
-	// when the dirs don't exist.
-	xdgData := os.Getenv("XDG_DATA_HOME")
-	if xdgData == "" {
-		xdgData = filepath.Join(home, ".local", "share")
-	}
-	for _, dir := range []string{
-		filepath.Join(xdgData, "tmux", "resurrect"),
-		filepath.Join(home, ".tmux", "resurrect"),
-	} {
-		if _, err := os.Stat(dir); err != nil {
-			continue
-		}
-		sc.Runner.EmitVerbose("Removing stale tmux-resurrect saves: " + dir)
-		saveDir := dir
-		bestEffort(sc, "remove tmux-resurrect saves", func() error {
-			return os.RemoveAll(saveDir)
-		})
-	}
-
-	// Prune plugin dirs that no longer appear in tmux.conf. TPM
-	// installs but never cleans (its `clean_plugins` script is only
-	// bound to a key), so a plugin removed from `set -g @plugin`
-	// lingers on disk with its bindings still active in any running
-	// tmux server — that's how tmux-menus kept clobbering `|`.
-	if stale, err := staleTmuxPlugins(tmuxConf, tmuxPluginsDir); err != nil {
-		sc.Runner.Log.Write(fmt.Sprintf(
-			"tmux plugin prune skipped: %v", err,
-		))
-	} else {
-		for _, dir := range stale {
-			sc.Runner.EmitVerbose("Removing stale tmux plugin: " + dir)
-			bestEffort(sc, "remove stale tmux plugin "+filepath.Base(dir), func() error {
-				return os.RemoveAll(dir)
-			})
-		}
-	}
 
 	// Install TPM plugins if TPM exists.
 	sc.Runner.EmitVerbose("Checking for TPM plugins")
@@ -459,6 +416,101 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 	return nil
 }
 
+// MaintainTmuxPlugins runs on every install, outside the "already
+// configured" symlink guard. It wipes tmux-resurrect/continuum save
+// files and prunes plugin dirs no longer listed in tmux.conf — both
+// of which are local-drift concerns that don't care whether symlinks
+// already match the repo. Safe to run repeatedly; no-op when nothing
+// is stale.
+func MaintainTmuxPlugins(ctx context.Context, sc *SetupContext) error {
+	_ = ctx
+	home := os.Getenv("HOME")
+	tmuxConf := filepath.Join(home, ".config", "tmux", "tmux.conf")
+	tmuxPluginsDir := filepath.Join(home, ".tmux", "plugins")
+
+	// Wipe tmux-resurrect / tmux-continuum save state. The plugin
+	// dirs themselves are handled by staleTmuxPlugins below; the
+	// JSON snapshots under XDG_DATA_HOME (and legacy ~/.tmux/
+	// resurrect/) persist otherwise and would be silently replayed
+	// if either plugin ever reappeared in tmux.conf.
+	xdgData := os.Getenv("XDG_DATA_HOME")
+	if xdgData == "" {
+		xdgData = filepath.Join(home, ".local", "share")
+	}
+	for _, dir := range []string{
+		filepath.Join(xdgData, "tmux", "resurrect"),
+		filepath.Join(home, ".tmux", "resurrect"),
+	} {
+		if _, err := os.Stat(dir); err != nil {
+			continue
+		}
+		sc.Runner.EmitVerbose("Removing stale tmux-resurrect saves: " + dir)
+		saveDir := dir
+		bestEffort(sc, "remove tmux-resurrect saves", func() error {
+			return os.RemoveAll(saveDir)
+		})
+	}
+
+	// Prune plugin dirs that no longer appear in tmux.conf. TPM
+	// installs but never cleans (its `clean_plugins` script is only
+	// bound to a key), so a plugin removed from `set -g @plugin`
+	// lingers on disk with its bindings still active in any running
+	// tmux server — that's how tmux-menus kept clobbering `|`.
+	stale, err := staleTmuxPlugins(tmuxConf, tmuxPluginsDir)
+	if err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"tmux plugin prune skipped: %v", err,
+		))
+		return nil
+	}
+	if len(stale) == 0 {
+		return nil
+	}
+	sc.Runner.Log.Write(fmt.Sprintf(
+		"maintain-tmux: pruning %d stale plugin dir(s)", len(stale),
+	))
+	for _, dir := range stale {
+		sc.Runner.EmitVerbose("Removing stale tmux plugin: " + dir)
+		d := dir
+		bestEffort(sc, "remove stale tmux plugin "+filepath.Base(d), func() error {
+			return os.RemoveAll(d)
+		})
+	}
+	return nil
+}
+
+// MaintainNeovimPlugins wipes plugin clones whose HEAD doesn't match
+// `nvim-pack-lock.json`. Extracted from setupNeovim so it runs on
+// every install, not only when symlinks change — drift happens when
+// the repo's `version` spec changes (e.g. harpoon master → harpoon2)
+// and the on-disk clone stays on the old branch.
+func MaintainNeovimPlugins(ctx context.Context, sc *SetupContext) error {
+	_ = ctx
+	home := os.Getenv("HOME")
+	lockPath := filepath.Join(sc.RootDir, "configs", "nvim", "nvim-pack-lock.json")
+	drifted, err := nvimDriftedClones(lockPath, home)
+	if err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"nvim drift scan skipped: %v", err,
+		))
+		return nil
+	}
+	if len(drifted) == 0 {
+		return nil
+	}
+	sc.Runner.Log.Write(fmt.Sprintf(
+		"maintain-nvim: wiping %d drifted plugin clone(s)", len(drifted),
+	))
+	for _, dir := range drifted {
+		sc.Runner.EmitVerbose("Removing drifted nvim plugin clone: " + dir)
+		d := dir
+		bestEffort(sc, "remove drifted plugin "+filepath.Base(d), func() error {
+			return os.RemoveAll(d)
+		})
+	}
+	return nil
+}
+
 func setupNeovim(ctx context.Context, sc *SetupContext) error {
 	home := os.Getenv("HOME")
 	sc.Runner.EmitVerbose("Creating Neovim directories")
@@ -483,27 +535,6 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		bestEffort(sc, "remove stale ~/.local/share/nvim/lazy", func() error {
 			return os.RemoveAll(lazyDir)
 		})
-	}
-
-	// Reconcile plugin clones against nvim-pack-lock.json. Clones
-	// whose HEAD doesn't match the locked rev get wiped so the next
-	// headless `vim.pack.update` (or `vim.pack.add` from init.lua)
-	// re-clones cleanly. Fixes the hydra case where harpoon was
-	// stuck on master after the version spec switched to "harpoon2" —
-	// `vim.pack.update` fetches new refs but won't switch a detached
-	// HEAD across branches.
-	lockPath := filepath.Join(sc.RootDir, "configs", "nvim", "nvim-pack-lock.json")
-	if drifted, err := nvimDriftedClones(lockPath, home); err != nil {
-		sc.Runner.Log.Write(fmt.Sprintf(
-			"nvim drift scan skipped: %v", err,
-		))
-	} else {
-		for _, dir := range drifted {
-			sc.Runner.EmitVerbose("Removing drifted nvim plugin clone: " + dir)
-			bestEffort(sc, "remove drifted plugin "+filepath.Base(dir), func() error {
-				return os.RemoveAll(dir)
-			})
-		}
 	}
 
 	// Build blink.cmp fuzzy matcher if available.

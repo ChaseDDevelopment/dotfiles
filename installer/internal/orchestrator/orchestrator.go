@@ -270,8 +270,60 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		}
 	}
 
-	// Component setup (symlinks + hooks).
+	// Maintenance tasks run on every install regardless of whether
+	// component symlinks are already correct. These handle local
+	// drift (stale tmux plugins from removed `@plugin` lines,
+	// nvim clones whose HEAD drifted off the locked rev) which is
+	// orthogonal to symlink state and was silently skipped when we
+	// gated it on `setupTmux`/`setupNeovim`.
 	bm := backup.NewManager(bc.DryRun)
+	setupCtxBuilder := func() *config.SetupContext {
+		return &config.SetupContext{
+			Runner:   runner,
+			RootDir:  bc.RootDir,
+			Backup:   bm,
+			DryRun:   bc.DryRun,
+			Platform: plat,
+			Failures: bc.Failures,
+		}
+	}
+	var maintenanceIDs []string
+	if !bc.DryRun {
+		type maintSpec struct {
+			id, label, requires string
+			run                 func(context.Context, *config.SetupContext) error
+		}
+		specs := []maintSpec{
+			{id: "maintain-tmux", label: "Housekeeping tmux plugins", requires: "tmux", run: config.MaintainTmuxPlugins},
+			{id: "maintain-nvim", label: "Housekeeping Neovim plugins", requires: "nvim", run: config.MaintainNeovimPlugins},
+		}
+		for _, s := range specs {
+			// Only chain a dep when the required tool is scheduled
+			// to install this run — otherwise orphan deps break the
+			// engine's unknown-dep check. If the tool is already on
+			// the box, no dep needed (the run closure itself probes
+			// before touching anything).
+			var deps []string
+			for _, tid := range toolIDs {
+				if tid == s.requires {
+					deps = append(deps, tid)
+					break
+				}
+			}
+			spec := s
+			tasks = append(tasks, engine.Task{
+				ID:        spec.id,
+				Label:     spec.label,
+				DependsOn: deps,
+				Run: func(ctx context.Context) error {
+					return spec.run(ctx, setupCtxBuilder())
+				},
+			})
+			maintenanceIDs = append(maintenanceIDs, spec.id)
+		}
+	}
+
+	// Component setup (symlinks + hooks).
 	var setupIDs []string
 	for _, comp := range config.AllComponents() {
 		if !bc.isComponentSelected(comp.Name) {
@@ -326,15 +378,7 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			Label:     fmt.Sprintf("Setting up %s", comp.Name),
 			DependsOn: setupDeps,
 			Run: func(ctx context.Context) error {
-				sc := &config.SetupContext{
-					Runner:   runner,
-					RootDir:  bc.RootDir,
-					Backup:   bm,
-					DryRun:   bc.DryRun,
-					Platform: plat,
-					Failures: bc.Failures,
-				}
-				return config.SetupComponent(ctx, comp, sc)
+				return config.SetupComponent(ctx, comp, setupCtxBuilder())
 			},
 		})
 		setupIDs = append(setupIDs, taskID)
@@ -349,10 +393,11 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 	if !bc.DryRun && bc.RootDir != "" {
 		driftSweepAdded = true
 		allDeps := make(
-			[]string, 0, len(toolIDs)+len(setupIDs),
+			[]string, 0, len(toolIDs)+len(setupIDs)+len(maintenanceIDs),
 		)
 		allDeps = append(allDeps, toolIDs...)
 		allDeps = append(allDeps, setupIDs...)
+		allDeps = append(allDeps, maintenanceIDs...)
 		tasks = append(tasks, engine.Task{
 			ID:        "sweep-repo-drift",
 			Label:     "Restoring repo configs",
