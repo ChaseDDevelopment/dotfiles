@@ -141,8 +141,14 @@ func devTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "starship"},
 				{Method: MethodScript, Script: &ScriptConfig{
-					URL:             "https://starship.rs/install.sh",
-					Args:            []string{"--yes"},
+					URL: "https://starship.rs/install.sh",
+					Args: []string{"--yes"},
+					// Starship's installer explicitly checks that it's
+					// being run under POSIX sh and aborts on bash
+					// ("Running installation script with non-POSIX
+					// bash may cause errors. Please use sh instead.").
+					// Override our bash default from executeScriptFile.
+					Shell:           "sh",
 					NoProfileModify: true,
 				}},
 			},

@@ -83,6 +83,24 @@ func TestDevAndOfficialToolCatalog(t *testing.T) {
 		t.Fatalf("uv installer should disable profile edits: %#v", uv.Strategies[0].Script)
 	}
 
+	// Starship's upstream installer refuses to run under bash; we
+	// must explicitly select sh. Regression guard for the kashyyyk
+	// failure ("Running installation script with non-POSIX bash...").
+	starship := toolByCommand(t, dev, "starship")
+	var starshipScript *ScriptConfig
+	for _, s := range starship.Strategies {
+		if s.Method == MethodScript && s.Script != nil {
+			starshipScript = s.Script
+			break
+		}
+	}
+	if starshipScript == nil {
+		t.Fatalf("starship should have a MethodScript strategy: %#v", starship.Strategies)
+	}
+	if starshipScript.Shell != "sh" {
+		t.Fatalf("starship Script.Shell = %q, want \"sh\"", starshipScript.Shell)
+	}
+
 	yazi := toolByCommand(t, dev, "yazi")
 	if yazi.CargoCrate != "yazi-build" {
 		t.Fatalf("yazi cargo crate = %q", yazi.CargoCrate)
