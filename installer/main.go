@@ -199,16 +199,28 @@ func main() {
 	}
 	// Propagate critical install failures as non-zero exit — CI
 	// wrappers and shell scripts need this to stop silently lying.
-	if m, ok := finalModel.(tui.AppModel); ok && m.CriticalFailure() {
-		os.Exit(2)
+	// Exit 10 when the TUI asked for a post-quit shell reload —
+	// install.sh inspects this code and execs a fresh login shell.
+	// Log the final state + exit code so we can debug shell-reload
+	// regressions from install.log alone.
+	m, ok := finalModel.(tui.AppModel)
+	critical := ok && m.CriticalFailure()
+	reload := ok && m.ShellReloadPending()
+	exitCode := 0
+	switch {
+	case critical:
+		exitCode = 2
+	case reload:
+		exitCode = 10
 	}
-	// Exit 10 when the TUI asked for a post-quit shell reload.
-	// install.sh inspects this code and execs a fresh login shell
-	// so the user lands in a session with the new PATH, aliases,
-	// and plugin configs already loaded. Any other zero exit means
-	// "done, no reload" (e.g. doctor runs, dry runs).
-	if m, ok := finalModel.(tui.AppModel); ok && m.ShellReloadPending() {
-		os.Exit(10)
+	if runner != nil && runner.Log != nil {
+		runner.Log.Write(fmt.Sprintf(
+			"dotsetup exiting: code=%d reload=%t critical=%t model_ok=%t",
+			exitCode, reload, critical, ok,
+		))
+	}
+	if exitCode != 0 {
+		os.Exit(exitCode)
 	}
 }
 

@@ -112,6 +112,11 @@ fi
 "$BINARY"
 code=$?
 
+# Echo the exit code once so a later debug session can grep for it
+# in the user's scrollback or CI log without relaunching. Matches
+# the "dotsetup exiting:" line the Go binary writes to install.log.
+echo "install.sh: dotsetup exit=$code" >&2
+
 # Exit 10 is our private "reload shell please" contract from the TUI
 # (see installer/main.go). Anything else non-zero is a genuine error.
 if [ "$code" -ne 0 ] && [ "$code" -ne 10 ]; then
