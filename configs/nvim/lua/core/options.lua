@@ -13,6 +13,7 @@ vim.o.smartcase = true
 -- UI
 vim.o.signcolumn = 'yes'
 vim.o.cursorline = true
+vim.o.colorcolumn = '80'
 vim.o.scrolloff = 8
 vim.o.sidescrolloff = 8
 vim.o.splitbelow = true
