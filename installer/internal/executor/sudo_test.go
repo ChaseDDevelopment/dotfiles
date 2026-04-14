@@ -56,7 +56,7 @@ func TestHasSudoAndNeedsSudo(t *testing.T) {
 	stateFile := filepath.Join(dir, "sudo.state")
 	t.Setenv("SUDO_STATE", stateFile)
 	if err := os.WriteFile(filepath.Join(fakebin, "sudo"), []byte(`#!/bin/sh
-if [ "$1" = "-n" ] && [ "$2" = "true" ]; then
+if [ "$1" = "-n" ] && [ "$2" = "-v" ]; then
   if [ -f "$SUDO_STATE" ]; then
     exit 0
   fi
@@ -78,6 +78,42 @@ exit 0
 	}
 	if NeedsSudo() {
 		t.Fatal("expected cached sudo credentials")
+	}
+}
+
+// TestNeedsSudoOnMixedNopasswdHost covers the kashyyyk failure mode:
+// stock Ubuntu cloud-init boxes put the user in the sudo group (which
+// requires a password) *and* add a NOPASSWD drop-in. Under that config
+// `sudo -n true` exits 0 (NOPASSWD matches /usr/bin/true) but a later
+// `sudo -v` still wants a password — so NeedsSudo must probe with -v
+// to return true here, otherwise PreAuth is skipped and the TUI hits a
+// blocking password prompt mid-install.
+func TestNeedsSudoOnMixedNopasswdHost(t *testing.T) {
+	dir := t.TempDir()
+	fakebin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin)
+
+	// `sudo -n true` → 0 (NOPASSWD rule wins for actual commands),
+	// `sudo -n -v`  → 1 (%sudo rule forces password for refresh).
+	if err := os.WriteFile(filepath.Join(fakebin, "sudo"), []byte(`#!/bin/sh
+if [ "$1" = "-n" ] && [ "$2" = "-v" ]; then
+  exit 1
+fi
+if [ "$1" = "-n" ] && [ "$2" = "true" ]; then
+  exit 0
+fi
+exit 0
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if !NeedsSudo() {
+		t.Fatal("NeedsSudo must return true on mixed NOPASSWD host " +
+			"(sudo -n true=0 but sudo -n -v=1) so PreAuth runs before " +
+			"the TUI takes stdin")
 	}
 }
 

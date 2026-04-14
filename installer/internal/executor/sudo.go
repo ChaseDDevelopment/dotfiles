@@ -24,9 +24,15 @@ func NeedsSudo() bool {
 	if _, err := exec.LookPath("sudo"); err != nil {
 		return false
 	}
-	// sudo -n true succeeds silently when credentials are
-	// already cached or NOPASSWD is configured.
-	cmd := exec.Command("sudo", "-n", "true")
+	// Probe with `sudo -n -v` (refresh-timestamp, non-interactive)
+	// rather than `sudo -n true`. On stock Ubuntu cloud-init boxes
+	// (e.g. kashyyyk) the user is in the sudo group *and* has a
+	// NOPASSWD drop-in; `sudo -n true` matches NOPASSWD and exits
+	// 0, but a later `sudo -v` or expired-cache refresh still
+	// prompts because the %sudo rule requires a password. `-v`
+	// correctly reports "would I need a password for any of the
+	// user's rules?", which is what PreAuth actually cares about.
+	cmd := exec.Command("sudo", "-n", "-v")
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
