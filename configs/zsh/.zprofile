@@ -40,3 +40,23 @@ fi
 if [[ -d "/Applications/Obsidian.app/Contents/MacOS" ]]; then
     path+=("/Applications/Obsidian.app/Contents/MacOS")
 fi
+
+# Tmux auto-attach — runs in the login shell BEFORE .zshrc so the outer
+# process hands off to tmux without paying the antidote / compinit /
+# plugin-source tax in .zshrc. Inner zsh (spawned by tmux as default-
+# command) is NOT a login shell, so it skips this block and loads .zshrc
+# normally. The $TMUX / $SSH_TTY / $VSCODE_PID guards prevent launching
+# tmux in nested or non-interactive contexts.
+if [[ -z "$TMUX" && -z "$SSH_TTY" && -z "$VSCODE_PID" ]] \
+   && [[ "$TERM_PROGRAM" != "vscode" && "$TERM_PROGRAM" != "cursor" ]] \
+   && [[ -t 0 ]] \
+   && (( $+commands[tmux] )); then
+    if ! tmux has-session -t Main 2>/dev/null; then
+        exec tmux new-session -s Main
+    elif [[ "$(tmux display-message -t Main -p '#{session_attached}')" == "0" ]]; then
+        exec tmux attach -t Main
+    else
+        exec tmux new-session -s "term-$$" \; \
+            set-option destroy-unattached on
+    fi
+fi
