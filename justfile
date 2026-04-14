@@ -76,5 +76,9 @@ release BUMP='patch':
     read -r -p "tag and push $next? [y/N] " reply
     [[ "$reply" =~ ^[Yy]$ ]] || { echo "aborted"; exit 1; }
     git tag -a "$next" -m "Release $next"
-    git push origin "$next"
-    echo "✓ pushed $next — release workflow will build & publish"
+    # Push main first so branch-followers (other machines running
+    # `git pull --ff-only`) pick up the commits that went into the
+    # tag. Pushing only the tag ships CI's release artifact but
+    # leaves origin/main frozen — see dock/v0.1.2 regression.
+    git push origin main && git push origin "$next"
+    echo "✓ pushed main + $next — release workflow will build & publish"
