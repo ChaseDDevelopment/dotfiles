@@ -242,17 +242,23 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	// Set zsh as default shell. We cannot call chsh from the TUI
-	// because it prompts for a password and the TUI owns the
-	// terminal via alt-screen mode, which causes a hang.
+	// Set zsh as the default shell. `chsh` itself would prompt for
+	// the user's password via PAM and deadlock the TUI, but
+	// `sudo -n chsh` reuses the sudo credentials we pre-authed at
+	// startup (see executor/sudo.go), so the change happens without
+	// another prompt. Failures here degrade to the old "log a
+	// reminder" behavior — a chsh hiccup shouldn't abort a run.
 	currentShell := os.Getenv("SHELL")
 	if !strings.HasSuffix(currentShell, "/zsh") {
-		zshPath, err := exec.LookPath("zsh")
-		if err == nil {
-			sc.Runner.Log.Write(fmt.Sprintf(
-				"Run 'chsh -s %s' after install to set default shell",
-				zshPath,
-			))
+		zshPath, lerr := exec.LookPath("zsh")
+		if lerr == nil {
+			if err := setDefaultShellZsh(ctx, sc, currentShell, zshPath); err != nil {
+				sc.Runner.Log.Write(fmt.Sprintf(
+					"chsh to %s failed (%v) — run "+
+						"'sudo chsh -s %s %s' manually to make zsh permanent",
+					zshPath, err, zshPath, os.Getenv("USER"),
+				))
+			}
 		}
 	}
 
@@ -272,6 +278,84 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 // the next shell start regenerates cached init output with the
 // current .zshrc. Runs at the end of setupZsh — the one place
 // that owns both the .zshrc symlink and the cache directory.
+// setDefaultShellZsh changes the current user's login shell to
+// zshPath via `sudo -n chsh`, reusing cached sudo credentials so
+// the TUI doesn't have to prompt. On Linux, zshPath must appear in
+// /etc/shells before chsh will accept it; ensureShellListed adds
+// it there when missing (also via sudo).
+func setDefaultShellZsh(
+	ctx context.Context,
+	sc *SetupContext,
+	currentShell, zshPath string,
+) error {
+	if !executor.HasSudo() {
+		return fmt.Errorf("sudo not available")
+	}
+	if executor.NeedsSudo() {
+		// Credentials weren't preauthed / cache expired. Running
+		// `sudo chsh` would prompt inside the TUI and hang.
+		return fmt.Errorf("sudo credentials not cached — skipping chsh")
+	}
+	if err := ensureShellListed(ctx, sc, zshPath); err != nil {
+		return fmt.Errorf("ensure %s in /etc/shells: %w", zshPath, err)
+	}
+	user := os.Getenv("USER")
+	if user == "" {
+		return fmt.Errorf("USER env unset")
+	}
+	if err := sc.Runner.Run(
+		ctx, "sudo", "-n", "chsh", "-s", zshPath, user,
+	); err != nil {
+		return err
+	}
+	sc.Runner.Log.Write(fmt.Sprintf(
+		"chsh: default shell %s → %s (via sudo -n, cached creds)",
+		currentShell, zshPath,
+	))
+	return nil
+}
+
+// ensureShellListed adds zshPath to /etc/shells when it isn't
+// already there — required on most Linux distros before chsh will
+// accept the path. No-op on macOS, where /etc/shells ships with
+// the stock zsh entries and our Homebrew zsh is auto-accepted by
+// Directory Services.
+func ensureShellListed(
+	ctx context.Context,
+	sc *SetupContext,
+	zshPath string,
+) error {
+	const shellsFile = "/etc/shells"
+	data, err := os.ReadFile(shellsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No /etc/shells — chsh on this host either doesn't
+			// check or we'll fail later with a clearer error.
+			return nil
+		}
+		return err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == zshPath {
+			return nil
+		}
+	}
+	// Append via `sudo tee -a` so we keep the same cached-sudo
+	// path as the actual chsh call.
+	line := zshPath + "\n"
+	cmd := exec.CommandContext(
+		ctx, "sudo", "-n", "tee", "-a", shellsFile,
+	)
+	cmd.Stdin = strings.NewReader(line)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("sudo tee %s: %w (%s)", shellsFile, err, strings.TrimSpace(string(out)))
+	}
+	sc.Runner.Log.Write(fmt.Sprintf(
+		"Added %s to %s", zshPath, shellsFile,
+	))
+	return nil
+}
+
 func clearZshInitCaches(home string, runner *executor.Runner) error {
 	cacheDir := filepath.Join(home, ".cache", "zsh")
 	entries, err := os.ReadDir(cacheDir)
@@ -355,6 +439,27 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		bestEffort(sc, "remove stale ~/.local/share/nvim/lazy", func() error {
 			return os.RemoveAll(lazyDir)
 		})
+	}
+
+	// Reconcile plugin clones against nvim-pack-lock.json. Clones
+	// whose HEAD doesn't match the locked rev get wiped so the next
+	// headless `vim.pack.update` (or `vim.pack.add` from init.lua)
+	// re-clones cleanly. Fixes the hydra case where harpoon was
+	// stuck on master after the version spec switched to "harpoon2" —
+	// `vim.pack.update` fetches new refs but won't switch a detached
+	// HEAD across branches.
+	lockPath := filepath.Join(sc.RootDir, "configs", "nvim", "nvim-pack-lock.json")
+	if drifted, err := nvimDriftedClones(lockPath, home); err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"nvim drift scan skipped: %v", err,
+		))
+	} else {
+		for _, dir := range drifted {
+			sc.Runner.EmitVerbose("Removing drifted nvim plugin clone: " + dir)
+			bestEffort(sc, "remove drifted plugin "+filepath.Base(dir), func() error {
+				return os.RemoveAll(dir)
+			})
+		}
 	}
 
 	// Build blink.cmp fuzzy matcher if available.
