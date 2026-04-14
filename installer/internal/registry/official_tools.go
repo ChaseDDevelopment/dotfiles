@@ -78,7 +78,15 @@ func installNvm(ctx context.Context, ic *InstallContext) error {
 	}
 
 	// Set NVM_DIR before running the installer so it installs there.
+	// nvm's install.sh has an up-front `[ -d "$NVM_DIR" ]` guard that
+	// bails when NVM_DIR is set to a missing path — the XDG location
+	// we prefer (~/.config/nvm) won't exist yet on fresh machines.
+	// Pre-creating an empty dir satisfies the guard; nvm then clones
+	// its git checkout into it.
 	ic.Runner.AddEnv("NVM_DIR", nvmDir)
+	if err := os.MkdirAll(nvmDir, 0o755); err != nil {
+		return fmt.Errorf("create NVM_DIR %s: %w", nvmDir, err)
+	}
 
 	// Fetch latest nvm version dynamically. A silent fallback to a
 	// hardcoded tag would violate the "always latest" policy and
@@ -163,12 +171,15 @@ func installAtuin(ctx context.Context, ic *InstallContext) error {
 	if err := os.Chmod(scriptPath, 0o755); err != nil {
 		return fmt.Errorf("chmod atuin installer: %w", err)
 	}
-	// SHELL=/bin/sh makes atuin's setup.sh fall through its shell
-	// detection (bash/zsh/fish) and skip the rc-append step.
-	// configs/zsh/.zshrc already runs `_cached_init atuin init zsh`,
-	// so the installer's eval line would be redundant.
+	// `--non-interactive` skips the `read </dev/tty` prompt that
+	// hangs the installer forever when the TUI owns the terminal
+	// (setup.sh otherwise asks "Would you like to import your
+	// existing shell history?"). SHELL=/bin/sh via noProfileEnv()
+	// also makes the setup.sh skip its rc-append step, which would
+	// otherwise duplicate `_cached_init atuin init zsh` from our
+	// managed .zshrc.
 	if err := ic.Runner.RunWithEnv(
-		ctx, noProfileEnv(), "sh", scriptPath,
+		ctx, noProfileEnv(), "sh", scriptPath, "--non-interactive",
 	); err != nil {
 		return fmt.Errorf("install atuin: %w", err)
 	}

@@ -136,10 +136,19 @@ printf 'tool-old 0.9.0'
 		"git clone https://github.com/tmux-plugins/tpm",
 		"sudo ln -s /opt/nvim-linux64/bin/nvim /usr/local/bin/nvim",
 		"sudo install -m 0644",
+		// atuin installer must run with --non-interactive to avoid
+		// the `read </dev/tty` history-import prompt hanging the TUI.
+		"--non-interactive",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("registry log missing %q:\n%s", want, got)
 		}
+	}
+
+	// installNvm must pre-create NVM_DIR so nvm's install.sh (which
+	// refuses to run when NVM_DIR is set but missing) can proceed.
+	if _, err := os.Stat(filepath.Join(home, ".config", "nvm")); err != nil {
+		t.Errorf("installNvm did not create $HOME/.config/nvm: %v", err)
 	}
 }
 
