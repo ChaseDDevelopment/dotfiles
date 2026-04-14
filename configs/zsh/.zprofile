@@ -20,16 +20,10 @@ if [[ -n "$_brew_bin" ]]; then
 fi
 unset _brew_bin _brew_cache
 
-# Path additions
+# User-local bin dirs (cargo/bun/go/local) are prepended in .zshenv
+# so non-login shells see them too. Keep `typeset -U path` here so
+# DOTNET_ROOT and the GUI-app prepends below dedupe cleanly.
 typeset -U path
-path=(
-    "${HOME}/.local/bin"
-    "${HOME}/.cargo/bin"
-    "${HOME}/.bun/bin"
-    "${HOME}/go/bin"
-    $path
-)
-export PATH
 
 # .NET SDK (installed via dotnet-install.sh to ~/.dotnet)
 if [[ -d "${HOME}/.dotnet" ]]; then

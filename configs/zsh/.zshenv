@@ -19,7 +19,23 @@ export LC_ALL="en_US.UTF-8"
 # Claude Code
 export CLAUDE_CODE_NO_FLICKER=1
 
-# PATH setup is in .zprofile (must run AFTER macOS /etc/zprofile path_helper)
+# User-local bin dirs live here (not .zprofile) so non-login shells
+# — tmux panes, `ssh host cmd`, subshells spawned by the Go installer —
+# also see them. path_helper on macOS only reorders system dirs in
+# /etc/paths*, so $HOME-prefixed entries keep their prepended spot.
+typeset -U path
+path=(
+    "${HOME}/.local/bin"
+    "${HOME}/.cargo/bin"
+    "${HOME}/.bun/bin"
+    "${HOME}/go/bin"
+    $path
+)
+export PATH
+
+# Homebrew shellenv + macOS GUI-app paths stay in .zprofile — they
+# must run AFTER /etc/zprofile's path_helper to keep /opt/homebrew
+# ahead of /usr/bin (see commit e14ec37).
 
 # Cross-platform clipboard detection for fzf
 if [[ "$OSTYPE" == "darwin"* ]]; then
