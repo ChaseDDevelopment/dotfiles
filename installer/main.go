@@ -202,6 +202,14 @@ func main() {
 	if m, ok := finalModel.(tui.AppModel); ok && m.CriticalFailure() {
 		os.Exit(2)
 	}
+	// Exit 10 when the TUI asked for a post-quit shell reload.
+	// install.sh inspects this code and execs a fresh login shell
+	// so the user lands in a session with the new PATH, aliases,
+	// and plugin configs already loaded. Any other zero exit means
+	// "done, no reload" (e.g. doctor runs, dry runs).
+	if m, ok := finalModel.(tui.AppModel); ok && m.ShellReloadPending() {
+		os.Exit(10)
+	}
 }
 
 // findRootDir locates the dotfiles repository root (the directory

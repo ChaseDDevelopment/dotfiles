@@ -49,6 +49,11 @@ type summaryModel struct {
 	// rendered on the summary so the user sees which files to stash
 	// or commit before re-running.
 	repoBlockedBody string
+
+	// shellReloadPending mirrors AppModel.shellReloadPending so the
+	// completion view can show the "shell will reload on quit" hint
+	// and retune the footer. Set before rendering by updateSummary.
+	shellReloadPending bool
 }
 
 func newSummaryModel(dryRun bool) summaryModel {
@@ -374,16 +379,33 @@ func (m summaryModel) completionView(width, height int) string {
 
 	// Footer with scroll hint when doctor mode is scrollable.
 	needsScroll := m.doctorMode && m.viewportReady
+	quitHint := "q quit"
+	if m.shellReloadPending {
+		quitHint = "q reload & quit"
+	}
 	var footer string
 	if needsScroll {
-		footer = renderFooter("↑↓ scroll", "enter menu", "q quit")
+		footer = renderFooter("↑↓ scroll", "enter menu", quitHint)
 	} else {
-		footer = renderFooter("enter menu", "q quit")
+		footer = renderFooter("enter menu", quitHint)
 	}
 	footerBlock := lipgloss.NewStyle().
 		Width(panelOuterWidth(w)).
 		AlignHorizontal(lipgloss.Center).
 		Render(footer)
+
+	// Reload hint sits between the panel and the footer so the user
+	// can't miss why `q` says "reload & quit".
+	if m.shellReloadPending {
+		reloadHint := lipgloss.NewStyle().
+			Foreground(catMauve).
+			Width(panelOuterWidth(w)).
+			AlignHorizontal(lipgloss.Center).
+			Render("↺ Your shell will reload when you quit")
+		return lipgloss.JoinVertical(
+			lipgloss.Left, panel, reloadHint, footerBlock,
+		)
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, panel, footerBlock)
 }

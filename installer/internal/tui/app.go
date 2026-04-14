@@ -106,6 +106,51 @@ type AppModel struct {
 	dpkgApt *pkgmgr.Apt
 
 	startTime time.Time
+
+	// shellReloadPending is set once install or update mode finishes
+	// successfully. It's sticky — the user can navigate back to the
+	// menu and do more, but any eventual `q`/ctrl-c quit will exit
+	// with code 10, which install.sh interprets as "exec into a
+	// fresh login shell" so the user lands in a session with the
+	// freshly-symlinked configs loaded.
+	shellReloadPending bool
+}
+
+// ShellReloadPending reports whether the installer has armed the
+// post-quit shell reload. main.go reads this after the Bubble Tea
+// program exits and maps it to os.Exit(10) for install.sh to pick
+// up. Exposed as a method so the field can stay unexported.
+func (m AppModel) ShellReloadPending() bool {
+	return m.shellReloadPending
+}
+
+// armShellReloadIfApplicable sets shellReloadPending when the
+// current mode is one the user would want to reload their shell
+// after (install / custom install / update — all mutate the config
+// tree). Doctor / restore / uninstall are skipped: doctor made no
+// changes, and restore/uninstall intentionally put the user back
+// to a state where a reloaded zsh could be counterproductive.
+// Skipped on critical failure — no point dropping them into a
+// half-built shell.
+func (m *AppModel) armShellReloadIfApplicable() {
+	if m.config == nil {
+		return
+	}
+	if m.summary.criticalFailure {
+		return
+	}
+	switch m.config.Mode {
+	case ModeInstall, ModeCustomInstall, ModeUpdate:
+		if !m.shellReloadPending {
+			m.shellReloadPending = true
+			if m.config.Runner != nil && m.config.Runner.Log != nil {
+				m.config.Runner.Log.Write(
+					"shell reload armed: will exec fresh login " +
+						"shell on quit",
+				)
+			}
+		}
+	}
 }
 
 // NewApp creates the initial application model.
@@ -223,6 +268,7 @@ func (m AppModel) View() tea.View {
 	case PhaseFailurePrompt:
 		content = m.failurePromptView(w)
 	case PhaseSummary:
+		m.summary.shellReloadPending = m.shellReloadPending
 		content = m.summary.View(w, m.height)
 	}
 
@@ -405,6 +451,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.summary.endTime = time.Now()
 			m.summary.warnings = m.config.Failures
 			m.phase = PhaseSummary
+			m.armShellReloadIfApplicable()
 			m.saveState()
 			if m.summary.doctorMode && m.width > 0 && m.height > 0 {
 				m.summary.initDoctorViewport(m.width, m.height)
@@ -422,6 +469,7 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.summary.endTime = time.Now()
 		m.summary.warnings = m.config.Failures
 		m.phase = PhaseSummary
+		m.armShellReloadIfApplicable()
 		m.saveState()
 		if m.summary.doctorMode && m.width > 0 && m.height > 0 {
 			m.summary.initDoctorViewport(m.width, m.height)

@@ -109,4 +109,30 @@ if [[ "$NEED_DOWNLOAD" == true ]]; then
     fi
 fi
 
-exec "$BINARY"
+"$BINARY"
+code=$?
+
+# Exit 10 is our private "reload shell please" contract from the TUI
+# (see installer/main.go). Anything else non-zero is a genuine error.
+if [ "$code" -ne 0 ] && [ "$code" -ne 10 ]; then
+    exit "$code"
+fi
+
+# Only reload when the TUI asked for it AND we have a live terminal.
+# Skip on CI, `| tee`, or redirected invocations — they'd get stuck
+# waiting on a child shell they don't control.
+if [ "$code" -ne 10 ] || ! [ -t 0 ] || ! [ -t 1 ]; then
+    exit 0
+fi
+
+# Prefer zsh — that's what configs/ is built around. Fall back to
+# $SHELL only when zsh isn't available (partial-failure install).
+if command -v zsh >/dev/null 2>&1; then
+    target_shell="zsh"
+elif [ -n "${SHELL:-}" ]; then
+    target_shell="$SHELL"
+else
+    exit 0
+fi
+
+exec "$target_shell" -l
