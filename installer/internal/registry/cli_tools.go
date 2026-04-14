@@ -257,15 +257,18 @@ func cliTools() []Tool {
 			},
 		},
 		// jless — interactive JSON viewer. GitHub releases ship
-		// .zip archives which the existing patterns don't handle,
-		// so we fall through to cargo on apt/dnf/yum hosts.
+		// .zip archives; cargo fallback requires libxcb dev headers
+		// (clipboard dep) so skip it — GitHub release is enough.
 		{
 			Name: "jless", Command: "jless", Description: "Interactive JSON viewer",
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "jless"},
-				{Managers: []string{"apt", "dnf", "yum"}, Method: MethodCargo, Crate: "jless"},
+				{Method: MethodGitHubRelease, GitHub: &GitHubConfig{
+					Repo: "PaulJuliusMartinez/jless", Pattern: github.PatternVersionPrefixed,
+					Binary: "jless", StripVPrefix: false, LibC: "gnu",
+					ArchiveFormat: "zip",
+				}},
 			},
-			CargoCrate: "jless",
 		},
 		// just — command runner (modern make replacement)
 		{

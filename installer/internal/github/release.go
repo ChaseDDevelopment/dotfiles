@@ -2,6 +2,7 @@ package github
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -73,6 +74,21 @@ type Config struct {
 	StripVPrefix bool       // strip leading 'v' from version tag
 	LibC         string     // "musl" or "gnu" (for TargetTriple pattern)
 	PinVersion   string     // pin to specific version (bypasses LatestVersion)
+	// ArchiveFormat selects the archive extension/extractor for tools
+	// that don't ship tar.gz releases. Empty means "tar.gz" (the
+	// historical default). Recognized values: "tar.gz", "zip".
+	ArchiveFormat string
+}
+
+// archiveExt returns the URL extension (including the leading dot)
+// for the configured archive format, defaulting to tar.gz.
+func (c *Config) archiveExt() string {
+	switch c.ArchiveFormat {
+	case "zip":
+		return ".zip"
+	default:
+		return ".tar.gz"
+	}
 }
 
 // LatestVersion fetches the latest release tag from a GitHub repository
@@ -127,23 +143,23 @@ func BuildURL(cfg *Config, p *platform.Platform, version string) (url string, is
 			tag = "v" + version
 		}
 		return fmt.Sprintf(
-			"https://github.com/%s/releases/download/%s/%s_%s.tar.gz",
-			cfg.Repo, tag, cfg.Binary, triple,
+			"https://github.com/%s/releases/download/%s/%s_%s%s",
+			cfg.Repo, tag, cfg.Binary, triple, cfg.archiveExt(),
 		), true
 
 	case PatternVersionPrefixed:
 		triple := p.TargetTriple(cfg.LibC)
 		return fmt.Sprintf(
-			"https://github.com/%s/releases/download/%s/%s-%s-%s.tar.gz",
-			cfg.Repo, version, cfg.Binary, version, triple,
+			"https://github.com/%s/releases/download/%s/%s-%s-%s%s",
+			cfg.Repo, version, cfg.Binary, version, triple, cfg.archiveExt(),
 		), true
 
 	case PatternCustomOSArch:
 		osName, arch := p.TitleStyle()
 		tag := "v" + version
 		return fmt.Sprintf(
-			"https://github.com/%s/releases/download/%s/%s_%s_%s_%s.tar.gz",
-			cfg.Repo, tag, cfg.Binary, version, osName, arch,
+			"https://github.com/%s/releases/download/%s/%s_%s_%s_%s%s",
+			cfg.Repo, tag, cfg.Binary, version, osName, arch, cfg.archiveExt(),
 		), true
 
 	case PatternRawBinary:
@@ -191,9 +207,103 @@ func DownloadAndInstall(
 	defer os.RemoveAll(tmpDir)
 
 	if isTarball {
+		if strings.HasSuffix(url, ".zip") {
+			return downloadZip(ctx, url, binaryName, tmpDir, runner)
+		}
 		return downloadTarball(ctx, url, binaryName, tmpDir, runner)
 	}
 	return downloadBinary(ctx, url, binaryName, tmpDir, runner)
+}
+
+func downloadZip(
+	ctx context.Context,
+	url, binaryName, tmpDir string,
+	runner Runner,
+) error {
+	zipPath := filepath.Join(tmpDir, "archive.zip")
+	if err := downloadFileFn(ctx, url, zipPath); err != nil {
+		return err
+	}
+
+	extractDir := filepath.Join(tmpDir, "extract")
+	if err := os.MkdirAll(extractDir, 0o755); err != nil {
+		return err
+	}
+
+	if err := extractZip(zipPath, extractDir); err != nil {
+		return fmt.Errorf("zip extract: %w", err)
+	}
+
+	binPath, err := findBinary(extractDir, binaryName)
+	if err != nil {
+		return err
+	}
+
+	return installBinary(ctx, binPath, binaryName, runner)
+}
+
+// extractZip decompresses a zip archive into dstDir with the same
+// zip-slip and symlink protections as extractTarGz. Files are capped
+// at 2 GiB to bound memory pressure from malformed archives.
+func extractZip(archivePath, dstDir string) error {
+	zr, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return fmt.Errorf("zip open: %w", err)
+	}
+	defer zr.Close()
+
+	dstAbs, err := filepath.Abs(dstDir)
+	if err != nil {
+		return err
+	}
+	dstAbs = filepath.Clean(dstAbs)
+
+	for _, f := range zr.File {
+		targetPath, err := safeJoin(dstAbs, f.Name)
+		if err != nil {
+			return fmt.Errorf("unsafe entry %q: %w", f.Name, err)
+		}
+
+		mode := f.Mode()
+		if mode&os.ModeSymlink != 0 {
+			// Matches extractTarGz: skip symlinks outright.
+			continue
+		}
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("zip read %s: %w", f.Name, err)
+		}
+		out, err := os.OpenFile(
+			targetPath,
+			os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+			mode.Perm()&0o777,
+		)
+		if err != nil {
+			rc.Close()
+			return err
+		}
+		if _, err := io.CopyN(out, rc, 2<<30); err != nil && !errors.Is(err, io.EOF) {
+			out.Close()
+			rc.Close()
+			return fmt.Errorf("write %s: %w", f.Name, err)
+		}
+		if err := out.Close(); err != nil {
+			rc.Close()
+			return err
+		}
+		rc.Close()
+	}
+	return nil
 }
 
 func downloadTarball(
