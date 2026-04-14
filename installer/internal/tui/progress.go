@@ -313,24 +313,31 @@ func (m progressModel) View(width int) string {
 	b.WriteString(titleStyle.Render("  Installing"))
 	b.WriteString(panelGap("\n\n"))
 
-	// Tool grid (3 columns).
+	// Tool grid (2 columns). Active items animate via spinner so a
+	// separate "running tasks" block below the grid isn't needed.
 	if len(m.toolNames) > 0 {
-		cols := 3
-		if w < 60 {
-			cols = 2
+		cols := 2
+		if w < 50 {
+			cols = 1
 		}
 		colWidth := (w - 4) / cols
+		const iconWidth = 2 // icon + following space
+		labelWidth := colWidth - iconWidth - 2
 
 		for i, name := range m.toolNames {
 			status := m.toolStatuses[name]
-			icon := m.statusIcon(status)
+			icon := m.statusIconFor(status)
 			label := name
-			if len(label) > colWidth-5 {
-				label = label[:colWidth-6] + "…"
+			if len(label) > labelWidth {
+				label = label[:labelWidth-1] + "…"
 			}
 
-			pad := dimStyle.Render(fmt.Sprintf("%-*s", colWidth-4, label))
-			cell := fmt.Sprintf("%s %s", icon, pad)
+			labelStyle := dimStyle
+			if status == statusActive {
+				labelStyle = selectedStyle
+			}
+			pad := labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label))
+			cell := fmt.Sprintf("  %s %s", icon, pad)
 			b.WriteString(cell)
 
 			if (i+1)%cols == 0 || i == len(m.toolNames)-1 {
@@ -358,35 +365,27 @@ func (m progressModel) View(width int) string {
 	bar := m.progress.ViewAs(pct)
 	b.WriteString(bar + counter + elapsed + panelGap("\n\n"))
 
-	// Active tasks.
-	if len(m.active) > 0 {
-		for _, at := range m.active {
-			name := stripLabelPrefix(at.label)
-			b.WriteString(panelGap("  ") + m.spinner.View() + panelGap(" ") + selectedStyle.Render(name) + panelGap("\n"))
-		}
-		// Verbose: show recent output lines.
-		if m.verbose && len(m.recentLines) > 0 {
-			b.WriteString(panelGap("\n"))
-			if m.expandedVerbose {
-				// Viewport content + sizing is maintained in Update
-				// via syncVerboseViewport / resizeVerboseViewport.
-				b.WriteString(dimStyle.Render(m.verboseViewport.View()) + panelGap("\n"))
-				b.WriteString(panelGap("  ") + dimStyle.Render("v: collapse  j/k: scroll") + panelGap("\n"))
-			} else {
-				// Compact: show last N lines.
-				lines := m.recentLines
-				if len(lines) > compactVerboseLines {
-					lines = lines[len(lines)-compactVerboseLines:]
-				}
-				for _, line := range lines {
-					truncated := line
-					if len(truncated) > w-8 {
-						truncated = truncated[:w-9] + "…"
-					}
-					b.WriteString(panelGap("  ") + dimStyle.Render(truncated) + panelGap("\n"))
-				}
-				b.WriteString(panelGap("  ") + dimStyle.Render("v: expand log") + panelGap("\n"))
+	// Verbose log (optional, toggled with 'v').
+	if len(m.active) > 0 && m.verbose && len(m.recentLines) > 0 {
+		if m.expandedVerbose {
+			// Viewport content + sizing is maintained in Update
+			// via syncVerboseViewport / resizeVerboseViewport.
+			b.WriteString(dimStyle.Render(m.verboseViewport.View()) + panelGap("\n"))
+			b.WriteString(panelGap("  ") + dimStyle.Render("v: collapse  j/k: scroll") + panelGap("\n"))
+		} else {
+			// Compact: show last N lines.
+			lines := m.recentLines
+			if len(lines) > compactVerboseLines {
+				lines = lines[len(lines)-compactVerboseLines:]
 			}
+			for _, line := range lines {
+				truncated := line
+				if len(truncated) > w-8 {
+					truncated = truncated[:w-9] + "…"
+				}
+				b.WriteString(panelGap("  ") + dimStyle.Render(truncated) + panelGap("\n"))
+			}
+			b.WriteString(panelGap("  ") + dimStyle.Render("v: expand log") + panelGap("\n"))
 		}
 	} else if m.done {
 		b.WriteString(successStyle.Render("  ✦ All steps completed!") + panelGap("\n"))
@@ -412,4 +411,14 @@ func (m progressModel) statusIcon(s toolStatus) string {
 	default:
 		return progressQueuedStyle.Render("○")
 	}
+}
+
+// statusIconFor is like statusIcon but animates the active state
+// using the shared spinner, so in-progress rows in the grid pulse
+// instead of showing a static dot.
+func (m progressModel) statusIconFor(s toolStatus) string {
+	if s == statusActive {
+		return m.spinner.View()
+	}
+	return m.statusIcon(s)
 }
