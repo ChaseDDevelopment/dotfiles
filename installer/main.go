@@ -278,6 +278,15 @@ func findRootDir() (string, error) {
 // augmentPath prepends common tool install directories to PATH so
 // exec.LookPath and exec.CommandContext can find binaries that live
 // outside the default system PATH (e.g., ~/.cargo/bin, ~/.local/bin).
+//
+// Entries are added unconditionally — including directories that
+// don't exist yet. Gating on os.Stat caused a subtle bug: when a
+// tool like uv or rust installed mid-run, the target dir (~/.local/
+// bin / ~/.cargo/bin) was created after augmentPath had already
+// snapshotted PATH, so subsequent tasks (ruff → uv, any cargo tool
+// → cargo) couldn't resolve the binary. PATH tolerates missing
+// directories — POSIX shells and Go's exec.LookPath both just skip
+// entries that don't exist — so adding them always is safe.
 func augmentPath() {
 	home := os.Getenv("HOME")
 	dirs := []string{
@@ -290,9 +299,7 @@ func augmentPath() {
 	}
 	path := os.Getenv("PATH")
 	for _, d := range dirs {
-		if _, err := os.Stat(d); err == nil {
-			path = d + string(filepath.ListSeparator) + path
-		}
+		path = d + string(filepath.ListSeparator) + path
 	}
 	if err := os.Setenv("PATH", path); err != nil {
 		fmt.Fprintf(os.Stderr,
