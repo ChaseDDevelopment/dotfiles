@@ -94,6 +94,66 @@ exit 0
 	}
 }
 
+// TestNerdFontLinuxInstallsFontconfigOnApt covers the kashyyyk
+// "fc-cache: executable file not found in $PATH" failure: minimal
+// Ubuntu images ship without fontconfig, so installNerdFontLinux
+// now pre-installs it via the pkg manager on apt hosts.
+func TestNerdFontLinuxInstallsFontconfigOnApt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	fakebin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	// Minimal stubs — download + extract + fc-cache all succeed.
+	for _, name := range []string{"curl", "tar", "fc-cache"} {
+		if err := os.WriteFile(
+			filepath.Join(fakebin, name), []byte("#!/bin/sh\nexit 0\n"), 0o755,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	log, err := executor.NewLogFile(filepath.Join(home, "test.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+
+	mgr := &jlessPkgMgr{stubPkgMgr: stubPkgMgr{name: "apt"}}
+	ic := &InstallContext{
+		Runner: executor.NewRunner(log, false),
+		PkgMgr: mgr,
+		Platform: &platform.Platform{
+			OS: platform.Linux, Arch: platform.AMD64,
+			PackageManager: platform.PkgApt,
+		},
+	}
+	origLatest := latestVersionFn
+	latestVersionFn = func(string, bool) (string, error) { return "3.4.0", nil }
+	defer func() { latestVersionFn = origLatest }()
+
+	if err := installNerdFontLinux(context.Background(), ic); err != nil {
+		t.Fatalf("installNerdFontLinux: %v", err)
+	}
+	if len(mgr.installs) == 0 {
+		t.Fatal("expected fontconfig pkg install, got none")
+	}
+	found := false
+	for _, call := range mgr.installs {
+		for _, pkg := range call {
+			if pkg == "fontconfig" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("fontconfig not requested from pkgmgr; installs=%v", mgr.installs)
+	}
+}
+
 // TestXcbDepsForPkgMgr covers the distro mapping and the nil-safe
 // no-op paths. brew/pacman return nil because jless has a prebuilt
 // path there — the caller should skip the pkgmgr step entirely.

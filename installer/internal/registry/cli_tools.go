@@ -381,7 +381,12 @@ func cliTools() []Tool {
 						return ic.Runner.Run(ctx, "brew", "install", "--cask", "font-jetbrains-mono-nerd-font")
 					},
 				},
-				{Method: MethodCustom, CustomFunc: installNerdFontLinux, Requires: []string{"curl"}},
+				{
+					Method:       MethodCustom,
+					CustomFunc:   installNerdFontLinux,
+					Requires:     []string{"curl"},
+					AcquiresDpkg: true, // fontconfig pre-install on apt
+				},
 			},
 		},
 	}
@@ -495,6 +500,20 @@ func isNerdFontInstalled() bool {
 }
 
 func installNerdFontLinux(ctx context.Context, ic *InstallContext) error {
+	// Pull in fontconfig (provides `fc-cache`) on apt hosts — minimal
+	// Ubuntu images don't ship it, and the fc-cache call at the end
+	// would silently fail "executable file not found in $PATH" on
+	// those boxes. Soft-fail: if the apt install fails we still drop
+	// the font files; they just won't be cached this run.
+	if ic.Platform != nil && ic.Platform.PackageManager == platform.PkgApt {
+		if err := ic.PkgMgr.Install(ctx, "fontconfig"); err != nil {
+			ic.Runner.Log.Write(fmt.Sprintf(
+				"nerd-font: fontconfig install failed: %v "+
+					"(fc-cache may not run)", err,
+			))
+		}
+	}
+
 	version, err := latestVersionFn("ryanoasis/nerd-fonts", true)
 	if err != nil {
 		return fmt.Errorf("resolve nerd-fonts latest version: %w", err)
