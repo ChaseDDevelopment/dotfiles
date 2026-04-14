@@ -85,9 +85,12 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../..'
 
-# Modern du replacement
+# Modern du replacement + storage-sleuthing shortcuts
 if (( $+commands[dust] )); then
     alias du='dust'
+    alias bigdirs='dust -n 30 -d 3'     # top 30 dirs, max depth 3
+    alias bigfiles='dust -n 30 -F'      # top 30 files (skip dirs)
+    alias biggest='dust -n 20 -x /'     # whole-root, one filesystem
 fi
 
 # Docker compose shorthand
