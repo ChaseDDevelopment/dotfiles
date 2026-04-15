@@ -109,6 +109,7 @@ require("which-key").add({
 	{ "<leader>ad", icon = { icon = "󰅖", color = "red" }, desc = "Deny diff" },
 
 	-- Toggle actions
+	{ "<leader>uw", icon = { icon = "󰖶", color = "yellow" }, desc = "Toggle word wrap" },
 	{ "<leader>uH", icon = { icon = "󰀱", color = "yellow" }, desc = "Toggle hardtime" },
 	{ "<leader>uP", icon = { icon = "󰛡", color = "yellow" }, desc = "Toggle precognition" },
 })
