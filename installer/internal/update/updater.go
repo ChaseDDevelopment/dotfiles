@@ -67,11 +67,11 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 		{"Node.js (nvm)", func(ctx context.Context) error {
 			return updateNvm(ctx, runner)
 		}},
-		{"Starship", func(ctx context.Context) error {
-			if !platform.HasCommand("starship") {
+		{"Oh-My-Posh", func(ctx context.Context) error {
+			if !platform.HasCommand("oh-my-posh") {
 				return nil
 			}
-			return updateStarship(ctx, runner, mgr)
+			return updateOhMyPosh(ctx, runner, mgr)
 		}},
 		{"Atuin", func(ctx context.Context) error {
 			return updateAtuin(ctx, runner, mgrName)
@@ -164,23 +164,18 @@ func updateNvm(ctx context.Context, runner *executor.Runner) error {
 	return runner.RunShell(ctx, script)
 }
 
-func updateStarship(ctx context.Context, runner *executor.Runner, mgr pkgmgr.PackageManager) error {
-	// Package-manager paths are exec-level argv calls — no shell
-	// interpolation, no remote-script execution. Upstream provides
-	// Starship on brew, apt (via Debian/Ubuntu), dnf, pacman, and
-	// zypper so the installer script is rarely needed anymore.
-	switch mgr.Name() {
-	case "brew":
-		return runner.Run(ctx, "brew", "upgrade", "starship")
-	case "pacman":
-		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "starship")
-	case "apt", "dnf", "yum", "zypper":
-		return mgr.Install(ctx, "starship")
+func updateOhMyPosh(ctx context.Context, runner *executor.Runner, mgr pkgmgr.PackageManager) error {
+	// Oh-My-Posh is shipped upstream only via Homebrew and the
+	// official install script. It's AUR-only on Arch and not in
+	// Debian/Fedora/openSUSE repos, so every non-brew manager falls
+	// through to the auditable download-then-exec helper below.
+	if mgr.Name() == "brew" {
+		return runner.Run(ctx, "brew", "upgrade", "oh-my-posh")
 	}
-	return fmt.Errorf(
-		"no safe Starship update path for package manager %q; "+
-			"install Starship via your system package manager and re-run",
-		mgr.Name(),
+	return runDownloadedScript(
+		ctx, runner,
+		"https://ohmyposh.dev/install.sh",
+		[]string{"-d", filepath.Join(os.Getenv("HOME"), ".local", "bin")},
 	)
 }
 

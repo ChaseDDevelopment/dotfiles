@@ -227,10 +227,11 @@ done
 [[ -f "${ZDOTDIR}/local.zsh" ]] && source "${ZDOTDIR}/local.zsh"
 
 # ----------------------------------------------------------------------------
-# Starship Prompt (MUST be last to properly hook into prompt)
+# Oh-My-Posh Prompt (MUST be last to properly hook into prompt)
 # ----------------------------------------------------------------------------
-if (( $+commands[starship] )); then
-    _cached_init "starship" "${commands[starship]}" starship init zsh
+if (( $+commands[oh-my-posh] )); then
+    _cached_init "oh-my-posh" "${commands[oh-my-posh]}" \
+        oh-my-posh init zsh --config "$HOME/.config/oh-my-posh/config.omp.yaml"
 fi
 
 # ----------------------------------------------------------------------------

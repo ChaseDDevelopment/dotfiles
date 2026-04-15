@@ -135,20 +135,21 @@ func devTools() []Tool {
 				}},
 			},
 		},
-		// Starship prompt
+		// Oh-My-Posh prompt
 		{
-			Name: "starship", Command: "starship", Description: "Cross-shell prompt",
+			Name: "oh-my-posh", Command: "oh-my-posh", Description: "Cross-shell prompt",
 			Strategies: []InstallStrategy{
-				{Managers: []string{"brew", "pacman"}, Method: MethodPackageManager, Package: "starship"},
+				// Fully qualified formula triggers brew's auto-tap of
+				// jandedobbeleer/oh-my-posh on first install.
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "jandedobbeleer/oh-my-posh/oh-my-posh"},
 				{Method: MethodScript, Script: &ScriptConfig{
-					URL: "https://starship.rs/install.sh",
-					Args: []string{"--yes"},
-					// Starship's installer explicitly checks that it's
-					// being run under POSIX sh and aborts on bash
-					// ("Running installation script with non-POSIX
-					// bash may cause errors. Please use sh instead.").
-					// Override our bash default from executeScriptFile.
-					Shell:           "sh",
+					// No pacman strategy: oh-my-posh is AUR-only on
+					// Arch, which this installer doesn't handle, so
+					// pacman users fall through to the script. Pass
+					// -d to land the binary on an already-PATHed dir
+					// (default ~/bin isn't on our PATH).
+					URL:             "https://ohmyposh.dev/install.sh",
+					Args:            []string{"-d", "$HOME/.local/bin"},
 					NoProfileModify: true,
 				}},
 			},

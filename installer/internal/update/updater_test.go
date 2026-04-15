@@ -154,8 +154,8 @@ printf '%%s %%s\n' %q "$*" >> "$UPDATE_LOG"
 `, name))
 	}
 
-	if err := updateStarship(context.Background(), runner, &testPkgMgr{name: "brew"}); err != nil {
-		t.Fatalf("updateStarship brew: %v", err)
+	if err := updateOhMyPosh(context.Background(), runner, &testPkgMgr{name: "brew"}); err != nil {
+		t.Fatalf("updateOhMyPosh brew: %v", err)
 	}
 	if err := updateAtuin(context.Background(), runner, "apt"); err != nil {
 		t.Fatalf("updateAtuin apt+cargo: %v", err)
@@ -170,7 +170,7 @@ printf '%%s %%s\n' %q "$*" >> "$UPDATE_LOG"
 	}
 	got := string(data)
 	for _, want := range []string{
-		"brew upgrade starship",
+		"brew upgrade oh-my-posh",
 		"cargo install atuin",
 		"brew upgrade dotnet-sdk",
 	} {
@@ -231,8 +231,8 @@ printf 'bash %s\n' "$*" >> "$UPDATE_LOG"
 exit 0
 `)
 
-	if err := updateStarship(context.Background(), runner, &testPkgMgr{name: "pacman"}); err != nil {
-		t.Fatalf("updateStarship pacman: %v", err)
+	if err := updateOhMyPosh(context.Background(), runner, &testPkgMgr{name: "pacman"}); err != nil {
+		t.Fatalf("updateOhMyPosh pacman (script fallback): %v", err)
 	}
 	if err := updateAtuin(context.Background(), runner, "brew"); err != nil {
 		t.Fatalf("updateAtuin brew: %v", err)
@@ -250,7 +250,7 @@ exit 0
 	}
 	got := string(data)
 	for _, want := range []string{
-		"sudo pacman -S --noconfirm starship",
+		"curl -fsSL https://ohmyposh.dev/install.sh",
 		"brew upgrade atuin",
 		"yay -S --noconfirm neovim-git",
 		"curl -fsSL https://dot.net/v1/dotnet-install.sh",
@@ -284,17 +284,11 @@ printf 'sudo %s\n' "$*" >> "$UPDATE_LOG"
 exit 0
 `)
 
-	if err := updateStarship(context.Background(), runner, &testPkgMgr{name: "dnf"}); err != nil {
-		t.Fatalf("updateStarship dnf install path: %v", err)
-	}
 	if err := updateNeovim(context.Background(), runner, &testPkgMgr{name: "unknown"}, nil); err != nil {
 		t.Fatalf("updateNeovim default mgr path: %v", err)
 	}
 
 	// Unsupported managers should return actionable errors.
-	if err := updateStarship(context.Background(), runner, &testPkgMgr{name: "unknown"}); err == nil {
-		t.Fatal("expected updateStarship unsupported-manager error")
-	}
 	if err := updateAtuin(context.Background(), runner, "unknown"); err == nil {
 		t.Fatal("expected updateAtuin unsupported-manager error")
 	}
@@ -311,7 +305,7 @@ func TestAllStepsAndCargoUpdates(t *testing.T) {
 	t.Setenv("UPDATE_LOG", logPath)
 	t.Setenv("HOME", dir)
 
-	for _, name := range []string{"rustup", "cargo", "uv", "bun", "brew", "ya", "eza"} {
+	for _, name := range []string{"rustup", "cargo", "uv", "bun", "brew", "ya", "eza", "oh-my-posh"} {
 		writeScript(t, fakebin, name, fmt.Sprintf(`#!/usr/bin/env bash
 printf '%%s %%s\n' %q "$*" >> "$UPDATE_LOG"
 `, name))
@@ -350,7 +344,7 @@ printf 'tpm %s\n' "$*" >> "$UPDATE_LOG"
 		"uv self update",
 		"uv tool upgrade --all",
 		"bun upgrade",
-		"brew upgrade starship",
+		"brew upgrade oh-my-posh",
 		"brew upgrade neovim",
 		"ya pkg upgrade",
 		"tpm all",

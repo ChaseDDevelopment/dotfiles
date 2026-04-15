@@ -137,7 +137,7 @@ type GitHubConfig = github.Config
 // installer with env vars (PROFILE=/dev/null, SHELL=/bin/sh,
 // INSTALLER_NO_MODIFY_PATH=1) that cause the installer's
 // rc-file-append branch to no-op. Use for bun/nvm/uv/rustup-init/
-// atuin/starship — every PATH export and init eval they'd write
+// atuin/oh-my-posh — every PATH export and init eval they'd write
 // is already covered by configs/zsh/.zprofile and the _cached_init
 // scheme in configs/zsh/.zshrc, so suppressing the append keeps
 // the symlinked repo files clean.

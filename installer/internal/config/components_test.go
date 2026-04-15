@@ -20,7 +20,7 @@ func TestClearZshInitCaches(t *testing.T) {
 		}
 		// Files that SHOULD be cleared.
 		for _, name := range []string{
-			"zoxide.zsh", "atuin.zsh", "starship.zsh",
+			"zoxide.zsh", "atuin.zsh", "oh-my-posh.zsh",
 		} {
 			if err := os.WriteFile(
 				filepath.Join(cacheDir, name), []byte("cached"), 0o644,
@@ -43,7 +43,7 @@ func TestClearZshInitCaches(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		for _, name := range []string{"zoxide.zsh", "atuin.zsh", "starship.zsh"} {
+		for _, name := range []string{"zoxide.zsh", "atuin.zsh", "oh-my-posh.zsh"} {
 			if _, err := os.Stat(filepath.Join(cacheDir, name)); !os.IsNotExist(err) {
 				t.Errorf("%s should have been removed, err=%v", name, err)
 			}

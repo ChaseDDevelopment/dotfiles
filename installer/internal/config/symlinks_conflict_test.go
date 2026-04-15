@@ -89,17 +89,17 @@ func TestApplySymlink_RegularFileIsBackedUpNotOverwritten(
 func TestApplyAllSymlinks_Idempotent(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	bm1 := backup.NewManager(false)
 	if err := ApplyAllSymlinks(
-		"Starship", rootDir, bm1, false, nil,
+		"OhMyPosh", rootDir, bm1, false, nil,
 	); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
 
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	linkBefore, err := os.Readlink(target)
 	if err != nil {
 		t.Fatalf("first apply did not create a symlink: %v", err)
@@ -113,7 +113,7 @@ func TestApplyAllSymlinks_Idempotent(t *testing.T) {
 
 	bm2 := backup.NewManager(false)
 	if err := ApplyAllSymlinks(
-		"Starship", rootDir, bm2, false, nil,
+		"OhMyPosh", rootDir, bm2, false, nil,
 	); err != nil {
 		t.Fatalf("second apply (should be idempotent): %v", err)
 	}

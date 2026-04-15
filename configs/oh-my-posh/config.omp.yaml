@@ -1,0 +1,21 @@
+$schema: https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json
+version: 3
+final_space: true
+blocks:
+  - type: prompt
+    alignment: left
+    segments:
+      - type: path
+        style: plain
+        foreground: "#89b4fa"
+        properties:
+          style: folder
+        template: "{{ .Path }} "
+      - type: git
+        style: plain
+        foreground: "#a6e3a1"
+        template: "{{ .HEAD }} "
+      - type: text
+        style: plain
+        foreground: "#cdd6f4"
+        template: "❯ "

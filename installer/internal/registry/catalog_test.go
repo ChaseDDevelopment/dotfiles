@@ -83,22 +83,35 @@ func TestDevAndOfficialToolCatalog(t *testing.T) {
 		t.Fatalf("uv installer should disable profile edits: %#v", uv.Strategies[0].Script)
 	}
 
-	// Starship's upstream installer refuses to run under bash; we
-	// must explicitly select sh. Regression guard for the kashyyyk
-	// failure ("Running installation script with non-POSIX bash...").
-	starship := toolByCommand(t, dev, "starship")
-	var starshipScript *ScriptConfig
-	for _, s := range starship.Strategies {
+	// Oh-My-Posh: brew strategy must use the fully qualified formula
+	// (triggers auto-tap) and the script fallback must pass -d to
+	// install into an already-PATHed directory.
+	omp := toolByCommand(t, dev, "oh-my-posh")
+	var ompBrew *InstallStrategy
+	var ompScript *ScriptConfig
+	for i, s := range omp.Strategies {
+		if s.Method == MethodPackageManager && s.Package == "jandedobbeleer/oh-my-posh/oh-my-posh" {
+			ompBrew = &omp.Strategies[i]
+		}
 		if s.Method == MethodScript && s.Script != nil {
-			starshipScript = s.Script
+			ompScript = s.Script
+		}
+	}
+	if ompBrew == nil {
+		t.Fatalf("oh-my-posh should have a fully-qualified brew strategy: %#v", omp.Strategies)
+	}
+	if ompScript == nil {
+		t.Fatalf("oh-my-posh should have a MethodScript strategy: %#v", omp.Strategies)
+	}
+	var sawInstallDirFlag bool
+	for _, a := range ompScript.Args {
+		if a == "-d" {
+			sawInstallDirFlag = true
 			break
 		}
 	}
-	if starshipScript == nil {
-		t.Fatalf("starship should have a MethodScript strategy: %#v", starship.Strategies)
-	}
-	if starshipScript.Shell != "sh" {
-		t.Fatalf("starship Script.Shell = %q, want \"sh\"", starshipScript.Shell)
+	if !sawInstallDirFlag {
+		t.Fatalf("oh-my-posh script should pass -d <dir>, got %#v", ompScript.Args)
 	}
 
 	yazi := toolByCommand(t, dev, "yazi")

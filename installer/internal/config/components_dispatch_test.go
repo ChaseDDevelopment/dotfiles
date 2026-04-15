@@ -20,10 +20,10 @@ func TestRunPostInstallDispatchesAllComponents(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	// Minimal stubs so every setup* helper finishes.
-	for _, name := range []string{"tmux", "pgrep", "cargo", "nvim", "starship", "ya", "git", "zsh", "brew", "bash"} {
+	for _, name := range []string{"tmux", "pgrep", "cargo", "nvim", "ya", "git", "zsh", "brew", "bash"} {
 		writeTool(t, bin, name, "#!/bin/sh\nexit 0\n")
 	}
-	for _, comp := range []string{"Zsh", "Tmux", "Neovim", "Starship", "Atuin", "Yazi", "Ghostty", "Git"} {
+	for _, comp := range []string{"Zsh", "Tmux", "Neovim", "Atuin", "Yazi", "Ghostty", "Git"} {
 		if err := runPostInstall(context.Background(), comp, sc); err != nil {
 			t.Fatalf("runPostInstall(%q): %v", comp, err)
 		}

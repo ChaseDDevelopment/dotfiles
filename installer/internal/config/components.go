@@ -26,7 +26,7 @@ func AllComponents() []Component {
 		{Name: "Zsh", Icon: " ", RequiredCmd: "zsh"},
 		{Name: "Tmux", Icon: " ", RequiredCmd: "tmux"},
 		{Name: "Neovim", Icon: " ", RequiredCmd: "nvim"},
-		{Name: "Starship", Icon: " ", RequiredCmd: "starship"},
+		{Name: "OhMyPosh", Icon: " ", RequiredCmd: "oh-my-posh"},
 		{Name: "Atuin", Icon: " ", RequiredCmd: "atuin"},
 		{Name: "Ghostty", Icon: "󰊠"},
 		{Name: "Yazi", Icon: " ", RequiredCmd: "yazi"},
@@ -149,8 +149,6 @@ func runPostInstall(ctx context.Context, name string, sc *SetupContext) error {
 		return setupTmux(ctx, sc)
 	case "Neovim":
 		return setupNeovim(ctx, sc)
-	case "Starship":
-		return setupStarship(ctx, sc)
 	case "Yazi":
 		return setupYazi(ctx, sc)
 	case "Ghostty":
@@ -631,21 +629,6 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	return nil
-}
-
-func setupStarship(ctx context.Context, sc *SetupContext) error {
-	configFile := os.ExpandEnv("$HOME/.config/starship.toml")
-	customConfig := filepath.Join(sc.RootDir, "configs", "starship", "starship.toml")
-
-	// If no custom config was symlinked, generate catppuccin preset.
-	if _, err := os.Stat(customConfig); os.IsNotExist(err) {
-		if platform.HasCommand("starship") {
-			bestEffort(sc, "starship preset failed", func() error {
-				return sc.Runner.Run(ctx, "starship", "preset", "catppuccin-powerline", "-o", configFile)
-			})
-		}
-	}
 	return nil
 }
 

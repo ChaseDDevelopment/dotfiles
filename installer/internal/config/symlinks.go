@@ -36,8 +36,8 @@ func AllSymlinks() []SymlinkEntry {
 		// Neovim
 		{Source: "nvim", Target: "$HOME/.config/nvim", IsDir: true, Component: "Neovim"},
 
-		// Starship
-		{Source: "starship/starship.toml", Target: "$HOME/.config/starship.toml", IsDir: false, Component: "Starship"},
+		// Oh-My-Posh
+		{Source: "oh-my-posh/config.omp.yaml", Target: "$HOME/.config/oh-my-posh/config.omp.yaml", IsDir: false, Component: "OhMyPosh"},
 
 		// Atuin
 		{Source: "atuin", Target: "$HOME/.config/atuin", IsDir: true, Component: "Atuin"},

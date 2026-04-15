@@ -14,7 +14,7 @@ func TestParseVersion(t *testing.T) {
 		{"tmux 3.4", [3]int{3, 4, 0}, false, true},
 		{"v20.11.0", [3]int{20, 11, 0}, false, true},
 		{"bat 0.24.0 (b1e116c)", [3]int{0, 24, 0}, false, true},
-		{"starship 1.17.1", [3]int{1, 17, 1}, false, true},
+		{"oh-my-posh 1.17.1", [3]int{1, 17, 1}, false, true},
 		{"zoxide 0.9.4", [3]int{0, 9, 4}, false, true},
 		{"1.0.0", [3]int{1, 0, 0}, false, true},
 		{"3.4", [3]int{3, 4, 0}, false, true},

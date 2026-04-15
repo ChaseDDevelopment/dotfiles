@@ -2,7 +2,7 @@
 
 ## Architecture
 
-- `configs/` — Dotfile configs (zsh, tmux, nvim, starship, atuin, ghostty, yazi, git, lazygit)
+- `configs/` — Dotfile configs (zsh, tmux, nvim, oh-my-posh, atuin, ghostty, yazi, git, lazygit)
 - `installer/` — Go TUI installer (Bubble Tea + Lipgloss, Catppuccin Mocha theme)
 - `install.sh` — Bootstrap script (downloads Go binary from GitHub Releases, runs it)
 

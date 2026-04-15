@@ -346,14 +346,14 @@ func TestDiffSymlink(t *testing.T) {
 func TestDiffComponent(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 
-	// Create source for Starship.
+	// Create source for Oh-My-Posh.
 	createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	// No targets exist, so no diffs (targets are missing,
 	// DiffSymlink returns "").
-	diffs := DiffComponent("Starship", rootDir)
+	diffs := DiffComponent("OhMyPosh", rootDir)
 	if len(diffs) != 0 {
 		t.Errorf(
 			"expected no diffs for missing targets, got %v", diffs,
@@ -361,11 +361,11 @@ func TestDiffComponent(t *testing.T) {
 	}
 
 	// Create a regular file at the target to trigger a diff.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	os.WriteFile(target, []byte("old"), 0o644)
 
-	diffs = DiffComponent("Starship", rootDir)
+	diffs = DiffComponent("OhMyPosh", rootDir)
 	if len(diffs) == 0 {
 		t.Error("expected diffs for existing regular file target")
 	}
@@ -556,37 +556,37 @@ func TestApplySymlink_ReplacesWrongSymlink(t *testing.T) {
 func TestApplyAllSymlinks(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 
-	// Create source files matching the "Starship" component.
+	// Create source files matching the "OhMyPosh" component.
 	createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	bm := backup.NewManager(false)
 
-	err := ApplyAllSymlinks("Starship", rootDir, bm, false, nil)
+	err := ApplyAllSymlinks("OhMyPosh", rootDir, bm, false, nil)
 	if err != nil {
 		t.Fatalf("ApplyAllSymlinks: %v", err)
 	}
 
 	// Verify the symlink was created.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	if _, err := os.Readlink(target); err != nil {
-		t.Errorf("Starship symlink not created: %v", err)
+		t.Errorf("Oh-My-Posh symlink not created: %v", err)
 	}
 }
 
 func TestRemoveComponentSymlinks(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	sourcePath := createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	// Create the symlink manually.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	os.Symlink(sourcePath, target)
 
-	err := RemoveComponentSymlinks("Starship", rootDir, nil)
+	err := RemoveComponentSymlinks("OhMyPosh", rootDir, nil)
 	if err != nil {
 		t.Fatalf("RemoveComponentSymlinks: %v", err)
 	}
@@ -599,17 +599,17 @@ func TestRemoveComponentSymlinks(t *testing.T) {
 func TestRemoveComponentSymlinks_LeavesWrongTarget(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	// Create a symlink pointing somewhere else entirely.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	wrong := filepath.Join(t.TempDir(), "other")
 	os.WriteFile(wrong, []byte("other"), 0o644)
 	os.Symlink(wrong, target)
 
-	err := RemoveComponentSymlinks("Starship", rootDir, nil)
+	err := RemoveComponentSymlinks("OhMyPosh", rootDir, nil)
 	if err != nil {
 		t.Fatalf("RemoveComponentSymlinks: %v", err)
 	}
@@ -625,15 +625,15 @@ func TestRemoveComponentSymlinks_LeavesWrongTarget(t *testing.T) {
 func TestRemoveComponentSymlinks_SkipsRegularFile(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	// Place a regular file at the target location.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	os.WriteFile(target, []byte("user-data"), 0o644)
 
-	err := RemoveComponentSymlinks("Starship", rootDir, nil)
+	err := RemoveComponentSymlinks("OhMyPosh", rootDir, nil)
 	if err != nil {
 		t.Fatalf("RemoveComponentSymlinks: %v", err)
 	}
@@ -680,11 +680,11 @@ func TestResolveSource_OSVariant(t *testing.T) {
 func TestApplyAllSymlinks_ErrorOnMissingSource(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 
-	// Starship source does NOT exist, so ApplyAllSymlinks should
+	// Oh-My-Posh source does NOT exist, so ApplyAllSymlinks should
 	// fail on the first entry with a missing source error.
 	bm := backup.NewManager(false)
 
-	err := ApplyAllSymlinks("Starship", rootDir, bm, false, nil)
+	err := ApplyAllSymlinks("OhMyPosh", rootDir, bm, false, nil)
 	if err == nil {
 		t.Fatal("expected error when source is missing")
 	}
@@ -693,11 +693,11 @@ func TestApplyAllSymlinks_ErrorOnMissingSource(t *testing.T) {
 func TestRollbackSymlinks(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	sourcePath := createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	// Create the symlink as ApplySymlink would.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	os.Symlink(sourcePath, target)
 
@@ -706,7 +706,7 @@ func TestRollbackSymlinks(t *testing.T) {
 		t.Fatalf("setup: symlink should exist: %v", err)
 	}
 
-	rollbackSymlinks("Starship", rootDir, nil)
+	rollbackSymlinks("OhMyPosh", rootDir, nil)
 
 	// After rollback, the symlink should be gone.
 	if _, err := os.Lstat(target); err == nil {
@@ -717,17 +717,17 @@ func TestRollbackSymlinks(t *testing.T) {
 func TestRollbackSymlinks_SkipsWrongTarget(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	// Create a symlink pointing to the wrong place.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	wrong := filepath.Join(t.TempDir(), "other")
 	os.WriteFile(wrong, []byte("other"), 0o644)
 	os.Symlink(wrong, target)
 
-	rollbackSymlinks("Starship", rootDir, nil)
+	rollbackSymlinks("OhMyPosh", rootDir, nil)
 
 	// Symlink to wrong target should be left intact.
 	if _, err := os.Lstat(target); err != nil {
@@ -740,15 +740,15 @@ func TestRollbackSymlinks_SkipsWrongTarget(t *testing.T) {
 func TestRollbackSymlinks_SkipsNonSymlink(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
 	// Place a regular file at the target.
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	os.WriteFile(target, []byte("data"), 0o644)
 
-	rollbackSymlinks("Starship", rootDir, nil)
+	rollbackSymlinks("OhMyPosh", rootDir, nil)
 
 	// Regular file should not be removed.
 	data, err := os.ReadFile(target)
@@ -928,16 +928,16 @@ func TestApplySymlink_WithRunner_BackupAndReplace(t *testing.T) {
 func TestRemoveComponentSymlinks_WithRunner(t *testing.T) {
 	rootDir, _ := setupTestDirs(t)
 	sourcePath := createSourceFile(
-		t, rootDir, "starship/starship.toml", "format=test",
+		t, rootDir, "oh-my-posh/config.omp.yaml", "format=test",
 	)
 
-	target := os.ExpandEnv("$HOME/.config/starship.toml")
+	target := os.ExpandEnv("$HOME/.config/oh-my-posh/config.omp.yaml")
 	os.MkdirAll(filepath.Dir(target), 0o755)
 	os.Symlink(sourcePath, target)
 
 	runner := newTestRunner(t)
 
-	err := RemoveComponentSymlinks("Starship", rootDir, runner)
+	err := RemoveComponentSymlinks("OhMyPosh", rootDir, runner)
 	if err != nil {
 		t.Fatalf("RemoveComponentSymlinks: %v", err)
 	}

@@ -5,7 +5,7 @@
 ![Zsh](https://img.shields.io/badge/Zsh-Shell-89b4fa?style=for-the-badge&logo=gnu-bash)
 ![Tmux](https://img.shields.io/badge/Tmux-Terminal-a6e3a1?style=for-the-badge)
 ![Neovim](https://img.shields.io/badge/Neovim-vim.pack-cba6f7?style=for-the-badge&logo=neovim)
-![Starship](https://img.shields.io/badge/Starship-Prompt-fab387?style=for-the-badge)
+![Oh-My-Posh](https://img.shields.io/badge/Oh--My--Posh-Prompt-fab387?style=for-the-badge)
 ![Yazi](https://img.shields.io/badge/Yazi-File_Manager-f5c2e7?style=for-the-badge)
 ![Ghostty](https://img.shields.io/badge/Ghostty-Terminal-94e2d5?style=for-the-badge)
 ![Catppuccin](https://img.shields.io/badge/Theme-Catppuccin-1e1e2e?style=for-the-badge)
@@ -25,7 +25,7 @@ This setup provides a complete, modern shell environment with:
 - **Zsh Shell** - Feature-rich shell with Antidote plugin manager (16 plugins)
 - **Tmux** - Terminal multiplexer with session persistence and Catppuccin theme (11 plugins)
 - **Neovim** - Modern editor with vim.pack built-in package manager (33 plugins, 14 LSP servers)
-- **Starship** - Fast, customizable prompt with Git integration
+- **Oh-My-Posh** - Fast, customizable prompt with Git integration
 - **Yazi** - Terminal file manager with image preview and Catppuccin theme (8 plugins)
 - **Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, zoxide, delta, lazygit, and more
 - **Development Tools** - nvm + Node.js, uv (Python), Bun, Rust, .NET SDK
@@ -78,7 +78,7 @@ chmod +x install.sh
 - **LSP Integration** - Language servers for Python, TypeScript, Rust, Lua, C#, Bash, Docker, and more
 - **Tree-sitter** - Syntax highlighting and code navigation for 30+ languages
 
-### Starship Prompt
+### Oh-My-Posh Prompt
 - **Catppuccin Theme** - Beautiful, informative prompt
 - **Git Integration** - Branch, status, and commit information
 - **Language Detection** - Automatic programming language indicators
@@ -87,7 +87,7 @@ chmod +x install.sh
 ### Yazi File Manager
 - **Terminal file manager** with image preview support
 - **Catppuccin Mocha theme** - Consistent look
-- **Plugins** - lazygit integration, git status, starship header, smart-enter, jump-to-char
+- **Plugins** - lazygit integration, git status, smart-enter, jump-to-char
 - **Tmux passthrough** - Image previews work inside tmux
 
 ### Modern CLI Tools
@@ -301,13 +301,13 @@ rm -rf ~/.cache/nvim
 nvim
 ```
 
-#### Starship Not Showing
+#### Oh-My-Posh Not Showing
 ```bash
-# Check if Starship is in PATH
-which starship
+# Check if Oh-My-Posh is in PATH
+which oh-my-posh
 
 # Verify it's in .zshrc (should be automatic)
-grep starship ~/.config/zsh/.zshrc
+grep oh-my-posh ~/.config/zsh/.zshrc
 ```
 
 #### Icons Not Displaying
@@ -377,8 +377,8 @@ dotfiles/
 │   ├── tmux/
 │   │   ├── tmux.conf           # Tmux configuration
 │   │   └── catppuccin-modules/ # Custom Catppuccin status modules
-│   ├── starship/
-│   │   └── starship.toml       # Starship configuration
+│   ├── oh-my-posh/
+│   │   └── config.omp.yaml     # Oh-My-Posh configuration
 │   ├── atuin/
 │   │   └── config.toml         # Atuin configuration
 │   ├── ghostty/
@@ -393,7 +393,7 @@ dotfiles/
 │       ├── theme.toml          # Yazi theme
 │       ├── init.lua            # Yazi init (plugin loading)
 │       ├── package.toml        # Yazi plugin manifest
-│       ├── plugins/            # Yazi plugins (lazygit, git, starship, etc.)
+│       ├── plugins/            # Yazi plugins (lazygit, git, etc.)
 │       └── flavors/            # Catppuccin Mocha flavor
 ```
 
@@ -416,7 +416,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Antidote](https://github.com/mattmc3/antidote) - Fast Zsh plugin manager
 - [Tmux](https://github.com/tmux/tmux) - Terminal multiplexer
 - [Neovim](https://neovim.io/) - Hyperextensible Vim-based text editor
-- [Starship](https://starship.rs/) - Cross-shell prompt
+- [Oh-My-Posh](https://ohmyposh.dev/) - Cross-shell prompt
 - [Yazi](https://yazi-rs.github.io/) - Terminal file manager
 - [Catppuccin](https://github.com/catppuccin/catppuccin) - Beautiful color schemes
 - [Atuin](https://github.com/atuinsh/atuin) - Magical shell history

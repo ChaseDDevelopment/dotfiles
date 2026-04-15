@@ -47,7 +47,7 @@ func TestComponentSetupHelpers(t *testing.T) {
 	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("COMPONENT_LOG", filepath.Join(home, "commands.log"))
 
-	for _, name := range []string{"tmux", "pgrep", "cargo", "nvim", "starship", "ya", "git", "bash", "zsh", "brew"} {
+	for _, name := range []string{"tmux", "pgrep", "cargo", "nvim", "ya", "git", "bash", "zsh", "brew"} {
 		body := `#!/bin/sh
 printf '%s %s\n' "` + name + `" "$*" >> "$COMPONENT_LOG"
 if [ "` + name + `" = "pgrep" ]; then
@@ -106,9 +106,6 @@ exit 0
 		t.Fatal("expected stale lazy dir to be removed")
 	}
 
-	if err := setupStarship(context.Background(), sc); err != nil {
-		t.Fatalf("setupStarship: %v", err)
-	}
 	if err := setupYazi(context.Background(), sc); err != nil {
 		t.Fatalf("setupYazi: %v", err)
 	}
@@ -130,7 +127,6 @@ exit 0
 		"tmux source-file",
 		"cargo build --release",
 		"nvim --headless",
-		"starship preset catppuccin-powerline",
 		"ya pkg install",
 		"git config --global user.name",
 	} {

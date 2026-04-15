@@ -368,7 +368,7 @@ func cliTools() []Tool {
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "7zip"},
 			},
 		},
-		// Nerd Font — required for icons in eza, starship, tmux, yazi
+		// Nerd Font — required for icons in eza, oh-my-posh, tmux, yazi
 		{
 			Name: "nerd-font", Command: "nerd-font",
 			Description: "JetBrains Mono Nerd Font",

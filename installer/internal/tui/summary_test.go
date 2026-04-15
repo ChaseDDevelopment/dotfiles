@@ -309,7 +309,7 @@ func TestSummaryModel_DryRunTableRowsAllStatuses(t *testing.T) {
 			Status: "already installed",
 		},
 		{
-			Component: "starship", Action: "configure",
+			Component: "oh-my-posh", Action: "configure",
 			Status: "already configured",
 		},
 		{

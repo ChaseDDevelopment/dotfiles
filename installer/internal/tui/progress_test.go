@@ -557,7 +557,7 @@ func TestProgressModel_ViewManyTools(t *testing.T) {
 
 	// Add many tools to test grid layout.
 	tools := []string{
-		"zsh", "tmux", "neovim", "starship", "atuin",
+		"zsh", "tmux", "neovim", "oh-my-posh", "atuin",
 		"ghostty", "yazi", "lazygit", "eza", "bat",
 		"fd", "ripgrep", "fzf", "delta", "zoxide",
 	}

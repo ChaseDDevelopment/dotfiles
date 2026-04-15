@@ -278,7 +278,7 @@ func TestMultipleRecordAndLookup(t *testing.T) {
 		{"zsh", "5.9", "brew"},
 		{"tmux", "3.4", "brew"},
 		{"nvim", "0.10.0", "github-release"},
-		{"starship", "1.20", "script"},
+		{"oh-my-posh", "1.20", "script"},
 		{"atuin", "18.0", "brew"},
 	}
 
