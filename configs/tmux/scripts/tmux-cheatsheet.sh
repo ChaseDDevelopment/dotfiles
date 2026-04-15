@@ -3,13 +3,13 @@
 # Displayed via: prefix + ?
 # Dismiss with any keypress (uses less -R)
 
-# Kanagawa Dragon palette
-BLUE='\033[38;2;127;180;202m'    # #7FB4CA
+# Kanagawa Wave palette
+BLUE='\033[38;2;126;156;216m'    # #7E9CD8
 MAUVE='\033[38;2;147;138;169m'   # #938AA9
-PEACH='\033[38;2;182;146;123m'   # #b6927b
-TEXT='\033[38;2;197;201;197m'    # #c5c9c5
-SUBTEXT='\033[38;2;166;166;156m' # #a6a69c
-SURFACE='\033[38;2;40;39;39m'    # #282727
+PEACH='\033[38;2;255;160;102m'   # #FFA066
+TEXT='\033[38;2;220;215;186m'    # #DCD7BA
+SUBTEXT='\033[38;2;200;192;147m' # #C8C093
+SURFACE='\033[38;2;42;42;55m'    # #2a2a37
 RESET='\033[0m'
 
 # Column widths

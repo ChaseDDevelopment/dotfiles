@@ -1,8 +1,8 @@
 require("kanagawa").setup({
-	theme = "dragon",
+	theme = "wave",
 	background = {
-		dark = "dragon",
+		dark = "wave",
 		light = "lotus",
 	},
 })
-vim.cmd.colorscheme("kanagawa-dragon")
+vim.cmd.colorscheme("kanagawa-wave")

@@ -13,9 +13,9 @@ blocks:
         template: "{{ .Path }} "
       - type: git
         style: plain
-        foreground: "#8a9a7b"
+        foreground: "#76946A"
         template: "{{ .HEAD }} "
       - type: text
         style: plain
-        foreground: "#c5c9c5"
+        foreground: "#DCD7BA"
         template: "❯ "
