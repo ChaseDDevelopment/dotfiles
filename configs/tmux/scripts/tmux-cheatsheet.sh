@@ -3,13 +3,13 @@
 # Displayed via: prefix + ?
 # Dismiss with any keypress (uses less -R)
 
-# Catppuccin Mocha palette
-BLUE='\033[38;2;137;180;250m'    # #89b4fa
-MAUVE='\033[38;2;203;166;247m'   # #cba6f7
-PEACH='\033[38;2;250;179;135m'   # #fab387
-TEXT='\033[38;2;205;214;244m'    # #cdd6f4
-SUBTEXT='\033[38;2;166;173;200m' # #a6adc8
-SURFACE='\033[38;2;69;71;90m'    # #45475a
+# Kanagawa Dragon palette
+BLUE='\033[38;2;127;180;202m'    # #7FB4CA
+MAUVE='\033[38;2;147;138;169m'   # #938AA9
+PEACH='\033[38;2;182;146;123m'   # #b6927b
+TEXT='\033[38;2;197;201;197m'    # #c5c9c5
+SUBTEXT='\033[38;2;166;166;156m' # #a6a69c
+SURFACE='\033[38;2;40;39;39m'    # #282727
 RESET='\033[0m'
 
 # Column widths

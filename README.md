@@ -376,7 +376,7 @@ dotfiles/
 │   │   └── lua/                # Plugin and core configuration
 │   ├── tmux/
 │   │   ├── tmux.conf           # Tmux configuration
-│   │   └── catppuccin-modules/ # Custom Catppuccin status modules
+│   │   └── kanagawa-modules/   # Custom Kanagawa status modules
 │   ├── oh-my-posh/
 │   │   └── config.omp.yaml     # Oh-My-Posh configuration
 │   ├── atuin/

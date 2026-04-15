@@ -7,15 +7,15 @@ blocks:
     segments:
       - type: path
         style: plain
-        foreground: "#89b4fa"
+        foreground: "#7E9CD8"
         properties:
           style: folder
         template: "{{ .Path }} "
       - type: git
         style: plain
-        foreground: "#a6e3a1"
+        foreground: "#8a9a7b"
         template: "{{ .HEAD }} "
       - type: text
         style: plain
-        foreground: "#cdd6f4"
+        foreground: "#c5c9c5"
         template: "❯ "
