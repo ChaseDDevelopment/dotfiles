@@ -10,7 +10,7 @@ require("core/options")
 require("core/keymaps")
 require("core/autocmds")
 vim.pack.add({
-	"https://github.com/catppuccin/nvim",
+	"https://github.com/rebelot/kanagawa.nvim",
 	"https://github.com/nvim-treesitter/nvim-treesitter",
 	"https://github.com/folke/snacks.nvim",
 	"https://github.com/folke/which-key.nvim",
@@ -49,7 +49,7 @@ vim.pack.add({
 	"https://github.com/coder/claudecode.nvim",
 	"https://github.com/christoomey/vim-tmux-navigator",
 })
-require("plugins/catppuccin")
+require("plugins/kanagawa")
 require("plugins/treesitter")
 require("plugins/snacks")
 require("plugins/which-key")
