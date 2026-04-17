@@ -1,0 +1,12 @@
+# =============================================================================
+# Bat Configuration
+# =============================================================================
+# Theme ships in configs/bat/themes/ and is compiled into the cache by the
+# installer's Bat component via `bat cache --build`. Delta's syntax-theme
+# in configs/git/config reads from the same bat cache, so both honor this.
+# =============================================================================
+
+--theme="tokyonight_night"
+--style="numbers,changes,header"
+--italic-text="always"
+--tabs="4"

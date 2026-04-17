@@ -54,6 +54,9 @@ func AllSymlinks() []SymlinkEntry {
 
 		// Lazygit
 		{Source: "lazygit", Target: "$HOME/.config/lazygit", IsDir: true, Component: "Git"},
+
+		// Bat (syntax theme is also consumed by git-delta via bat's cache)
+		{Source: "bat", Target: "$HOME/.config/bat", IsDir: true, Component: "Bat"},
 	}
 }
 

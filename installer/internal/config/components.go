@@ -31,6 +31,7 @@ func AllComponents() []Component {
 		{Name: "Ghostty", Icon: "󰊠"},
 		{Name: "Yazi", Icon: " ", RequiredCmd: "yazi"},
 		{Name: "Git", Icon: " ", RequiredCmd: "git"},
+		{Name: "Bat", Icon: "󱉶 ", RequiredCmd: "bat"},
 	}
 }
 
@@ -155,6 +156,8 @@ func runPostInstall(ctx context.Context, name string, sc *SetupContext) error {
 		return setupGhostty(ctx, sc)
 	case "Git":
 		return setupGit(ctx, sc)
+	case "Bat":
+		return setupBat(ctx, sc)
 	}
 	return nil
 }
@@ -652,6 +655,21 @@ func setupGhostty(_ context.Context, sc *SetupContext) error {
 		return nil
 	}
 	// Ghostty config is handled by symlinks — no extra setup needed.
+	return nil
+}
+
+// setupBat rebuilds bat's theme cache so the tmTheme files symlinked
+// into ~/.config/bat/themes/ become available to both `bat` and to
+// `delta` (which reads bat's syntax cache for git-delta syntax-theme).
+// Best-effort: a stale cache just means the default theme is used
+// until the user runs `bat cache --build` manually.
+func setupBat(ctx context.Context, sc *SetupContext) error {
+	if !platform.HasCommand("bat") {
+		return nil
+	}
+	bestEffort(sc, "bat cache --build failed", func() error {
+		return sc.Runner.Run(ctx, "bat", "cache", "--build")
+	})
 	return nil
 }
 
