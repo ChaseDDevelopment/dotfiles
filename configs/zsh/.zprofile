@@ -25,8 +25,14 @@ unset _brew_bin _brew_cache
 # DOTNET_ROOT and the GUI-app prepends below dedupe cleanly.
 typeset -U path
 
-# .NET SDK (installed via dotnet-install.sh to ~/.dotnet)
-if [[ -d "${HOME}/.dotnet" ]]; then
+# .NET SDK — point DOTNET_ROOT at whichever install layout is present.
+# Brew installs the formula at $HOMEBREW_PREFIX/opt/dotnet/libexec (caveat
+# output explicitly tells callers to set DOTNET_ROOT there). The script
+# installer (dotnet-install.sh) lands under ~/.dotnet. Prefer brew when both
+# exist so `brew upgrade dotnet` keeps control of the active toolchain.
+if [[ -n "${HOMEBREW_PREFIX:-}" && -d "${HOMEBREW_PREFIX}/opt/dotnet/libexec" ]]; then
+    export DOTNET_ROOT="${HOMEBREW_PREFIX}/opt/dotnet/libexec"
+elif [[ -d "${HOME}/.dotnet" ]]; then
     export DOTNET_ROOT="${HOME}/.dotnet"
     export PATH="${DOTNET_ROOT}:${PATH}"
 fi
