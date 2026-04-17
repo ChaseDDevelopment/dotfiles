@@ -34,7 +34,9 @@ blocks:
           commit_icon: "@"
           fetch_status: true
 
-  - type: rprompt
+  - type: prompt
+    alignment: right
+    filler: " "
     overflow: hidden
     segments:
       - type: python
