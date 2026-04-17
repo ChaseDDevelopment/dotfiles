@@ -50,7 +50,7 @@ else
     FZF_CLIP_CMD="cat >/dev/null"  # Fallback: discard
 fi
 
-# fzf defaults with Catppuccin Mocha colors
+# fzf defaults with TokyoNight Night colors
 export FZF_DEFAULT_OPTS="
   --height=40%
   --layout=reverse
@@ -60,10 +60,10 @@ export FZF_DEFAULT_OPTS="
   --pointer='>'
   --preview-window=right:60%
   --bind='ctrl-y:execute-silent(echo -n {} | ${FZF_CLIP_CMD})'
-  --color=bg+:#313244,bg:#1e1e2e,spinner:#f5e0dc,hl:#f38ba8
-  --color=fg:#cdd6f4,header:#f38ba8,info:#cba6f7,pointer:#f5e0dc
-  --color=marker:#b4befe,fg+:#cdd6f4,prompt:#cba6f7,hl+:#f38ba8
-  --color=selected-bg:#45475a
+  --color=bg+:#292e42,bg:#1a1b26,spinner:#7dcfff,hl:#f7768e
+  --color=fg:#c0caf5,header:#f7768e,info:#bb9af7,pointer:#7dcfff
+  --color=marker:#bb9af7,fg+:#c0caf5,prompt:#bb9af7,hl+:#f7768e
+  --color=selected-bg:#414868
 "
 
 # Use fd instead of find for fzf (respects .gitignore)

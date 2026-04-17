@@ -1,4 +1,4 @@
-# Catppuccin Mocha theme for lazygit
+# TokyoNight Night theme for lazygit
 git:
   paging:
     colorArg: always
@@ -10,21 +10,21 @@ gui:
   nerdFontsVersion: "3"
   theme:
     activeBorderColor:
-      - "#a6e3a1"   # Green
+      - "#9ece6a"   # Green
       - bold
     inactiveBorderColor:
-      - "#a6adc8"   # Overlay0
+      - "#a9b1d6"   # Fg dark / overlay
     optionsTextColor:
-      - "#89b4fa"   # Blue
+      - "#7aa2f7"   # Blue
     selectedLineBgColor:
-      - "#313244"   # Surface0
+      - "#292e42"   # Surface0
     cherryPickedCommitBgColor:
-      - "#45475a"   # Surface1
+      - "#414868"   # Surface1 / overlay
     cherryPickedCommitFgColor:
-      - "#a6e3a1"   # Green
+      - "#9ece6a"   # Green
     unstagedChangesColor:
-      - "#f38ba8"   # Red
+      - "#f7768e"   # Red
     defaultFgColor:
-      - "#cdd6f4"   # Text
+      - "#c0caf5"   # Text
     searchingActiveBorderColor:
-      - "#f9e2af"   # Yellow
+      - "#e0af68"   # Yellow

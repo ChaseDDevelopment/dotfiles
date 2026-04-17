@@ -1,8 +1,8 @@
 # =============================================================================
 # Yazi Theme
 # =============================================================================
-# Uses Catppuccin Mocha flavor (install: ya pkg add yazi-rs/flavors:catppuccin-mocha)
+# Uses Tokyo Night flavor (install: ya pkg add BennyOe/tokyo-night)
 # =============================================================================
 
 [flavor]
-dark = "catppuccin-mocha"
+dark = "tokyo-night"

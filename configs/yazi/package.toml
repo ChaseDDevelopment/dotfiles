@@ -29,16 +29,9 @@ rev = "7749958"
 hash = "31994c9caec5bdcafd994e9b00c632a4"
 
 [[plugin.deps]]
-use = "Rolv-Apneseth/starship"
-rev = "a837101"
-hash = "635b0feb9215772d22020eb0abf0bb34"
-
-[[plugin.deps]]
 use = "Lil-Dank/lazygit"
 rev = "8c4086c"
 hash = "85316b5e9abeae2531d3e5d02a094381"
 
 [[flavor.deps]]
-use = "yazi-rs/flavors:catppuccin-mocha"
-rev = "0670801"
-hash = "7dfe41c9c3d9be76da8a844263d0bbed"
+use = "BennyOe/tokyo-night"

@@ -1,6 +1,6 @@
 # Shell Environment Setup - "One Stop Shop"
 
-> Cross-platform shell environment with Catppuccin Mocha theme and modern CLI tools
+> Cross-platform shell environment with TokyoNight theme and modern CLI tools
 
 ![Zsh](https://img.shields.io/badge/Zsh-Shell-89b4fa?style=for-the-badge&logo=gnu-bash)
 ![Tmux](https://img.shields.io/badge/Tmux-Terminal-a6e3a1?style=for-the-badge)
@@ -8,12 +8,12 @@
 ![Oh-My-Posh](https://img.shields.io/badge/Oh--My--Posh-Prompt-fab387?style=for-the-badge)
 ![Yazi](https://img.shields.io/badge/Yazi-File_Manager-f5c2e7?style=for-the-badge)
 ![Ghostty](https://img.shields.io/badge/Ghostty-Terminal-94e2d5?style=for-the-badge)
-![Catppuccin](https://img.shields.io/badge/Theme-Catppuccin-1e1e2e?style=for-the-badge)
+![TokyoNight](https://img.shields.io/badge/Theme-TokyoNight-1a1b26?style=for-the-badge)
 
 ## Philosophy
 
 - **Learn by configuring** - Every config is hand-written, not generated
-- **Catppuccin Mocha everywhere** - Consistent theming across all tools
+- **TokyoNight everywhere** - Consistent theming across all tools
 - **Modern replacements** - eza > ls, bat > cat, ripgrep > grep, fd > find, zoxide > cd
 - **Cross-platform** - macOS (Intel + Apple Silicon) and Linux (Ubuntu, Arch, RHEL, Fedora)
 - **Interactive TUI installer** - Go + Bubble Tea with dry-run, backup/restore, component selection
@@ -23,14 +23,14 @@
 This setup provides a complete, modern shell environment with:
 
 - **Zsh Shell** - Feature-rich shell with Antidote plugin manager (16 plugins)
-- **Tmux** - Terminal multiplexer with session persistence and Catppuccin theme (11 plugins)
+- **Tmux** - Terminal multiplexer with session persistence and TokyoNight theme (11 plugins)
 - **Neovim** - Modern editor with vim.pack built-in package manager (33 plugins, 14 LSP servers)
 - **Oh-My-Posh** - Fast, customizable prompt with Git integration
-- **Yazi** - Terminal file manager with image preview and Catppuccin theme (8 plugins)
+- **Yazi** - Terminal file manager with image preview and TokyoNight theme (8 plugins)
 - **Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, zoxide, delta, lazygit, and more
 - **Development Tools** - nvm + Node.js, uv (Python), Bun, Rust, .NET SDK
 - **Shell Enhancements** - Atuin for shell history, fzf-tab for completions, direnv for per-project env
-- **Catppuccin Mocha** - Beautiful, consistent theming across all tools
+- **TokyoNight** - Beautiful, consistent theming across all tools
 
 ## Quick Installation
 
@@ -62,14 +62,14 @@ chmod +x install.sh
 
 ### Tmux Configuration
 - **TPM (Tmux Plugin Manager)** - Plugin management
-- **Catppuccin Mocha Theme** - Beautiful color scheme
+- **TokyoNight Theme** - Beautiful color scheme
 - **Vim-Tmux Navigator** - Seamless navigation between Vim and Tmux
 - **Tmux Sensible** - Better default settings
 - **Custom Key Bindings** - Ctrl+Space prefix and intuitive shortcuts
 
 ### Neovim Setup
 - **vim.pack** - Neovim's built-in plugin manager (0.12+)
-- **30+ plugins** - Catppuccin, Snacks (picker/dashboard), blink.cmp, treesitter, LSP, Mason, and more
+- **30+ plugins** - TokyoNight, Snacks (picker/dashboard), blink.cmp, treesitter, LSP, Mason, and more
 - **Latest Version Installation**:
   - **macOS**: Uses `brew install --HEAD neovim` for latest features
   - **Arch Linux**: Installs `neovim-git` from AUR for version 0.12+
@@ -79,14 +79,14 @@ chmod +x install.sh
 - **Tree-sitter** - Syntax highlighting and code navigation for 30+ languages
 
 ### Oh-My-Posh Prompt
-- **Catppuccin Theme** - Beautiful, informative prompt
+- **TokyoNight Theme** - Beautiful, informative prompt (zen-omp layout)
 - **Git Integration** - Branch, status, and commit information
 - **Language Detection** - Automatic programming language indicators
 - **Performance Optimized** - Fast prompt rendering
 
 ### Yazi File Manager
 - **Terminal file manager** with image preview support
-- **Catppuccin Mocha theme** - Consistent look
+- **TokyoNight theme** - Consistent look
 - **Plugins** - lazygit integration, git status, smart-enter, jump-to-char
 - **Tmux passthrough** - Image previews work inside tmux
 
@@ -116,7 +116,7 @@ chmod +x install.sh
 - **tree-sitter CLI** - Parser generator for syntax highlighting
 
 ### Ghostty Terminal (Desktop Only)
-- **Catppuccin Mocha Theme** - Consistent with all other tools
+- **TokyoNight Theme** - Consistent with all other tools
 - **JetBrainsMono Nerd Font** - Ligatures and icons
 - **Semi-transparent Background** - With wallpaper support
 - **SSH Integration** - Warp-like prompt navigation
@@ -124,7 +124,7 @@ chmod +x install.sh
 ### Shell Enhancements
 - **Atuin** - Magical shell history with sync and search
 - **direnv** - Auto-load environment variables per project directory
-- **Git Config** - Delta pager, Catppuccin-themed diffs
+- **Git Config** - Delta pager, TokyoNight-themed diffs
 
 ## System Requirements
 
@@ -376,7 +376,7 @@ dotfiles/
 │   │   └── lua/                # Plugin and core configuration
 │   ├── tmux/
 │   │   ├── tmux.conf           # Tmux configuration
-│   │   └── kanagawa-modules/   # Custom Kanagawa status modules
+│   │   └── scripts/            # Cheatsheet + clipboard capture helpers
 │   ├── oh-my-posh/
 │   │   └── config.omp.yaml     # Oh-My-Posh configuration
 │   ├── atuin/
@@ -386,7 +386,7 @@ dotfiles/
 │   ├── git/
 │   │   └── config              # Git config (delta pager, merge settings)
 │   ├── lazygit/
-│   │   └── config.yml          # Lazygit Catppuccin theme
+│   │   └── config.yml          # Lazygit TokyoNight theme
 │   └── yazi/
 │       ├── yazi.toml           # Yazi configuration
 │       ├── keymap.toml         # Yazi keybindings
@@ -394,7 +394,7 @@ dotfiles/
 │       ├── init.lua            # Yazi init (plugin loading)
 │       ├── package.toml        # Yazi plugin manifest
 │       ├── plugins/            # Yazi plugins (lazygit, git, etc.)
-│       └── flavors/            # Catppuccin Mocha flavor
+│       └── flavors/            # TokyoNight flavor
 ```
 
 ## Contributing
@@ -418,7 +418,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Neovim](https://neovim.io/) - Hyperextensible Vim-based text editor
 - [Oh-My-Posh](https://ohmyposh.dev/) - Cross-shell prompt
 - [Yazi](https://yazi-rs.github.io/) - Terminal file manager
-- [Catppuccin](https://github.com/catppuccin/catppuccin) - Beautiful color schemes
+- [TokyoNight](https://github.com/folke/tokyonight.nvim) - Beautiful color scheme inspired by Tokyo's night skyline
 - [Atuin](https://github.com/atuinsh/atuin) - Magical shell history
 - [delta](https://github.com/dandavison/delta) - Syntax-highlighting pager for git
 - [lazygit](https://github.com/jesseduffield/lazygit) - TUI git client

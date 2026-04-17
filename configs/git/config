@@ -36,7 +36,7 @@
     dark = true
     line-numbers = true
     hyperlinks = true
-    syntax-theme = Catppuccin Mocha
+    syntax-theme = tokyonight_night
 
 [alias]
     unstage = restore --staged

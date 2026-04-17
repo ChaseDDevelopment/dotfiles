@@ -9,22 +9,22 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Catppuccin Mocha palette
+// TokyoNight Night palette
 // ---------------------------------------------------------------------------
 
 var (
-	catBase     = lipgloss.Color("#1e1e2e") // Darkest – full-screen bg
-	catSurface0 = lipgloss.Color("#313244")
-	catOverlay0 = lipgloss.Color("#6c7086")
-	catOverlay1  = lipgloss.Color("#7f849c")
-	catSubtext0  = lipgloss.Color("#a6adc8")
-	catSubtext1  = lipgloss.Color("#bac2de")
-	catText      = lipgloss.Color("#cdd6f4")
-	catSapphire = lipgloss.Color("#74c7ec")
-	catGreen     = lipgloss.Color("#a6e3a1")
-	catYellow    = lipgloss.Color("#f9e2af")
-	catRed       = lipgloss.Color("#f38ba8")
-	catMauve = lipgloss.Color("#cba6f7")
+	catBase     = lipgloss.Color("#1a1b26") // Darkest – full-screen bg
+	catSurface0 = lipgloss.Color("#292e42")
+	catOverlay0 = lipgloss.Color("#545c7e")
+	catOverlay1 = lipgloss.Color("#565f89")
+	catSubtext0 = lipgloss.Color("#9aa5ce")
+	catSubtext1 = lipgloss.Color("#a9b1d6")
+	catText     = lipgloss.Color("#c0caf5")
+	catSapphire = lipgloss.Color("#2ac3de")
+	catGreen    = lipgloss.Color("#9ece6a")
+	catYellow   = lipgloss.Color("#e0af68")
+	catRed      = lipgloss.Color("#f7768e")
+	catMauve    = lipgloss.Color("#bb9af7")
 )
 
 // ---------------------------------------------------------------------------
@@ -32,6 +32,8 @@ var (
 // that child ANSI resets (\x1b[0m) never leak catBase into the panel.
 // Screen-level styles no longer need explicit Background(catBase) because
 // tea.View.BackgroundColor sets the terminal background at the VT level.
+// The `cat*` identifier prefix is historical (palette was originally
+// Catppuccin Mocha) — kept to avoid churn across styles.go/tests.
 // ---------------------------------------------------------------------------
 
 var (

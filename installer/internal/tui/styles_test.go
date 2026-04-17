@@ -216,7 +216,7 @@ func TestRenderBanner_DifferentPlatforms(t *testing.T) {
 	}
 }
 
-func TestCatppuccinColors(t *testing.T) {
+func TestTokyoNightColors(t *testing.T) {
 	t.Parallel()
 
 	// Verify colors are non-nil.

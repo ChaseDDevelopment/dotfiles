@@ -7,6 +7,3 @@ require("full-border"):setup()
 
 -- Git status indicators in file list
 require("git"):setup()
-
--- Starship prompt as header
-require("starship"):setup()
