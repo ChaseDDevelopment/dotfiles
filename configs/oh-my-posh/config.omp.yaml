@@ -41,7 +41,7 @@ blocks:
         style: plain
         foreground: "p:yellow"
         background: transparent
-        template: " {{ if .Venv }}{{ .Venv }} {{ end }}{{ .Full }}"
+        template: "\uE73C  {{ if .Venv }}{{ .Venv }} {{ end }}{{ .Full }}"
         cache:
           duration: 24h
           strategy: folder
@@ -53,7 +53,7 @@ blocks:
         style: plain
         foreground: "p:green"
         background: transparent
-        template: " {{ if .PackageManagerIcon }}{{ .PackageManagerIcon }} {{ end }}{{ .Full }}{{ if .Mismatch }} !={{ .Expected }}{{ end }}"
+        template: "\uE718  {{ if .PackageManagerIcon }}{{ .PackageManagerIcon }} {{ end }}{{ .Full }}{{ if .Mismatch }} !={{ .Expected }}{{ end }}"
         cache:
           duration: 24h
           strategy: folder
@@ -65,7 +65,7 @@ blocks:
         style: plain
         foreground: "p:cyan"
         background: transparent
-        template: " {{ .Full }}"
+        template: "\uE627  {{ .Full }}"
         cache:
           duration: 24h
           strategy: folder
@@ -77,7 +77,7 @@ blocks:
         style: plain
         foreground: "p:red"
         background: transparent
-        template: " {{ .Full }}"
+        template: "\uE7A8  {{ .Full }}"
         cache:
           duration: 24h
           strategy: folder
@@ -88,7 +88,7 @@ blocks:
         style: plain
         foreground: "p:magenta"
         background: transparent
-        template: " {{ if .Unsupported }}?{{ else }}{{ .Full }}{{ end }}"
+        template: "\uE77F  {{ if .Unsupported }}?{{ else }}{{ .Full }}{{ end }}"
         cache:
           duration: 24h
           strategy: folder
