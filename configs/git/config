@@ -54,3 +54,6 @@
 
 [merge]
     conflictstyle = zdiff3
+[user]
+	email = Chase@ChaseDDevelopment.tech
+	name = ChaseDDevelopment
