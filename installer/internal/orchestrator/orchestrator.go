@@ -42,6 +42,13 @@ type BuildConfig struct {
 	CleanBackup      bool
 	SelectedBackup   string
 	SelectedComps    []string // nil = all
+	// SkipDevTools, when true, drops tools flagged DevOnly in the
+	// registry (go, gopls, dotnet, uv, ruff, bun). Set by the TUI
+	// when the user disables "Install dev tools" on the Options
+	// screen. Defaults to false so the zero-value preserves today's
+	// behavior for callers that don't know about the toggle (tests,
+	// Doctor, Update).
+	SkipDevTools     bool
 	Version          string   // build version for self-update
 	// Failures collects best-effort post-install warnings from
 	// component setup hooks. Shared across all tasks in one run so
@@ -61,6 +68,19 @@ type BuildResult struct {
 	// tools and components were inspected, not just the totals.
 	AlreadyInstalledNames  []string
 	AlreadyConfiguredNames []string
+}
+
+// shouldInstallTool reports whether a tool should be considered for
+// this run: it must pass the platform/desktop gate AND not be
+// skipped as a dev-only SDK when SkipDevTools is set.
+func (bc *BuildConfig) shouldInstallTool(t *registry.Tool, plat *platform.Platform) bool {
+	if !registry.ShouldInstall(t, plat) {
+		return false
+	}
+	if bc.SkipDevTools && t.DevOnly {
+		return false
+	}
+	return true
 }
 
 // isComponentSelected checks whether a component name appears in
@@ -120,7 +140,7 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		// Pass 1: identify already-installed tools.
 		installedSet := map[string]bool{}
 		for _, t := range tools {
-			if !registry.ShouldInstall(&t, plat) {
+			if !bc.shouldInstallTool(&t, plat) {
 				installedSet[t.Command] = true
 				continue
 			}
@@ -139,7 +159,7 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		bs := &batchState{}
 
 		for _, t := range tools {
-			if !registry.ShouldInstall(&t, plat) {
+			if !bc.shouldInstallTool(&t, plat) {
 				continue
 			}
 			status := registry.CheckInstalled(&t)
@@ -613,7 +633,7 @@ func BuildDoctorTasks(bc *BuildConfig) BuildResult {
 	var tasks []engine.Task
 
 	for _, t := range registry.AllTools() {
-		if !registry.ShouldInstall(&t, bc.Platform) {
+		if !bc.shouldInstallTool(&t, bc.Platform) {
 			continue
 		}
 		t := t

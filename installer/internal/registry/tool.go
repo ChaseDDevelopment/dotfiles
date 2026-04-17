@@ -73,6 +73,11 @@ type Tool struct {
 	// WAYLAND_DISPLAY). Always true on macOS.
 	DesktopOnly bool
 
+	// DevOnly marks a tool as a language SDK / dev-tool. Skipped
+	// when the user disables "Install dev tools" in the Options
+	// menu, so server-only installs can avoid hundred-MB toolchains.
+	DevOnly bool
+
 	// MinVersion is the minimum required version (e.g. "0.12.0").
 	// When set, the installer treats the tool as "not installed" if
 	// the detected version is older than this threshold.

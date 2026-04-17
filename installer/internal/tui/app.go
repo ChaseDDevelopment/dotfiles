@@ -54,6 +54,7 @@ type AppConfig struct {
 	DryRun             bool
 	SkipPackages       bool
 	SkipUpdate         bool
+	SkipDevTools       bool
 	Verbose            bool
 	CleanBackup        bool
 	ForceReinstall     bool
@@ -355,6 +356,9 @@ func (m AppModel) updateOptionsMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config.Runner.Verbose = m.config.Verbose
 			m.config.CleanBackup = m.options.optionEnabled("clean_backup")
 			m.config.ForceReinstall = m.options.optionEnabled("force_reinstall")
+			// install_dev_tools defaults on; SkipDevTools is its inverse
+			// so the zero-value of BuildConfig keeps today's behavior.
+			m.config.SkipDevTools = !m.options.optionEnabled("install_dev_tools")
 
 			if m.config.Mode == ModeCustomInstall {
 				m.phase = PhaseComponentPicker
@@ -1011,6 +1015,7 @@ func (m *AppModel) buildConfig() *orchestrator.BuildConfig {
 		ForceReinstall: m.config.ForceReinstall,
 		SkipPackages:   m.config.SkipPackages,
 		SkipUpdate:     m.config.SkipUpdate,
+		SkipDevTools:   m.config.SkipDevTools,
 		CleanBackup:    m.config.CleanBackup,
 		SelectedBackup: m.config.SelectedBackup,
 		SelectedComps:  comps,

@@ -442,6 +442,47 @@ func TestBuildInstallTasksCleanBackupDryRun(t *testing.T) {
 	}
 }
 
+func TestBuildInstallTasksSkipDevTools(t *testing.T) {
+	t.Parallel()
+
+	// Tools tagged DevOnly in the registry. If this list drifts from
+	// dev_tools.go the test should fail loudly — that's the signal
+	// that the registry's DevOnly contract and the Options-menu
+	// toggle have gotten out of sync.
+	devOnlyNames := map[string]bool{
+		"uv":     true,
+		"ruff":   true,
+		"bun":    true,
+		"dotnet": true,
+		"go":     true,
+		"gopls":  true,
+	}
+
+	bc := newTestBuildConfig(t)
+	bc.SkipDevTools = true
+
+	result := BuildInstallTasks(bc)
+
+	for _, row := range result.PlanRows {
+		if devOnlyNames[row.Component] {
+			t.Errorf(
+				"DevOnly tool %q should be absent from plan rows "+
+					"when SkipDevTools is set",
+				row.Component,
+			)
+		}
+	}
+	for _, n := range result.AlreadyInstalledNames {
+		if devOnlyNames[n] {
+			t.Errorf(
+				"DevOnly tool %q should be absent from "+
+					"AlreadyInstalledNames when SkipDevTools is set",
+				n,
+			)
+		}
+	}
+}
+
 func TestBuildInstallTasksPlanRows(t *testing.T) {
 	t.Parallel()
 	bc := newTestBuildConfig(t)

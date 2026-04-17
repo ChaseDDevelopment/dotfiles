@@ -95,6 +95,7 @@ func devTools() []Tool {
 		// uv — Python package manager
 		{
 			Name: "uv", Command: "uv", Description: "Fast Python package manager",
+			DevOnly: true,
 			Strategies: []InstallStrategy{
 				{Method: MethodScript, Script: &ScriptConfig{
 					URL:             "https://astral.sh/uv/install.sh",
@@ -105,6 +106,7 @@ func devTools() []Tool {
 		// ruff — Python linter/formatter
 		{
 			Name: "ruff", Command: "ruff", Description: "Python linter and formatter",
+			DevOnly:   true,
 			DependsOn: []string{"uv"},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
@@ -115,6 +117,7 @@ func devTools() []Tool {
 		// Bun — JavaScript runtime
 		{
 			Name: "bun", Command: "bun", Description: "Fast JavaScript runtime",
+			DevOnly: true,
 			Strategies: []InstallStrategy{
 				{Method: MethodScript, Script: &ScriptConfig{
 					URL:             "https://bun.sh/install",
@@ -126,6 +129,7 @@ func devTools() []Tool {
 		// .NET SDK
 		{
 			Name: "dotnet", Command: "dotnet", Description: ".NET SDK",
+			DevOnly: true,
 			Strategies: []InstallStrategy{
 				// Homebrew: `dotnet-sdk` is a cask; the formula that ships the full SDK is just `dotnet`.
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "dotnet"},
@@ -182,6 +186,7 @@ func devTools() []Tool {
 		// Go
 		{
 			Name: "go", Command: "go", Description: "Go programming language",
+			DevOnly: true,
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "go"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "go"},
@@ -192,6 +197,7 @@ func devTools() []Tool {
 		// gopls — Go language server (LSP)
 		{
 			Name: "gopls", Command: "gopls", Description: "Go language server (LSP)",
+			DevOnly:   true,
 			DependsOn: []string{"go"},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {

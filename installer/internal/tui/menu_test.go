@@ -198,10 +198,15 @@ func TestNewOptionsMenu(t *testing.T) {
 		t.Errorf("cursor should start at 0, got %d", m.cursor)
 	}
 
-	// All options should start disabled.
+	// All options start disabled EXCEPT install_dev_tools, which
+	// defaults on so today's "install everything" behavior holds
+	// and only server operators flip it off.
+	defaultsOn := map[string]bool{"install_dev_tools": true}
 	for _, opt := range m.options {
-		if opt.enabled {
-			t.Errorf("option %q should start disabled", opt.key)
+		want := defaultsOn[opt.key]
+		if opt.enabled != want {
+			t.Errorf("option %q: want enabled=%v, got %v",
+				opt.key, want, opt.enabled)
 		}
 	}
 }

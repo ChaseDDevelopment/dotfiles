@@ -133,6 +133,10 @@ func newOptionsMenu() optionsMenuModel {
 			{key: "force_reinstall", label: "Force reinstall"},
 			{key: "verbose", label: "Verbose output"},
 			{key: "clean_backup", label: "Clean backup after"},
+			// Defaults on: server operators explicitly flip this off
+			// to skip Go/.NET/uv/Bun on machines that only need the
+			// terminal + nvim for logs/yaml/docker.
+			{key: "install_dev_tools", label: "Install dev tools (Go, .NET, uv, Bun)", enabled: true},
 		},
 	}
 }
