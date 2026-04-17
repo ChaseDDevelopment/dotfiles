@@ -6,7 +6,7 @@
 # TokyoNight Night palette
 BLUE='\033[38;2;122;162;247m'    # #7aa2f7
 MAUVE='\033[38;2;187;154;247m'   # #bb9af7
-PEACH='\033[38;2;255;158;100m'   # #ff9e64
+GREEN='\033[38;2;158;206;106m'   # #9ece6a
 TEXT='\033[38;2;192;202;245m'    # #c0caf5
 SUBTEXT='\033[38;2;169;177;214m' # #a9b1d6
 SURFACE='\033[38;2;41;46;66m'    # #292e42
@@ -30,9 +30,9 @@ header() {
 }
 
 row() {
-    printf "  ${PEACH}%-8s${RESET}${TEXT}%-$((C1 - 8))s${RESET}" "$1" "$2"
-    printf "${PEACH}%-8s${RESET}${TEXT}%-$((C2 - 8))s${RESET}" "$3" "$4"
-    printf "${PEACH}%-8s${RESET}${TEXT}%-$((C3 - 8))s${RESET}" "$5" "$6"
+    printf "  ${GREEN}%-8s${RESET}${TEXT}%-$((C1 - 8))s${RESET}" "$1" "$2"
+    printf "${GREEN}%-8s${RESET}${TEXT}%-$((C2 - 8))s${RESET}" "$3" "$4"
+    printf "${GREEN}%-8s${RESET}${TEXT}%-$((C3 - 8))s${RESET}" "$5" "$6"
     printf '\n'
 }
 
@@ -42,7 +42,7 @@ row() {
     printf "${BLUE}  │                            Tmux Keybinding Cheatsheet                            │${RESET}\n"
     printf "${BLUE}  ╰──────────────────────────────────────────────────────────────────────────────────╯${RESET}\n"
     printf '\n'
-    printf "  ${SUBTEXT}prefix = ${PEACH}C-Space${RESET}          ${SUBTEXT}All bindings below require prefix unless noted${RESET}\n"
+    printf "  ${SUBTEXT}prefix = ${GREEN}C-Space${RESET}          ${SUBTEXT}All bindings below require prefix unless noted${RESET}\n"
     printf '\n'
 
     sep
