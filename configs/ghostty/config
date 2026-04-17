@@ -7,7 +7,7 @@ font-size = 14
 font-thicken = true
 
 # Theme
-theme = Kanagawa Wave
+theme = TokyoNight
 
 # Window
 window-padding-x = 10
