@@ -129,12 +129,30 @@ zstyle ':fzf-tab:*' fzf-command fzf
 _cached_init() {
     local name="$1" binary="$2"
     shift 2
+    local -a watch=()
+    while [[ "$1" == "--watch" ]]; do
+        watch+=("$2")
+        shift 2
+    done
     local cache="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/${name}.zsh"
     local rc="${ZDOTDIR:-$HOME}/.zshrc"
     [[ -d "${cache:h}" ]] || mkdir -p "${cache:h}"
+    local stale=0
     if [[ ! -f "$cache" ]] \
         || [[ "$binary" -nt "$cache" ]] \
         || [[ "$rc" -nt "$cache" ]]; then
+        stale=1
+    fi
+    if (( ! stale )); then
+        local f
+        for f in "${watch[@]}"; do
+            if [[ -e "$f" && "$f" -nt "$cache" ]]; then
+                stale=1
+                break
+            fi
+        done
+    fi
+    if (( stale )); then
         "$@" > "$cache" 2>/dev/null
     fi
     source "$cache"
@@ -229,9 +247,15 @@ done
 # ----------------------------------------------------------------------------
 # Oh-My-Posh Prompt (MUST be last to properly hook into prompt)
 # ----------------------------------------------------------------------------
+# NOTE: oh-my-posh init is NOT wrapped in _cached_init. Each `oh-my-posh init`
+# generates a fresh POSH_SESSION_ID and stores the parsed config in the
+# per-session cache file (~/.cache/oh-my-posh/zsh.<SESSION_ID>.omp.cache).
+# Caching the wrapper pins one UUID across every shell, which causes the
+# shared session cache to eventually drop the CONFIG entry — subsequent
+# prompts then fall back to oh-my-posh's default theme. The init call only
+# costs ~10ms, so evaluate it inline instead.
 if (( $+commands[oh-my-posh] )); then
-    _cached_init "oh-my-posh" "${commands[oh-my-posh]}" \
-        oh-my-posh init zsh --config "$HOME/.config/oh-my-posh/config.omp.yaml"
+    eval "$(oh-my-posh init zsh --config "$HOME/.config/oh-my-posh/config.omp.yaml")"
 fi
 
 # ----------------------------------------------------------------------------
