@@ -37,11 +37,70 @@ blocks:
   - type: rprompt
     overflow: hidden
     segments:
+      - type: python
+        style: plain
+        foreground: "p:yellow"
+        background: transparent
+        template: " {{ if .Venv }}{{ .Venv }} {{ end }}{{ .Full }}"
+        cache:
+          duration: 24h
+          strategy: folder
+        properties:
+          display_mode: context
+          fetch_version: true
+          fetch_virtual_env: true
+      - type: node
+        style: plain
+        foreground: "p:green"
+        background: transparent
+        template: " {{ if .PackageManagerIcon }}{{ .PackageManagerIcon }} {{ end }}{{ .Full }}{{ if .Mismatch }} !={{ .Expected }}{{ end }}"
+        cache:
+          duration: 24h
+          strategy: folder
+        properties:
+          display_mode: context
+          fetch_version: true
+          fetch_package_manager: true
+      - type: go
+        style: plain
+        foreground: "p:cyan"
+        background: transparent
+        template: " {{ .Full }}"
+        cache:
+          duration: 24h
+          strategy: folder
+        properties:
+          display_mode: context
+          fetch_version: true
+          parse_mod_file: true
+      - type: rust
+        style: plain
+        foreground: "p:red"
+        background: transparent
+        template: " {{ .Full }}"
+        cache:
+          duration: 24h
+          strategy: folder
+        properties:
+          display_mode: context
+          fetch_version: true
+      - type: dotnet
+        style: plain
+        foreground: "p:magenta"
+        background: transparent
+        template: " {{ if .Unsupported }}?{{ else }}{{ .Full }}{{ end }}"
+        cache:
+          duration: 24h
+          strategy: folder
+        properties:
+          display_mode: context
+          fetch_version: true
+          fetch_sdk_version: true
       - type: executiontime
         style: plain
         foreground: "p:yellow"
         background: transparent
-        template: "{{ .FormattedMs }}"
+        template: " {{ .FormattedMs }}"
         properties:
           threshold: 5000
 
