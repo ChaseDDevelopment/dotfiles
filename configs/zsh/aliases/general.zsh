@@ -22,12 +22,29 @@ else
 fi
 
 # bat / batcat (Ubuntu/Debian names it batcat due to package conflict)
-# -pp = plain (no line numbers) + no paging (copy-paste friendly)
-if (( $+commands[bat] )); then
-    alias cat='bat -pp'
-elif (( $+commands[batcat] )); then
-    alias cat='batcat -pp'
+# -pp = plain (no line numbers) + no paging (copy-paste friendly).
+#
+# .log files route through tailspin instead — bat's `log` grammar
+# collapses every timestamp to `constant.numeric`, which paints the
+# whole file in TokyoNight orange. tailspin has dedicated highlighters
+# for dates, severities, paths, k=v, etc., so logs look varied instead.
+if (( $+commands[batcat] && ! $+commands[bat] )); then
     alias bat='batcat'
+fi
+if (( $+commands[bat] || $+commands[batcat] )); then
+    cat() {
+        local _bat
+        (( $+commands[bat] )) && _bat=bat || _bat=batcat
+        if (( $+commands[tspin] )); then
+            local arg
+            for arg in "$@"; do
+                case $arg in
+                    *.log) tspin -p "$@"; return $? ;;
+                esac
+            done
+        fi
+        command $_bat -pp "$@"
+    }
 fi
 
 if (( $+commands[rg] )); then
