@@ -127,7 +127,8 @@ func devTools() []Tool {
 		{
 			Name: "dotnet", Command: "dotnet", Description: ".NET SDK",
 			Strategies: []InstallStrategy{
-				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "dotnet-sdk"},
+				// Homebrew: `dotnet-sdk` is a cask; the formula that ships the full SDK is just `dotnet`.
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "dotnet"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "dotnet-sdk"},
 				{Method: MethodScript, Script: &ScriptConfig{
 					URL:  "https://dot.net/v1/dotnet-install.sh",
@@ -186,6 +187,16 @@ func devTools() []Tool {
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "go"},
 				{Managers: []string{"apt"}, Method: MethodPackageManager, Package: "golang"},
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "golang"},
+			},
+		},
+		// gopls — Go language server (LSP)
+		{
+			Name: "gopls", Command: "gopls", Description: "Go language server (LSP)",
+			DependsOn: []string{"go"},
+			Strategies: []InstallStrategy{
+				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+					return ic.Runner.Run(ctx, "go", "install", "golang.org/x/tools/gopls@latest")
+				}},
 			},
 		},
 	}

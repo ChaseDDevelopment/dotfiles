@@ -240,7 +240,7 @@ func updateDotnet(ctx context.Context, runner *executor.Runner, mgrName string) 
 	}
 	switch mgrName {
 	case "brew":
-		return runner.Run(ctx, "brew", "upgrade", "dotnet-sdk")
+		return runner.Run(ctx, "brew", "upgrade", "dotnet")
 	case "pacman":
 		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "dotnet-sdk")
 	}

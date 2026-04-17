@@ -295,6 +295,7 @@ func augmentPath() {
 		filepath.Join(home, ".bun", "bin"),
 		filepath.Join(home, ".atuin", "bin"),
 		filepath.Join(home, ".dotnet"),
+		filepath.Join(home, "go", "bin"),
 		"/usr/local/go/bin",
 	}
 	path := os.Getenv("PATH")

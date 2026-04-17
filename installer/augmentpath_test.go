@@ -27,6 +27,7 @@ func TestAugmentPathAddsNonexistentDirs(t *testing.T) {
 		filepath.Join(home, ".bun", "bin"),
 		filepath.Join(home, ".atuin", "bin"),
 		filepath.Join(home, ".dotnet"),
+		filepath.Join(home, "go", "bin"),
 		"/usr/local/go/bin",
 	}
 	for _, d := range want {

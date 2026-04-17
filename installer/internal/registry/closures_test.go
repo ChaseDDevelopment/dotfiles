@@ -57,7 +57,7 @@ func setupClosureEnv(t *testing.T, mgrName string) (*InstallContext, string) {
 		"brew", "pacman", "yay", "paru", "sudo", "cargo", "curl",
 		"tar", "bash", "sh", "git", "dpkg", "tree-sitter", "uv",
 		"unzip", "fc-cache", "ln", "chmod", "install", "dd",
-		"dnf", "apt-get", "nala", "tee",
+		"dnf", "apt-get", "nala", "tee", "go",
 	} {
 		stubBin(t, bin, name, "CLOSURE_LOG")
 	}
@@ -167,6 +167,12 @@ func TestInlineCustomClosures_InvokeExpectedCommands(t *testing.T) {
 			findFn:   pickCustom("ruff", "brew"),
 			wantArgs: "uv tool install ruff",
 		},
+		{
+			tool:     "gopls",
+			mgr:      "brew", // no Managers filter, matches any
+			findFn:   pickCustom("gopls", "brew"),
+			wantArgs: "go install golang.org/x/tools/gopls@latest",
+		},
 	}
 
 	toolsByCat := [][]Tool{cliTools(), devTools(), officialInstallerTools()}
@@ -244,6 +250,7 @@ func TestAllCatalogCustomFuncs_AreReachable(t *testing.T) {
 		"ghostty":   {},
 		"nerd-font": {},
 		"ruff":      {},
+		"gopls":     {},
 	}
 
 	for _, cat := range [][]Tool{

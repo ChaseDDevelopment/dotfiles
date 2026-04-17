@@ -153,6 +153,8 @@ func TestUpdatePackageHelpers(t *testing.T) {
 printf '%%s %%s\n' %q "$*" >> "$UPDATE_LOG"
 `, name))
 	}
+	// updateDotnet early-returns unless `dotnet` is on PATH; provide a stub so the brew branch is exercised on hosts where dotnet isn't installed.
+	writeScript(t, fakebin, "dotnet", "#!/bin/sh\nexit 0\n")
 
 	if err := updateOhMyPosh(context.Background(), runner, &testPkgMgr{name: "brew"}); err != nil {
 		t.Fatalf("updateOhMyPosh brew: %v", err)
@@ -172,7 +174,7 @@ printf '%%s %%s\n' %q "$*" >> "$UPDATE_LOG"
 	for _, want := range []string{
 		"brew upgrade oh-my-posh",
 		"cargo install atuin",
-		"brew upgrade dotnet-sdk",
+		"brew upgrade dotnet",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("command log missing %q:\n%s", want, got)
@@ -230,6 +232,8 @@ exit 0
 printf 'bash %s\n' "$*" >> "$UPDATE_LOG"
 exit 0
 `)
+	// updateDotnet early-returns unless `dotnet` is on PATH; provide a stub so the script-fallback branch is exercised on hosts where dotnet isn't installed.
+	writeScript(t, fakebin, "dotnet", "#!/bin/sh\nexit 0\n")
 
 	if err := updateOhMyPosh(context.Background(), runner, &testPkgMgr{name: "pacman"}); err != nil {
 		t.Fatalf("updateOhMyPosh pacman (script fallback): %v", err)
