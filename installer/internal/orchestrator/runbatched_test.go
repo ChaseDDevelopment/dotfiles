@@ -224,7 +224,7 @@ func TestRunBatchedInstall(t *testing.T) {
 
 			err := runBatchedInstall(
 				context.Background(), tool, entry, ic, plat, bs,
-				[]string{"fail"}, st,
+				[]string{"fail"}, st, nil,
 			)
 
 			// Error expectation.
@@ -313,7 +313,7 @@ func TestRunBatchedInstallCleanSkipsFallback(t *testing.T) {
 
 	if err := runBatchedInstall(
 		context.Background(), tool, entry, ic, plat, bs,
-		[]string{"ok"}, st,
+		[]string{"ok"}, st, nil,
 	); err != nil {
 		t.Fatalf("runBatchedInstall: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestBatchStateRunOnceOnlyRunsOnce(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			bs.runOnce(context.Background(), mgr, []string{"a", "b", "c"})
+			bs.runOnce(context.Background(), mgr, []string{"a", "b", "c"}, nil, nil)
 		}()
 	}
 	close(start)
@@ -375,7 +375,7 @@ func TestBatchStateRunOncePartialFailurePopulatesMap(t *testing.T) {
 		},
 	}
 	var bs batchState
-	bs.runOnce(context.Background(), mgr, []string{"a", "b", "c", "d"})
+	bs.runOnce(context.Background(), mgr, []string{"a", "b", "c", "d"}, nil, nil)
 
 	if bs.err == nil {
 		t.Fatal("expected bs.err to hold the BatchFailure")
@@ -415,7 +415,7 @@ func TestBatchStateRunOnceTotalFailureNilSentinel(t *testing.T) {
 		installReturn: errors.New("connection refused"),
 	}
 	var bs batchState
-	bs.runOnce(context.Background(), mgr, []string{"x", "y"})
+	bs.runOnce(context.Background(), mgr, []string{"x", "y"}, nil, nil)
 
 	if bs.err == nil {
 		t.Fatal("expected bs.err set for raw error")
@@ -435,7 +435,7 @@ func TestBatchStateRunOnceTotalFailureNilSentinel(t *testing.T) {
 func TestBatchStateRunOnceEmptyGenericsNoOp(t *testing.T) {
 	mgr := &routedPkgMgr{name: "apt"}
 	var bs batchState
-	bs.runOnce(context.Background(), mgr, nil)
+	bs.runOnce(context.Background(), mgr, nil, nil, nil)
 
 	if got := int(mgr.installCalls32.Load()); got != 0 {
 		t.Fatalf(

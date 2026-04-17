@@ -111,11 +111,16 @@ func (a *Apt) installArgs(pkgs []string) []string {
 // grepping for failures harder. DEBIAN_FRONTEND=noninteractive is
 // a belt-and-braces guard against prompts that -y doesn't cover
 // (e.g. restart-services dialogs from some packages).
+// NALA_FANCY=0 forces nala into plain line-oriented output so the
+// orchestrator's batch progress tap can match dpkg's
+// `Setting up <name>` completion markers without chasing ANSI
+// cursor games. Harmless when the active command is plain apt.
 func aptEnv() []string {
 	return []string{
 		"TERM=dumb",
 		"NO_COLOR=1",
 		"DEBIAN_FRONTEND=noninteractive",
+		"NALA_FANCY=0",
 	}
 }
 

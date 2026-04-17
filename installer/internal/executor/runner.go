@@ -36,8 +36,17 @@ type Runner struct {
 	// periodically so users know some output is missing — silent
 	// drops used to look identical to a quiet install.
 	droppedLines int
-	mu           sync.Mutex
-	maxRecent    int
+	// progressTap receives every stdout/stderr line BEFORE the Verbose
+	// filter, so consumers (e.g. the orchestrator parsing brew's
+	// `==> Pouring <name>` markers during a batch install) can
+	// observe progress even when verbose mode is off. Guarded by
+	// tapMu because Runner goroutines mutate it mid-install;
+	// separate from mu to avoid holding the main lock during a
+	// per-line callback that could fan out further work.
+	progressTap func(line string)
+	tapMu       sync.RWMutex
+	mu          sync.Mutex
+	maxRecent   int
 }
 
 // NewRunner creates a Runner attached to the given log file.
@@ -52,6 +61,32 @@ func (r *Runner) EnableVerboseChannel(bufSize int) {
 	defer r.mu.Unlock()
 	if r.verboseCh == nil {
 		r.verboseCh = make(chan string, bufSize)
+	}
+}
+
+// SetProgressTap installs (or clears, when tap is nil) a per-line
+// callback invoked for every stdout/stderr line captured by the
+// executor, BEFORE the Verbose filter. Intended for short-lived
+// parsers wired around a single shell invocation (e.g. the
+// orchestrator tapping brew's stdout during a batch install to
+// flip individual tools to done as `==> Pouring <name>` lines
+// stream in). The callback runs on the scanner goroutine and MUST
+// NOT block — do any fan-out via a buffered channel.
+func (r *Runner) SetProgressTap(tap func(line string)) {
+	r.tapMu.Lock()
+	r.progressTap = tap
+	r.tapMu.Unlock()
+}
+
+// emitProgress invokes the active progress tap, if any. Read side
+// of tapMu is cheap so scanner goroutines that never see a tap
+// installed pay only an RLock/RUnlock per line.
+func (r *Runner) emitProgress(line string) {
+	r.tapMu.RLock()
+	tap := r.progressTap
+	r.tapMu.RUnlock()
+	if tap != nil {
+		tap(line)
 	}
 }
 
@@ -229,8 +264,13 @@ func (r *Runner) runCmd(
 			// Raw bytes into the log so users can always recover
 			// original output with ANSI intact.
 			r.Log.WriteRaw(append(append([]byte{}, line...), '\n'))
-			if r.Verbose {
-				if cleaned := cleanLine(string(line)); cleaned != "" {
+			// Fan cleaned lines out to the progress tap regardless of
+			// Verbose — parsers must see brew/apt progress markers
+			// even on non-verbose runs so the grid stays accurate.
+			cleaned := cleanLine(string(line))
+			if cleaned != "" {
+				r.emitProgress(cleaned)
+				if r.Verbose {
 					r.EmitVerbose(cleaned)
 				}
 			}

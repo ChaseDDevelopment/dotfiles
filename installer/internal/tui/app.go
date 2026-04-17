@@ -464,6 +464,24 @@ func (m AppModel) updateInstalling(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progress.markSkipped(msg.ID, msg.Label, msg.Reason)
 		return m, listenCmd(m.eventCh)
 
+	case engine.BatchProgressMsg:
+		// One item inside a shared package-manager batch finished
+		// (e.g. brew `==> Pouring ripgrep --`). Flip it to done so
+		// the grid advances during the batch instead of freezing on
+		// whichever task won the resource race. The owning task's
+		// own TaskDoneMsg fires shortly after when its Run closure
+		// runs its post-install — markDone is idempotent so the
+		// second call won't double-count in the summary.
+		if msg.Label != "" {
+			m.progress.labelByID[msg.ID] = msg.Label
+		}
+		m.progress.markDone(msg.ID, nil)
+		name := m.progress.nameForID(msg.ID)
+		if start, ok := m.summary.startTimes[name]; ok {
+			m.summary.durations[name] = time.Since(start)
+		}
+		return m, listenCmd(m.eventCh)
+
 	case engine.AllDoneMsg:
 		m.summary.steps = m.progress.steps
 		m.summary.endTime = time.Now()
@@ -662,6 +680,16 @@ func (m AppModel) updateFailurePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, listenCmd(m.eventCh)
 	case engine.TaskSkippedMsg:
 		m.progress.markSkipped(msg.ID, msg.Label, msg.Reason)
+		return m, listenCmd(m.eventCh)
+	case engine.BatchProgressMsg:
+		if msg.Label != "" {
+			m.progress.labelByID[msg.ID] = msg.Label
+		}
+		m.progress.markDone(msg.ID, nil)
+		name := m.progress.nameForID(msg.ID)
+		if start, ok := m.summary.startTimes[name]; ok {
+			m.summary.durations[name] = time.Since(start)
+		}
 		return m, listenCmd(m.eventCh)
 	case engine.AllDoneMsg:
 		// Engine finished while user is deciding. Auto-transition to

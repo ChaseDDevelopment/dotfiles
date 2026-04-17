@@ -111,7 +111,14 @@ func (m progressModel) Init() tea.Cmd {
 	return m.spinner.Tick
 }
 
-// markActive is called when an engine task starts running.
+// markActive is called when an engine task starts running. It is
+// idempotent: (1) re-activating an already-active tool is a no-op
+// so the active list never contains duplicate entries for one ID;
+// (2) a tool that already reached a terminal status (done/failed)
+// is NOT downgraded back to active — this matters for the batch
+// fanout path in Part B, where a brew `==> Pouring <name>` can flip
+// a tool to done before its own engine task eventually fires its
+// TaskStartedMsg (which would otherwise reset the grid entry).
 func (m *progressModel) markActive(id, label string) {
 	name := stripLabelPrefix(label)
 	m.labelByID[id] = name
@@ -119,13 +126,31 @@ func (m *progressModel) markActive(id, label string) {
 		m.toolNames = append(m.toolNames, name)
 		m.totalTools = len(m.toolNames)
 	}
+	switch m.toolStatuses[name] {
+	case statusDone, statusFailed, statusSkipped:
+		return
+	}
 	m.toolStatuses[name] = statusActive
+	for _, a := range m.active {
+		if a.id == id {
+			return
+		}
+	}
 	m.active = append(m.active, activeTask{id: id, label: label})
 }
 
-// markDone is called when an engine task finishes.
+// markDone is called when an engine task finishes. It is idempotent:
+// a second call for a tool already in a terminal state is a no-op,
+// which prevents the summary screen from double-counting when a
+// brew `==> Pouring` progress event and the peer task's own
+// TaskDoneMsg both report completion for the same tool.
 func (m *progressModel) markDone(id string, err error) {
 	name := m.nameForID(id)
+	switch m.toolStatuses[name] {
+	case statusDone, statusFailed, statusSkipped:
+		m.removeActive(id)
+		return
+	}
 	action := "install"
 	switch {
 	case strings.HasPrefix(id, "setup-"):

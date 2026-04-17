@@ -140,6 +140,22 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 		var mu sync.Mutex
 		var wg sync.WaitGroup
 
+		// Tracks which task IDs have had TaskStartedMsg emitted. Every
+		// ID is announced at most once, whether directly (its own
+		// goroutine starting) or via a BatchPeers fanout from another
+		// task in the same bucket. Keyed by task ID, guarded by mu.
+		startedAnnounced := make(map[string]bool)
+		announceStarted := func(id, label string) {
+			mu.Lock()
+			if startedAnnounced[id] {
+				mu.Unlock()
+				return
+			}
+			startedAnnounced[id] = true
+			mu.Unlock()
+			send(ctx, out, TaskStartedMsg{ID: id, Label: label})
+		}
+
 		// readyCh feeds tasks that have zero remaining dependencies.
 		readyCh := make(chan string, len(tasks))
 
@@ -258,7 +274,19 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 						state[t.ID] = Running
 						mu.Unlock()
 
-						send(ctx, out, TaskStartedMsg{ID: t.ID, Label: t.Label})
+						announceStarted(t.ID, t.Label)
+						// Fanning out to BatchPeers BEFORE running the
+						// actual install ensures the UI reflects that
+						// every tool in a shared pkgmgr invocation
+						// (one `brew install a b c …`) is active from
+						// the moment the shared command begins — not
+						// just the one task that happened to win the
+						// resource semaphore.
+						for _, peerID := range t.BatchPeers {
+							if peer, ok := byID[peerID]; ok {
+								announceStarted(peer.ID, peer.Label)
+							}
+						}
 
 						// Run with timeout. Per-task Timeout wins; fall
 						// back to the package default for anything that
@@ -268,6 +296,14 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 							timeout = DefaultTaskTimeout
 						}
 						tCtx, cancel := context.WithTimeout(ctx, timeout)
+						// Expose a channel-aware emitter so the Run
+						// closure can send BatchProgressMsg (and other
+						// custom events) through the same out channel
+						// the scheduler uses. Re-using send() keeps
+						// cancellation semantics consistent.
+						tCtx = WithEmitter(tCtx, func(ev Event) {
+							send(ctx, out, ev)
+						})
 						err := t.Run(tCtx)
 						// Surface timeouts with a human-readable label so the
 						// TUI doesn't just show the generic "signal: killed"

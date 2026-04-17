@@ -190,6 +190,37 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			}
 		}
 
+		// Collect the task IDs of every bucket member so each Task
+		// in the bucket can advertise the *others* as BatchPeers.
+		// This lets the scheduler announce the full bucket as active
+		// the moment the shared pkgmgr invocation starts, rather
+		// than pinning the grid to whichever task happened to win
+		// the resource semaphore.
+		bucketIDs := make([]string, 0, len(bucket))
+		for _, e := range bucket {
+			bucketIDs = append(bucketIDs, e.tool.Command)
+		}
+
+		// Build manager-native name → task ID lookup for the batch
+		// progress tap. Each bucket entry's generic package may map
+		// to one or more concrete manager names (e.g. brew nodejs →
+		// "node"); we record every mapped name so brew's
+		// `==> Pouring node` marker resolves back to the nodejs
+		// task. Labels are captured too so BatchProgressMsg carries
+		// the friendly name instead of re-deriving from the task ID.
+		nameToTaskID := map[string]string{}
+		labelByTaskID := map[string]string{}
+		for _, e := range bucket {
+			taskID := e.tool.Command
+			labelByTaskID[taskID] = e.tool.Name
+			for _, mapped := range mgr.MapName(e.genericPkg) {
+				if _, already := nameToTaskID[mapped]; !already {
+					nameToTaskID[mapped] = taskID
+				}
+			}
+		}
+		batchMatcher := progressMatchers[mgrName]
+
 		// Dependency injection: tools that touch dpkg must wait for
 		// the doctor pseudo-task. We detect dpkg-touching via the
 		// task's computed Resources set (which includes ResDpkg
@@ -233,9 +264,13 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 					ForceReinstall: bc.ForceReinstall,
 				}
 				if entry != nil {
+					tap := buildBatchProgressTap(
+						ctx, batchMatcher,
+						nameToTaskID, labelByTaskID,
+					)
 					return runBatchedInstall(
 						ctx, &t, entry, ic, plat, bs,
-						bucketGenerics, bc.State,
+						bucketGenerics, bc.State, tap,
 					)
 				}
 				// Non-batched tool — existing per-tool path.
@@ -258,13 +293,27 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 				deps = append(deps, dpkgDoctorID)
 			}
 
+			// Batched tools share a single pkgmgr invocation, so they
+			// should appear active together in the UI. Peers = every
+			// other bucket member.
+			var peers []string
+			if entry != nil && len(bucketIDs) > 1 {
+				peers = make([]string, 0, len(bucketIDs)-1)
+				for _, id := range bucketIDs {
+					if id != taskID {
+						peers = append(peers, id)
+					}
+				}
+			}
+
 			tasks = append(tasks, engine.Task{
-				ID:        taskID,
-				Label:     fmt.Sprintf("Installing %s", t.Name),
-				Critical:  t.Critical,
-				DependsOn: deps,
-				Resources: resources,
-				Run:       run,
+				ID:         taskID,
+				Label:      fmt.Sprintf("Installing %s", t.Name),
+				Critical:   t.Critical,
+				DependsOn:  deps,
+				Resources:  resources,
+				Run:        run,
+				BatchPeers: peers,
 			})
 			toolIDs = append(toolIDs, taskID)
 		}
@@ -725,14 +774,26 @@ type batchState struct {
 // runOnce is the sync.Once body: invokes the manager's batch install
 // exactly once for the whole bucket, then classifies the outcome so
 // per-tool tasks can consume it without re-entering.
+//
+// tap, when non-nil, is installed on the runner for the lifetime
+// of the batch invocation so the orchestrator can translate manager
+// progress markers into BatchProgressMsg events. It runs inside the
+// sync.Once guard so it is set exactly once — concurrent callers of
+// runOnce cannot race to overwrite each other's tap.
 func (b *batchState) runOnce(
 	ctx context.Context,
 	mgr pkgmgr.PackageManager,
 	generics []string,
+	runner *executor.Runner,
+	tap func(line string),
 ) {
 	b.once.Do(func() {
 		if len(generics) == 0 {
 			return
+		}
+		if runner != nil && tap != nil {
+			runner.SetProgressTap(tap)
+			defer runner.SetProgressTap(nil)
 		}
 		err := mgr.Install(ctx, generics...)
 		b.err = err
@@ -778,8 +839,9 @@ func runBatchedInstall(
 	bs *batchState,
 	generics []string,
 	st *state.Store,
+	tap func(line string),
 ) error {
-	bs.runOnce(ctx, ic.PkgMgr, generics)
+	bs.runOnce(ctx, ic.PkgMgr, generics, ic.Runner, tap)
 
 	failedThisTool := false
 	switch {

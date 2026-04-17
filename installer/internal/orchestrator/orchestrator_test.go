@@ -114,7 +114,7 @@ func TestBatchHelpers(t *testing.T) {
 			},
 		}
 		var bs batchState
-		bs.runOnce(context.Background(), mgr, []string{"a", "b"})
+		bs.runOnce(context.Background(), mgr, []string{"a", "b"}, nil, nil)
 		if mgr.installCalls != 1 {
 			t.Fatalf("installCalls = %d, want 1", mgr.installCalls)
 		}
@@ -139,7 +139,7 @@ func TestBatchHelpers(t *testing.T) {
 			},
 			genericPkg: "ok",
 		}
-		if err := runBatchedInstall(context.Background(), okTool, okEntry, ic, bc.Platform, bs, []string{"ok"}, store); err != nil {
+		if err := runBatchedInstall(context.Background(), okTool, okEntry, ic, bc.Platform, bs, []string{"ok"}, store, nil); err != nil {
 			t.Fatalf("runBatchedInstall success: %v", err)
 		}
 		if mgr.installCalls != 1 {
@@ -175,7 +175,7 @@ func TestBatchHelpers(t *testing.T) {
 			strategy:   &registry.InstallStrategy{Method: registry.MethodPackageManager, Package: "fail"},
 			genericPkg: "fail",
 		}
-		if err := runBatchedInstall(context.Background(), failTool, failEntry, ic, bc.Platform, bs, []string{"fail"}, store); err != nil {
+		if err := runBatchedInstall(context.Background(), failTool, failEntry, ic, bc.Platform, bs, []string{"fail"}, store, nil); err != nil {
 			t.Fatalf("runBatchedInstall fallback: %v", err)
 		}
 		if !fallbackCalled {
@@ -194,7 +194,7 @@ func TestBatchHelpers(t *testing.T) {
 			strategy:   &registry.InstallStrategy{Method: registry.MethodPackageManager, Package: "fatal"},
 			genericPkg: "fatal",
 		}
-		err := runBatchedInstall(context.Background(), tool, entry, ic, bc.Platform, bs, []string{"fatal"}, bc.State)
+		err := runBatchedInstall(context.Background(), tool, entry, ic, bc.Platform, bs, []string{"fatal"}, bc.State, nil)
 		if err == nil || !strings.Contains(err.Error(), "fatal condition") {
 			t.Fatalf("expected fatal apt error, got %v", err)
 		}

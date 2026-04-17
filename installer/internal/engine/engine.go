@@ -61,6 +61,15 @@ type Task struct {
 	// "signal: killed".
 	Timeout time.Duration
 	Run     func(ctx context.Context) error
+	// BatchPeers lists task IDs that are installed together with this
+	// task in a single shared package-manager invocation (e.g., one
+	// `brew install a b c` for several tools). When a task in a batch
+	// acquires its resource and starts, the scheduler also emits
+	// TaskStartedMsg for every peer so the UI reflects that every
+	// member of the batch is actively being installed — not just the
+	// one whose goroutine won the resource race. Each task ID is
+	// announced at most once per run.
+	BatchPeers []string
 }
 
 // Event is the sealed interface implemented by every scheduler
@@ -108,3 +117,50 @@ func (TaskSkippedMsg) isEngineEvent() {}
 type AllDoneMsg struct{}
 
 func (AllDoneMsg) isEngineEvent() {}
+
+// BatchProgressMsg reports per-item progress inside a shared
+// package-manager batch (e.g., brew `==> Pouring <name>` lines from
+// one `brew install a b c …` invocation). The scheduler does not
+// generate these itself; Task.Run closures emit them via the
+// context-bound emitter so the UI can flip individual tools to done
+// while the shared command is still running, instead of waiting for
+// the whole batch to finish. ID is the engine task ID of the
+// completed item (same namespace as TaskDoneMsg.ID).
+type BatchProgressMsg struct {
+	ID    string
+	Label string
+	Phase string // "done" is currently the only phase emitted
+}
+
+func (BatchProgressMsg) isEngineEvent() {}
+
+// emitterKey is the context key used to carry the scheduler's event
+// emitter into Task.Run closures. Unexported so callers cannot
+// inject a fake emitter and bypass the scheduler's send-with-cancel
+// semantics; use EmitFromContext to retrieve.
+type emitterKey struct{}
+
+// WithEmitter returns a child context carrying emit, which Task.Run
+// closures can retrieve via EmitFromContext to send custom events
+// (BatchProgressMsg today) on the same channel the scheduler uses
+// for TaskStartedMsg / TaskDoneMsg. Called by the scheduler;
+// external callers should not invoke this directly.
+func WithEmitter(ctx context.Context, emit func(Event)) context.Context {
+	if emit == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, emitterKey{}, emit)
+}
+
+// EmitFromContext retrieves the event emitter attached by the
+// scheduler. Returns a no-op when absent so call sites never need
+// a nil check — calling the returned func is always safe.
+func EmitFromContext(ctx context.Context) func(Event) {
+	if ctx == nil {
+		return func(Event) {}
+	}
+	if emit, ok := ctx.Value(emitterKey{}).(func(Event)); ok && emit != nil {
+		return emit
+	}
+	return func(Event) {}
+}

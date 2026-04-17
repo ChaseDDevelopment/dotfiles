@@ -52,7 +52,7 @@ printf 'install ok installed'
 	if a.Name() != "apt" {
 		t.Fatalf("Name() = %q", a.Name())
 	}
-	if got := aptEnv(); len(got) != 3 {
+	if got := aptEnv(); len(got) != 4 {
 		t.Fatalf("aptEnv len = %d", len(got))
 	}
 	if got := a.MapName("nodejs"); strings.Join(got, ",") != "nodejs,npm" {

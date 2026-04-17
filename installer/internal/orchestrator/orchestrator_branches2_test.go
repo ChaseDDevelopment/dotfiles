@@ -476,7 +476,7 @@ func TestRunBatchedInstallPostInstallErrorPropagates(t *testing.T) {
 
 	err = runBatchedInstall(
 		context.Background(), tool, entry, ic, plat, bs,
-		[]string{"post-fail"}, st,
+		[]string{"post-fail"}, st, nil,
 	)
 	if err == nil {
 		t.Fatal("expected error from post-install failure, got nil")
@@ -538,7 +538,7 @@ func TestRunBatchedInstallFallbackErrorPropagates(t *testing.T) {
 
 	err = runBatchedInstall(
 		context.Background(), tool, entry, ic, plat, bs,
-		[]string{"fail-only"}, st,
+		[]string{"fail-only"}, st, nil,
 	)
 	if err == nil {
 		t.Fatal("expected fallback error to propagate, got nil")
