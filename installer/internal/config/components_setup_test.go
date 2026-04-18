@@ -301,3 +301,85 @@ exit 0
 		}
 	}
 }
+
+// TestMaintainTmuxPluginsPreClonesSkipRecursive — plugins listed in
+// tmuxPluginSkipRecursive (e.g. tmux-powerkit, whose upstream ships a
+// wiki submodule that breaks TPM's `git clone --recursive`) must be
+// cloned by us shallow + --no-recurse-submodules BEFORE TPM runs, so
+// TPM sees the dir on disk and skips its own broken attempt.
+func TestMaintainTmuxPluginsPreClonesSkipRecursive(t *testing.T) {
+	sc, home := newComponentSetup(t)
+
+	fakebin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	logPath := filepath.Join(home, "commands.log")
+	t.Setenv("COMPONENT_LOG", logPath)
+	for _, name := range []string{"tmux", "chmod", "git"} {
+		writeTool(t, fakebin, name, `#!/bin/sh
+printf '`+name+` %s\n' "$*" >> "$COMPONENT_LOG"
+exit 0
+`)
+	}
+
+	tmuxConfDir := filepath.Join(home, ".config", "tmux")
+	if err := os.MkdirAll(tmuxConfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tmuxConf := filepath.Join(tmuxConfDir, "tmux.conf")
+	confBody := `set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-sensible'
+set -g @plugin 'fabioluciano/tmux-powerkit'
+`
+	if err := os.WriteFile(tmuxConf, []byte(confBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tpmScript := filepath.Join(
+		home, ".tmux", "plugins", "tpm", "scripts", "install_plugins.sh",
+	)
+	if err := os.MkdirAll(filepath.Dir(tpmScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tpmScript, []byte(`#!/bin/sh
+printf 'install_plugins.sh ran\n' >> "$COMPONENT_LOG"
+exit 0
+`), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MaintainTmuxPlugins(context.Background(), sc); err != nil {
+		t.Fatalf("MaintainTmuxPlugins: %v", err)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logStr := string(data)
+
+	cloneIdx := strings.Index(logStr, "git clone --depth=1 --single-branch --no-recurse-submodules")
+	if cloneIdx < 0 {
+		t.Fatalf("expected pre-clone of tmux-powerkit before TPM, log:\n%s", logStr)
+	}
+	if !strings.Contains(logStr, "fabioluciano/tmux-powerkit") {
+		t.Fatalf("pre-clone did not target tmux-powerkit, log:\n%s", logStr)
+	}
+
+	tpmIdx := strings.Index(logStr, "install_plugins.sh ran")
+	if tpmIdx < 0 {
+		t.Fatalf("install_plugins.sh did not run, log:\n%s", logStr)
+	}
+	if cloneIdx > tpmIdx {
+		t.Fatalf("pre-clone must happen before TPM, got clone=%d tpm=%d log:\n%s",
+			cloneIdx, tpmIdx, logStr)
+	}
+
+	// tmux-sensible is declared but NOT in skipRecursive — confirm we
+	// didn't also pre-clone it (only entries in the map get pre-cloned).
+	if strings.Contains(logStr, "tmux-sensible.git") {
+		t.Fatalf("only skipRecursive plugins should pre-clone, log:\n%s", logStr)
+	}
+}
