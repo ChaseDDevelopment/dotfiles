@@ -198,15 +198,30 @@ func devTools() []Tool {
 		// XDG paths so gopls lands in ~/.local/bin (matching .zshenv)
 		// even when ./install.sh is launched from a shell that hasn't
 		// sourced .zshenv yet (e.g., system bash on a fresh box).
+		// IsInstalledFunc requires the canonical ~/.local/bin path so
+		// a stale ~/go/bin/gopls (from before the GOPATH/GOBIN move)
+		// triggers a relocate-reinstall rather than a SKIP.
 		{
 			Name: "gopls", Command: "gopls", Description: "Go language server (LSP)",
 			DevOnly:   true,
 			DependsOn: []string{"go"},
+			IsInstalledFunc: func() bool {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return false
+				}
+				_, err = os.Stat(filepath.Join(home, ".local", "bin", "gopls"))
+				return err == nil
+			},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
 					home, err := os.UserHomeDir()
 					if err != nil {
 						return fmt.Errorf("resolve home dir: %w", err)
+					}
+					legacy := filepath.Join(home, "go", "bin", "gopls")
+					if _, statErr := os.Stat(legacy); statErr == nil {
+						_ = os.Remove(legacy)
 					}
 					env := []string{
 						"GOPATH=" + filepath.Join(home, ".local", "share", "go"),

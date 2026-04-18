@@ -22,9 +22,14 @@ check: vet test
 install:
     ./install.sh
 
-# Build from source and run the installer directly
+# Build from source and run the installer directly. Exit code 10 is
+# the installer's "shell reload requested" signal, not a failure.
 run: build
+    #!/usr/bin/env bash
+    set -u
     ./installer/dotsetup
+    rc=$?
+    if [[ $rc -eq 10 ]]; then exit 0; else exit $rc; fi
 
 # Remove built binary
 clean:

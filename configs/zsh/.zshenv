@@ -11,6 +11,15 @@ export ZSH_CACHE_DIR="${XDG_CACHE_HOME}/ohmyzsh"
 export GOPATH="${XDG_DATA_HOME}/go"
 export GOBIN="${HOME}/.local/bin"
 
+# Force `just` to use zsh as its recipe shell so recipes inherit the
+# env defined in this file (GOPATH, GOBIN, PATH, EDITOR, …). `just`
+# defaults to `sh -cu`, which doesn't source ~/.zshenv — that's why
+# `go build` inside `just build` was falling back to GOPATH=$HOME/go.
+# This wrapper covers every zsh-parent invocation; bash/cron/GUI
+# invocations still fall back to just's default — for those, add
+# `set shell := ["zsh", "-cu"]` to the specific justfile.
+just() { command just --shell zsh --shell-arg -cu "$@"; }
+
 # Zsh config location
 export ZDOTDIR="${XDG_CONFIG_HOME}/zsh"
 
