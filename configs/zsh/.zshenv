@@ -5,6 +5,12 @@ export XDG_CACHE_HOME="${HOME}/.cache"
 export XDG_STATE_HOME="${HOME}/.local/state"
 export ZSH_CACHE_DIR="${XDG_CACHE_HOME}/ohmyzsh"
 
+# Go: keep module cache out of $HOME/go and drop binaries into
+# ~/.local/bin alongside uv, oh-my-posh, etc. `go install` without
+# these defaults creates ~/go (GOPATH) and ~/go/bin (GOBIN).
+export GOPATH="${XDG_DATA_HOME}/go"
+export GOBIN="${HOME}/.local/bin"
+
 # Zsh config location
 export ZDOTDIR="${XDG_CONFIG_HOME}/zsh"
 
@@ -28,7 +34,6 @@ path=(
     "${HOME}/.local/bin"
     "${HOME}/.cargo/bin"
     "${HOME}/.bun/bin"
-    "${HOME}/go/bin"
     $path
 )
 export PATH

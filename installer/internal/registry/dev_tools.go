@@ -194,14 +194,25 @@ func devTools() []Tool {
 				{Managers: []string{"dnf", "yum"}, Method: MethodPackageManager, Package: "golang"},
 			},
 		},
-		// gopls — Go language server (LSP)
+		// gopls — Go language server (LSP). GOPATH/GOBIN are pinned to
+		// XDG paths so gopls lands in ~/.local/bin (matching .zshenv)
+		// even when ./install.sh is launched from a shell that hasn't
+		// sourced .zshenv yet (e.g., system bash on a fresh box).
 		{
 			Name: "gopls", Command: "gopls", Description: "Go language server (LSP)",
 			DevOnly:   true,
 			DependsOn: []string{"go"},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
-					return ic.Runner.Run(ctx, "go", "install", "golang.org/x/tools/gopls@latest")
+					home, err := os.UserHomeDir()
+					if err != nil {
+						return fmt.Errorf("resolve home dir: %w", err)
+					}
+					env := []string{
+						"GOPATH=" + filepath.Join(home, ".local", "share", "go"),
+						"GOBIN=" + filepath.Join(home, ".local", "bin"),
+					}
+					return ic.Runner.RunWithEnv(ctx, env, "go", "install", "golang.org/x/tools/gopls@latest")
 				}},
 			},
 		},
