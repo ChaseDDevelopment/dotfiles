@@ -17,6 +17,11 @@ blocks:
     alignment: left
     newline: true
     segments:
+      - type: session
+        style: plain
+        background: transparent
+        foreground: "p:magenta"
+        template: "{{ if .SSHSession }}\U000F0489 {{ .HostName }} {{ end }}"
       - type: path
         style: plain
         background: transparent
