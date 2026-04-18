@@ -3,6 +3,24 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 vim.env.PATH = vim.fn.stdpath('data') .. '/mason/bin:' .. vim.env.PATH
 vim.o.clipboard = 'unnamedplus'
+
+-- Over SSH (incl. nested tmux), force OSC 52 so yanks reach the local
+-- system clipboard. Built-in auto-detection is gated on $SSH_TTY which
+-- tmux often drops; SSH_CONNECTION survives tmux and is set by sshd.
+-- Requires `set -g allow-passthrough on` on every tmux layer in the chain.
+if vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY then
+    vim.g.clipboard = {
+        name = 'OSC 52',
+        copy = {
+            ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
+            ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+        },
+        paste = {
+            ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
+            ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+        },
+    }
+end
 vim.o.number = true
 vim.o.relativenumber = true
 
