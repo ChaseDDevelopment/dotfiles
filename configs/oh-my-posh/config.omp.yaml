@@ -21,7 +21,7 @@ blocks:
         style: plain
         background: transparent
         foreground: "p:green"
-        template: "{{ if .Env.SSH_CONNECTION }}{{ .Icon }} {{ end }}"
+        template: "{{ if .Env.SSH_CONNECTION }}{{ .Icon }}  {{ end }}"
       - type: session
         style: plain
         background: transparent
