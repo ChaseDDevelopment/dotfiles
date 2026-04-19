@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 )
@@ -188,7 +189,72 @@ func installAtuin(ctx context.Context, ic *InstallContext) error {
 	atunBin := filepath.Join(os.Getenv("HOME"), ".atuin", "bin")
 	newPath := atunBin + ":" + os.Getenv("PATH")
 	ic.Runner.AddEnv("PATH", newPath)
+
+	// Guard the unguarded `eval "$(atuin init bash)"` line the
+	// upstream installer may have appended to ~/.bashrc. Even when
+	// we set SHELL=/bin/sh in noProfileEnv to discourage the
+	// append, some paths (prior manual install, future installer
+	// changes, hosts where the line already exists) leave an
+	// unguarded line that errors with `atuin: command not found` on
+	// every non-interactive bash invocation where ~/.atuin/bin
+	// isn't on PATH. Best-effort: failure here doesn't fail atuin.
+	home := os.Getenv("HOME")
+	if home != "" {
+		bashrc := filepath.Join(home, ".bashrc")
+		if err := guardAtuinBashrcInit(bashrc); err != nil {
+			ic.Runner.Log.Write(fmt.Sprintf(
+				"WARNING: guard atuin init in %s: %v",
+				bashrc, err,
+			))
+		}
+	}
 	return nil
+}
+
+// guardAtuinBashrcInit rewrites an unguarded
+// `eval "$(atuin init bash)"` line in the given bashrc so it
+// prepends $HOME/.atuin/bin to PATH and skips the eval when atuin
+// isn't on PATH. No-op when the file doesn't exist, when the line
+// isn't present, or when the file already contains the PATH-prepend
+// (idempotent). Creates $bashrc.dotsetup.bak on first patch only —
+// existing backups are left alone so re-running dotsetup never
+// clobbers a hand-crafted backup the user may have made.
+func guardAtuinBashrcInit(bashrc string) error {
+	const unguarded = `eval "$(atuin init bash)"`
+	const pathMarker = `$HOME/.atuin/bin:$PATH`
+
+	data, err := os.ReadFile(bashrc)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	body := string(data)
+	if !strings.Contains(body, unguarded) {
+		return nil
+	}
+	if strings.Contains(body, pathMarker) {
+		return nil // already guarded — idempotent re-run
+	}
+
+	backup := bashrc + ".dotsetup.bak"
+	if _, err := os.Stat(backup); os.IsNotExist(err) {
+		if err := os.WriteFile(backup, data, 0o600); err != nil {
+			return fmt.Errorf("write backup %s: %w", backup, err)
+		}
+	}
+
+	replacement := `export PATH="$HOME/.atuin/bin:$PATH"` + "\n" +
+		`command -v atuin >/dev/null && eval "$(atuin init bash)"`
+	patched := strings.Replace(body, unguarded, replacement, 1)
+
+	info, err := os.Stat(bashrc)
+	var mode os.FileMode = 0o644
+	if err == nil {
+		mode = info.Mode().Perm()
+	}
+	return os.WriteFile(bashrc, []byte(patched), mode)
 }
 
 func installTPM(ctx context.Context, ic *InstallContext) error {
