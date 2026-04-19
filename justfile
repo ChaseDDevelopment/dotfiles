@@ -1,5 +1,7 @@
 # dotfiles — common dev tasks. Run `just` with no args to list recipes.
 
+set shell := ["zsh", "-cu"]
+
 default:
     @just --list
 
