@@ -201,6 +201,38 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		}
 	}
 
+	// Set zsh as the default shell BEFORE the potentially-slow
+	// antidote plugin compile below. On a fresh Proxmox host
+	// (milkyway 2026-04-19) the antidote zsh -c step was still
+	// running when the installer exited, so chsh never ran and the
+	// user stayed on bash forever — making the whole zsh config
+	// dormant. We now chsh first; a slow antidote compile can't
+	// keep the login shell wrong anymore.
+	//
+	// Source the current login shell from /etc/passwd (via getent)
+	// rather than $SHELL — $SHELL is the *current* shell, and when
+	// a user runs dotsetup after already manually chsh'ing, $SHELL
+	// may still reflect the old session.
+	user := os.Getenv("USER")
+	if user == "" {
+		user = os.Getenv("LOGNAME")
+	}
+	loginShell := loginShellFor(user)
+	if user != "" && !strings.HasSuffix(loginShell, "/zsh") {
+		zshPath, lerr := exec.LookPath("zsh")
+		if lerr == nil {
+			if err := setDefaultShellZsh(ctx, sc, loginShell, zshPath); err != nil {
+				sc.Runner.Log.Write(fmt.Sprintf(
+					"chsh to %s failed (%v) — run "+
+						"'sudo chsh -s %s %s' manually to make zsh permanent",
+					zshPath, err, zshPath, user,
+				))
+				sc.Failures.Record(sc.Component,
+					"chsh to zsh failed", err)
+			}
+		}
+	}
+
 	// Install Antidote.
 	antidotePaths := []string{
 		"/opt/homebrew/opt/antidote/share/antidote/antidote.zsh",
@@ -243,26 +275,6 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	// Set zsh as the default shell. `chsh` itself would prompt for
-	// the user's password via PAM and deadlock the TUI, but
-	// `sudo -n chsh` reuses the sudo credentials we pre-authed at
-	// startup (see executor/sudo.go), so the change happens without
-	// another prompt. Failures here degrade to the old "log a
-	// reminder" behavior — a chsh hiccup shouldn't abort a run.
-	currentShell := os.Getenv("SHELL")
-	if !strings.HasSuffix(currentShell, "/zsh") {
-		zshPath, lerr := exec.LookPath("zsh")
-		if lerr == nil {
-			if err := setDefaultShellZsh(ctx, sc, currentShell, zshPath); err != nil {
-				sc.Runner.Log.Write(fmt.Sprintf(
-					"chsh to %s failed (%v) — run "+
-						"'sudo chsh -s %s %s' manually to make zsh permanent",
-					zshPath, err, zshPath, os.Getenv("USER"),
-				))
-			}
-		}
-	}
-
 	// Nuke cached shell init output so the next shell start
 	// regenerates with the current .zshrc flags. _cached_init only
 	// invalidates on binary-mtime changes; flag-only changes (e.g.
@@ -279,11 +291,40 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 // the next shell start regenerates cached init output with the
 // current .zshrc. Runs at the end of setupZsh — the one place
 // that owns both the .zshrc symlink and the cache directory.
+// loginShellFor returns the configured login shell for user as
+// recorded in /etc/passwd (via getent). Unlike $SHELL, this reflects
+// what /bin/login will actually exec on the next fresh session.
+// Returns "" if user is empty or getent fails.
+func loginShellFor(user string) string {
+	if user == "" {
+		return ""
+	}
+	out, err := exec.Command("getent", "passwd", user).Output()
+	if err != nil {
+		return ""
+	}
+	fields := strings.Split(strings.TrimSpace(string(out)), ":")
+	if len(fields) < 7 {
+		return ""
+	}
+	return fields[6]
+}
+
 // setDefaultShellZsh changes the current user's login shell to
 // zshPath via `sudo -n chsh`, reusing cached sudo credentials so
 // the TUI doesn't have to prompt. On Linux, zshPath must appear in
 // /etc/shells before chsh will accept it; ensureShellListed adds
 // it there when missing (also via sudo).
+//
+// After chsh succeeds we verify two things:
+//  1. /etc/passwd reads back zshPath (confirms the write took).
+//  2. `su - <user> -c true` returns 0 (confirms the shell path is
+//     actually executable — catches the class of failure behind
+//     every "I broke my Proxmox login" forum thread, where the
+//     shell field was set to a non-existent or unexecutable path).
+//
+// On verify failure we revert to the original shell so the user
+// isn't locked out on their next login.
 func setDefaultShellZsh(
 	ctx context.Context,
 	sc *SetupContext,
@@ -302,18 +343,70 @@ func setDefaultShellZsh(
 	}
 	user := os.Getenv("USER")
 	if user == "" {
-		return fmt.Errorf("USER env unset")
+		user = os.Getenv("LOGNAME")
+	}
+	if user == "" {
+		return fmt.Errorf("USER/LOGNAME env unset")
 	}
 	if err := sc.Runner.Run(
 		ctx, "sudo", "-n", "chsh", "-s", zshPath, user,
 	); err != nil {
 		return err
 	}
+
+	// Verify 1: /etc/passwd reads back the new shell.
+	got := loginShellFor(user)
+	if got != zshPath {
+		// chsh exited 0 but /etc/passwd didn't update — shouldn't
+		// happen, but treat as a failure and try to revert.
+		revertShell(ctx, sc, user, currentShell)
+		return fmt.Errorf(
+			"chsh succeeded but /etc/passwd shell is %q, want %q",
+			got, zshPath,
+		)
+	}
+
+	// Verify 2: the shell is actually executable from a fresh
+	// login. `su - <user> -c true` creates a new session that
+	// execs the configured login shell; if zshPath is missing or
+	// broken su exits non-zero and we revert.
+	if err := sc.Runner.Run(
+		ctx, "sudo", "-n", "su", "-", user, "-c", "true",
+	); err != nil {
+		revertShell(ctx, sc, user, currentShell)
+		return fmt.Errorf(
+			"new shell %s is not executable (su verify failed: %w) — reverted to %s",
+			zshPath, err, currentShell,
+		)
+	}
+
 	sc.Runner.Log.Write(fmt.Sprintf(
-		"chsh: default shell %s → %s (via sudo -n, cached creds)",
+		"chsh: default shell %s → %s (verified via getent + su)",
 		currentShell, zshPath,
 	))
 	return nil
+}
+
+// revertShell best-effort reverts user's login shell to prevShell
+// when a chsh verify step fails, so we don't leave the user with a
+// broken login. Errors are logged but not propagated — the caller
+// already has a failure to report.
+func revertShell(
+	ctx context.Context,
+	sc *SetupContext,
+	user, prevShell string,
+) {
+	if prevShell == "" {
+		return
+	}
+	if err := sc.Runner.Run(
+		ctx, "sudo", "-n", "chsh", "-s", prevShell, user,
+	); err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"WARNING: failed to revert %s's shell to %s: %v",
+			user, prevShell, err,
+		))
+	}
 }
 
 // ensureShellListed adds zshPath to /etc/shells when it isn't

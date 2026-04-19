@@ -87,7 +87,7 @@ func devTools() []Tool {
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "tree-sitter-cli"},
 				{Managers: []string{"pacman"}, Method: MethodPackageManager, Package: "tree-sitter-cli"},
-				{Method: MethodCustom, CustomFunc: installTreeSitterCLI, Requires: []string{"curl"}},
+				{Method: MethodCustom, CustomFunc: installTreeSitterCLI, Requires: []string{"curl", "unzip"}},
 				{Method: MethodCargo, Crate: "tree-sitter-cli"},
 			},
 			CargoCrate: "tree-sitter-cli",
@@ -156,7 +156,7 @@ func devTools() []Tool {
 					URL:             "https://ohmyposh.dev/install.sh",
 					Args:            []string{"-d", "$HOME/.local/bin"},
 					NoProfileModify: true,
-				}},
+				}, Requires: []string{"unzip"}},
 			},
 		},
 		// yazi — terminal file manager + companion packages

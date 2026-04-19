@@ -17,6 +17,15 @@ func toolByCommand(t *testing.T, tools []Tool, command string) Tool {
 	return Tool{}
 }
 
+func stringSliceContains(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRustToolchainCatalog(t *testing.T) {
 	tools := rustToolchain()
 	if len(tools) != 1 {
@@ -88,12 +97,14 @@ func TestDevAndOfficialToolCatalog(t *testing.T) {
 	// install into an already-PATHed directory.
 	omp := toolByCommand(t, dev, "oh-my-posh")
 	var ompBrew *InstallStrategy
+	var ompScriptStrategy *InstallStrategy
 	var ompScript *ScriptConfig
 	for i, s := range omp.Strategies {
 		if s.Method == MethodPackageManager && s.Package == "jandedobbeleer/oh-my-posh/oh-my-posh" {
 			ompBrew = &omp.Strategies[i]
 		}
 		if s.Method == MethodScript && s.Script != nil {
+			ompScriptStrategy = &omp.Strategies[i]
 			ompScript = s.Script
 		}
 	}
@@ -112,6 +123,35 @@ func TestDevAndOfficialToolCatalog(t *testing.T) {
 	}
 	if !sawInstallDirFlag {
 		t.Fatalf("oh-my-posh script should pass -d <dir>, got %#v", ompScript.Args)
+	}
+	// The ohmyposh.dev install script shells out to `unzip` and fails
+	// hard when it's missing. Declaring Requires lets the orchestrator
+	// block this strategy until the apt batch that installs unzip
+	// completes, rather than racing it (see install.log on milkyway
+	// 2026-04-19 where this race left oh-my-posh uninstalled).
+	if !stringSliceContains(ompScriptStrategy.Requires, "unzip") {
+		t.Fatalf("oh-my-posh script strategy must declare Requires=\"unzip\": %#v", ompScriptStrategy.Requires)
+	}
+
+	// tree-sitter-cli: installTreeSitterCLI shells out to `unzip` when
+	// extracting the GitHub-release zip, so the custom strategy must
+	// declare it (alongside curl) to avoid the same race.
+	tsc := toolByCommand(t, dev, "tree-sitter")
+	var tscCustom *InstallStrategy
+	for i, s := range tsc.Strategies {
+		if s.Method == MethodCustom {
+			tscCustom = &tsc.Strategies[i]
+			break
+		}
+	}
+	if tscCustom == nil {
+		t.Fatalf("tree-sitter-cli must have a MethodCustom strategy: %#v", tsc.Strategies)
+	}
+	for _, dep := range []string{"curl", "unzip"} {
+		if !stringSliceContains(tscCustom.Requires, dep) {
+			t.Fatalf("tree-sitter-cli custom strategy must declare Requires=%q: %#v",
+				dep, tscCustom.Requires)
+		}
 	}
 
 	yazi := toolByCommand(t, dev, "yazi")
