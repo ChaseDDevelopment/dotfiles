@@ -65,9 +65,12 @@ type Apt struct {
 	repaired   bool
 
 	// UserApprovedRepair gates the auto-repair path when unhealthy
-	// state is detected. Defaults to true for the interim (pre-TUI
-	// modal). When the TUI modal (plan Phase A2) lands, this will
-	// flip to false and only be set true via explicit user choice.
+	// dpkg state is detected. Defaults to false so no `sudo dpkg
+	// --configure -a` runs without explicit user consent, upholding
+	// the "prompt before system mutations" rule across Install,
+	// Update, Doctor, and Restore modes. Callers wire it to true
+	// only after the TUI consent modal (preflightDpkgHealth +
+	// updateDpkgRepair) records an explicit user approval.
 	UserApprovedRepair bool
 }
 
@@ -76,9 +79,8 @@ type Apt struct {
 // wiring the dpkg doctor pseudo-task and repair-consent flag.
 func NewApt(runner *executor.Runner, useNala bool) *Apt {
 	return &Apt{
-		runner:             runner,
-		useNala:            useNala,
-		UserApprovedRepair: true,
+		runner:  runner,
+		useNala: useNala,
 	}
 }
 
@@ -307,7 +309,19 @@ func listStaleDpkgUpdates() []string {
 // don't pile repair attempts on top of each other. A repair
 // attempt that fails is recorded and all subsequent callers see
 // the same error — subsequent attempts would fail identically.
+//
+// Gated by UserApprovedRepair so the mid-install healer path (see
+// registry.executeInstallFiltered) can't silently `sudo` behind
+// the user's back when they skipped or declined the preflight
+// modal. sync.Once is not entered until consent is granted, so a
+// later preflight-approved retry can still repair.
 func (a *Apt) RunDpkgConfigureAll(ctx context.Context) error {
+	if !a.UserApprovedRepair {
+		return fmt.Errorf(
+			"dpkg repair was not approved by the user; run " +
+				"`sudo dpkg --configure -a` manually and re-run dotsetup",
+		)
+	}
 	a.repairOnce.Do(func() {
 		a.runner.Log.Write(
 			"dpkg doctor: running `sudo dpkg --configure -a` to repair interrupted state",
@@ -334,9 +348,10 @@ func (a *Apt) RunDpkgConfigureAll(ctx context.Context) error {
 // returns an error describing what the user needs to fix manually.
 //
 // Callers are responsible for surfacing the TUI modal that flips
-// UserApprovedRepair based on user choice — until that wiring
-// (plan Phase A2 TUI) is in place, UserApprovedRepair defaults to
-// true so tool installs aren't blocked by the interim.
+// UserApprovedRepair based on user choice. In modes that don't
+// render the modal (e.g. Doctor, Restore), UserApprovedRepair stays
+// false and this returns an actionable error rather than silently
+// running `sudo dpkg --configure -a`.
 func (a *Apt) EnsureHealthy(ctx context.Context) error {
 	state, err := a.DetectDpkgHealth(ctx)
 	if err != nil {

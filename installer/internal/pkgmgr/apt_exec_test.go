@@ -116,6 +116,10 @@ exec "$@"
 `)
 
 	a := NewApt(runner, false)
+	// NewApt now defaults UserApprovedRepair=false; this branch of
+	// the test exercises the post-consent repair path, so opt in
+	// explicitly as the TUI would after a user presses "r".
+	a.UserApprovedRepair = true
 	state, err := a.DetectDpkgHealth(context.Background())
 	if err != nil {
 		t.Fatalf("DetectDpkgHealth: %v", err)

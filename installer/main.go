@@ -177,6 +177,11 @@ func main() {
 		}
 	}
 
+	// Wire the runner log as the Store's warning sink so best-effort
+	// failures (e.g. directory fsync rejection on APFS/NFS) surface
+	// loudly instead of being swallowed.
+	installState.SetLogger(func(msg string) { runner.Log.Write(msg) })
+
 	cfg := &tui.AppConfig{
 		DryRun:   false,
 		Platform: plat,

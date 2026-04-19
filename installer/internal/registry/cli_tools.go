@@ -542,8 +542,15 @@ func installNerdFontLinux(ctx context.Context, ic *InstallContext) error {
 		return fmt.Errorf("extract nerd font: %w", err)
 	}
 
-	// Refresh font cache.
-	_ = ic.Runner.Run(ctx, "fc-cache", "-fv")
+	// Refresh font cache. A failure here shouldn't abort the install
+	// (the font files are already in place), but per the "errors must
+	// be loud" rule we surface it via the runner log so a broken
+	// font-cache binary doesn't disappear silently.
+	if err := ic.Runner.Run(ctx, "fc-cache", "-fv"); err != nil {
+		ic.Runner.Log.Write(fmt.Sprintf(
+			"WARNING: fc-cache refresh failed (non-fatal): %v", err,
+		))
+	}
 	return nil
 }
 

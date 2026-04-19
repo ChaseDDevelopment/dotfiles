@@ -323,6 +323,9 @@ func TestAptRunDpkgConfigureAllFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := NewApt(runner, false)
+	// Opt in to repair so we exercise the RunDpkgConfigureAll body
+	// rather than the new not-approved short-circuit.
+	a.UserApprovedRepair = true
 	if err := a.RunDpkgConfigureAll(context.Background()); err == nil ||
 		!strings.Contains(err.Error(), "dpkg --configure") {
 		t.Fatalf("expected repair failure, got %v", err)
@@ -531,6 +534,8 @@ exec "$@"
 `)
 
 	a := NewApt(runner, false)
+	// Opt in so EnsureHealthy exercises the repair path.
+	a.UserApprovedRepair = true
 	if err := a.EnsureHealthy(context.Background()); err != nil {
 		t.Fatalf("first EnsureHealthy: %v", err)
 	}
@@ -575,6 +580,9 @@ exec "$@"
 `)
 
 	a := NewApt(runner, false)
+	// Opt in to force EnsureHealthy into the repair path so the
+	// "still dirty after repair" branch actually runs.
+	a.UserApprovedRepair = true
 	err := a.EnsureHealthy(context.Background())
 	if err == nil {
 		t.Fatal(

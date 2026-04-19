@@ -41,6 +41,21 @@ type Store struct {
 	mu      sync.Mutex
 	Tools   map[string]ToolRecord `json:"tools"`
 	Updated time.Time             `json:"updated"`
+
+	// logger is an optional sink for best-effort warnings that can't
+	// be surfaced via the returned error chain (e.g. directory fsync
+	// failures on filesystems like APFS/NFS that legitimately reject
+	// the operation). Nil means warnings are discarded. Callers wire
+	// this via SetLogger after construction.
+	logger func(string) `json:"-"`
+}
+
+// SetLogger installs an optional warning sink. Passing nil restores
+// the default silent behavior. Safe to call concurrently with Save.
+func (s *Store) SetLogger(fn func(string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logger = fn
 }
 
 // DefaultPath returns ~/.local/share/dotsetup/state.json.
@@ -150,9 +165,18 @@ func (s *Store) Save() error {
 
 	// fsync the parent directory so the rename itself is durable on
 	// ext4 and friends. Best-effort — some filesystems / platforms
-	// reject directory fsync; we log via the returned error chain.
+	// (APFS, NFS) legitimately reject directory fsync, so treating
+	// failure as fatal would cause spurious Save errors. Surface the
+	// error to the optional logger so a genuine problem (permission
+	// denied, I/O error on a filesystem that normally supports it)
+	// isn't silently swallowed.
 	if dirFD, err := os.Open(dir); err == nil {
-		_ = dirFD.Sync()
+		if syncErr := dirFD.Sync(); syncErr != nil && s.logger != nil {
+			s.logger(fmt.Sprintf(
+				"WARNING: state: directory fsync failed (non-fatal): %v",
+				syncErr,
+			))
+		}
 		dirFD.Close()
 	}
 	return nil
