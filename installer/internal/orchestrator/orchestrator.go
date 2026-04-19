@@ -368,9 +368,17 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		// manager script that does the actual cloning). Without the
 		// tpm dep, on a fresh host the maintain task can race ahead
 		// of the tpm clone and silently skip plugin install.
+		// ensure-zsh-login lives here rather than in setupZsh's
+		// post-install because setupZsh is gated on
+		// InspectComponent != "already configured". On hosts whose
+		// Zsh symlinks are already correct from a prior run (pluto,
+		// 2026-04-19) the setup task was skipped, and chsh with it.
+		// Running in the maintenance block matches the existing
+		// "always run regardless of symlink state" contract.
 		specs := []maintSpec{
 			{id: "maintain-tmux", label: "Housekeeping tmux plugins", requires: []string{"tmux", "tpm"}, run: config.MaintainTmuxPlugins},
 			{id: "maintain-nvim", label: "Housekeeping Neovim plugins", requires: []string{"nvim"}, run: config.MaintainNeovimPlugins},
+			{id: "ensure-zsh-login", label: "Ensuring login shell is zsh", requires: []string{"zsh"}, run: config.EnsureLoginShellIsZsh},
 		}
 		for _, s := range specs {
 			// Only chain a dep when the required tool is scheduled

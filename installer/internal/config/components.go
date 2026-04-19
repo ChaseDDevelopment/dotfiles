@@ -201,38 +201,6 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		}
 	}
 
-	// Set zsh as the default shell BEFORE the potentially-slow
-	// antidote plugin compile below. On a fresh Proxmox host
-	// (milkyway 2026-04-19) the antidote zsh -c step was still
-	// running when the installer exited, so chsh never ran and the
-	// user stayed on bash forever — making the whole zsh config
-	// dormant. We now chsh first; a slow antidote compile can't
-	// keep the login shell wrong anymore.
-	//
-	// Source the current login shell from /etc/passwd (via getent)
-	// rather than $SHELL — $SHELL is the *current* shell, and when
-	// a user runs dotsetup after already manually chsh'ing, $SHELL
-	// may still reflect the old session.
-	user := os.Getenv("USER")
-	if user == "" {
-		user = os.Getenv("LOGNAME")
-	}
-	loginShell := loginShellFor(user)
-	if user != "" && !strings.HasSuffix(loginShell, "/zsh") {
-		zshPath, lerr := exec.LookPath("zsh")
-		if lerr == nil {
-			if err := setDefaultShellZsh(ctx, sc, loginShell, zshPath); err != nil {
-				sc.Runner.Log.Write(fmt.Sprintf(
-					"chsh to %s failed (%v) — run "+
-						"'sudo chsh -s %s %s' manually to make zsh permanent",
-					zshPath, err, zshPath, user,
-				))
-				sc.Failures.Record(sc.Component,
-					"chsh to zsh failed", err)
-			}
-		}
-	}
-
 	// Install Antidote.
 	antidotePaths := []string{
 		"/opt/homebrew/opt/antidote/share/antidote/antidote.zsh",
@@ -284,6 +252,57 @@ func setupZsh(ctx context.Context, sc *SetupContext) error {
 		return clearZshInitCaches(home, sc.Runner)
 	})
 
+	return nil
+}
+
+// EnsureLoginShellIsZsh switches the current user's login shell to
+// zsh when it isn't already. Registered as a standalone
+// orchestrator maintenance task rather than being folded into
+// setupZsh, because setupZsh is skipped when Zsh symlinks are
+// already correct — which hid chsh on any host that had previously
+// run dotsetup (pluto, 2026-04-19). Runs every install regardless
+// of symlink state.
+//
+// No-op when:
+//   - no zsh binary on PATH (nothing to chsh to)
+//   - user's login shell already ends in /zsh (per /etc/passwd)
+//   - USER/LOGNAME env is empty (defensive — shouldn't happen)
+//
+// Failures are logged and recorded in Failures; this function
+// never returns an error, so a chsh hiccup doesn't abort the
+// install.
+func EnsureLoginShellIsZsh(
+	ctx context.Context, sc *SetupContext,
+) error {
+	sc.Component = "Zsh"
+
+	user := os.Getenv("USER")
+	if user == "" {
+		user = os.Getenv("LOGNAME")
+	}
+	if user == "" {
+		return nil
+	}
+
+	loginShell := loginShellFor(user)
+	if strings.HasSuffix(loginShell, "/zsh") {
+		return nil
+	}
+
+	zshPath, err := exec.LookPath("zsh")
+	if err != nil {
+		return nil
+	}
+
+	if err := setDefaultShellZsh(ctx, sc, loginShell, zshPath); err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"chsh to %s failed (%v) — run "+
+				"'sudo chsh -s %s %s' manually to make zsh permanent",
+			zshPath, err, zshPath, user,
+		))
+		sc.Failures.Record(sc.Component,
+			"chsh to zsh failed", err)
+	}
 	return nil
 }
 

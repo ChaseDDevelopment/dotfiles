@@ -18,7 +18,11 @@ func TestMaintenanceTasksEmittedUnconditionally(t *testing.T) {
 
 	result := BuildInstallTasks(bc)
 
-	want := map[string]bool{"maintain-tmux": false, "maintain-nvim": false}
+	want := map[string]bool{
+		"maintain-tmux":     false,
+		"maintain-nvim":     false,
+		"ensure-zsh-login":  false,
+	}
 	for _, task := range result.Tasks {
 		if _, ok := want[task.ID]; ok {
 			want[task.ID] = true
@@ -41,7 +45,8 @@ func TestMaintenanceTasksSkipOnDryRun(t *testing.T) {
 	result := BuildInstallTasks(bc)
 
 	for _, task := range result.Tasks {
-		if task.ID == "maintain-tmux" || task.ID == "maintain-nvim" {
+		switch task.ID {
+		case "maintain-tmux", "maintain-nvim", "ensure-zsh-login":
 			t.Errorf("dry-run emitted maintenance task %q", task.ID)
 		}
 	}
@@ -81,5 +86,43 @@ func TestMaintainTmuxDependsOnTpmWhenScheduled(t *testing.T) {
 			t.Errorf("maintain-tmux missing dep %q (deps = %v)",
 				dep, maintainTmux.DependsOn)
 		}
+	}
+}
+
+// TestEnsureZshLoginDependsOnZshWhenScheduled covers the pluto
+// regression: chsh was buried inside setupZsh, which skips when
+// Zsh symlinks are already correct. Lifting it into a dedicated
+// `ensure-zsh-login` task means it runs every install — but it
+// still needs to wait for the zsh binary task when zsh is being
+// installed this run, otherwise chsh may fire before the binary
+// exists.
+func TestEnsureZshLoginDependsOnZshWhenScheduled(t *testing.T) {
+	bc := newTestBuildConfig(t)
+	bc.DryRun = false
+	bc.ForceReinstall = true // force zsh onto the schedule
+
+	result := BuildInstallTasks(bc)
+
+	var ensure *engine.Task
+	for i := range result.Tasks {
+		if result.Tasks[i].ID == "ensure-zsh-login" {
+			ensure = &result.Tasks[i]
+			break
+		}
+	}
+	if ensure == nil {
+		t.Fatal("ensure-zsh-login task missing from install graph")
+	}
+
+	foundZshDep := false
+	for _, dep := range ensure.DependsOn {
+		if dep == "zsh" {
+			foundZshDep = true
+			break
+		}
+	}
+	if !foundZshDep {
+		t.Errorf("ensure-zsh-login missing zsh dep (deps = %v)",
+			ensure.DependsOn)
 	}
 }
