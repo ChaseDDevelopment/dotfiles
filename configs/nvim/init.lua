@@ -47,6 +47,7 @@ vim.pack.add({
 	"https://github.com/Weyaaron/nvim-training",
 	"https://github.com/coder/claudecode.nvim",
 	"https://github.com/christoomey/vim-tmux-navigator",
+	"https://github.com/m4xshen/hardtime.nvim",
 })
 require("plugins/tokyonight")
 require("plugins/treesitter")
