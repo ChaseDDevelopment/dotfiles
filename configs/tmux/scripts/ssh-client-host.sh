@@ -26,9 +26,24 @@ done
 host=$(hostname -s 2>/dev/null)
 [ -n "$host" ] || exit 0
 
-# No pill, no caps — just bold magenta hostname text on bar-bg,
-# with padding spaces on each side for breathing room. Previous
-# iterations tried rounded caps (full and half pills); the user
-# preferred a flat label, reasoning that another pill next to the
-# "Main" session segment and the window list reads as overloaded.
-printf ' #[fg=#bb9af7,bold]%s#[default] ' "$host"
+# Rounded pill matching powerkit's window-name segments (purple
+# bg with dark bold text, rounded caps on both ends). Sits between
+# the green "Main" session pill and the window list, blending in
+# with the rest of the bar instead of looking like a special
+# annotation.
+#
+# Separator bytes via POSIX-portable `printf '%b'` + octal escapes.
+# Hex `\xHH` in the format string isn't parsed by dash (Linux
+# /bin/sh on Debian/Ubuntu); `%b` + `\0NNN` works in bash, dash,
+# and busybox.
+# U+E0B6 (left rounded) = 0xEE 0x82 0xB6 = \0356\0202\0266
+# U+E0B4 (right rounded) = 0xEE 0x82 0xB4 = \0356\0202\0264
+lcap=$(printf '%b' '\0356\0202\0266')
+rcap=$(printf '%b' '\0356\0202\0264')
+# Colors lifted directly from powerkit's window-status-current-format
+# (per `tmux show -gv window-status-current-format`): bg #9d7cd8
+# (purple) with fg #453760 (deep purple) and bold. Those fg/bg pairs
+# are tuned for proper contrast on the TokyoNight palette; using
+# base-dark #1a1b26 as fg against magenta reads as muddy low-contrast
+# because both sit in the blue-purple region of the spectrum.
+printf '#[fg=#9d7cd8,bg=default]%s#[fg=#453760,bg=#9d7cd8,bold] %s #[fg=#9d7cd8,bg=default,nobold]%s#[default]' "$lcap" "$host" "$rcap"
