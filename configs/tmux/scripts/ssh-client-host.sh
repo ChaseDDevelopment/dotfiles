@@ -9,10 +9,11 @@
 # decision is made from its own PID walk.
 #
 # Styling: single-tone blue pill at the leftmost position of the
-# bar (prepended to status-left by prepend-ssh-host.sh). LCAP on
-# bar-bg, exit chevron tracks powerkit's session-bg conditional so
-# the pill flows cleanly into the green Main pill on its right
-# without colliding with the session→windows chevron.
+# bar (prepended to status-left by prepend-ssh-host.sh). Flat left
+# edge against the bar's left boundary; exit chevron tracks
+# powerkit's session-bg conditional so the pill flows cleanly
+# into the green Main pill on its right without colliding with
+# the session→windows chevron.
 client_pid="$1"
 [ -n "$client_pid" ] || exit 0
 
@@ -43,23 +44,21 @@ host_fg='#1a1b26'
 # → #7dcfff, normal → #9ece6a.
 session_bg='#{?client_prefix,#e0af68,#{?pane_in_mode,#7dcfff,#9ece6a}}'
 
-# U+E0B6 (rounded left, POWERKIT_SEP_ROUND_LEFT)  for the LCAP
 # U+E0B4 (rounded right, POWERKIT_SEP_ROUND_RIGHT) for the exit
-# chevron — same glyphs powerkit uses for bar-edge caps. Emit via
-# POSIX-portable `printf '%b'` + octal so dash renders the bytes;
-# hex `\xHH` in the format string is unparsed by dash.
-# U+E0B6 = 0xEE 0x82 0xB6 = \0356\0202\0266
+# chevron — same glyph powerkit uses for its right-facing
+# boundaries. Emit via POSIX-portable `printf '%b'` + octal so
+# dash renders the bytes; hex `\xHH` in the format string is
+# unparsed by dash.
 # U+E0B4 = 0xEE 0x82 0xB4 = \0356\0202\0264
-lcap=$(printf '%b' '\0356\0202\0266')
 rcap=$(printf '%b' '\0356\0202\0264')
 
 # Pill renders at the LEFTMOST position of the bar (prepended to
-# powerkit's status-left by prepend-ssh-host.sh). LCAP enters from
-# bar-bg → blue, pill content on blue, exit chevron transitions
-# blue → session_bg so the session pill's leading cell matches.
-# The session pill handles its own transition to the window list
-# via powerkit's native session→windows chevron.
-printf '#[fg=%s,bg=default]%s#[fg=%s,bg=%s,bold] @ %s #[fg=%s,bg=%s,nobold]%s#[default]' \
-    "$host_bg" "$lcap" \
+# powerkit's status-left by prepend-ssh-host.sh). Left edge is
+# flat — the pill starts against the bar's left edge with no cap
+# glyph. Exit chevron transitions blue → session_bg so the
+# session pill's leading cell matches; the session pill handles
+# its own transition to the window list via powerkit's native
+# session→windows chevron.
+printf '#[fg=%s,bg=%s,bold] @ %s #[fg=%s,bg=%s,nobold]%s#[default]' \
     "$host_fg" "$host_bg" "$host" \
     "$host_bg" "$session_bg" "$rcap"
