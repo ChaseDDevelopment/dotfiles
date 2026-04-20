@@ -29,7 +29,7 @@ function ssht() {
     # wrapper exists but errors on source, which would otherwise leak
     # stderr noise into the fallback path.
     ssh -t "$@" "$host" \
-        'command -v tmux-session >/dev/null 2>&1 && exec tmux-session main || PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" exec tmux new-session -A -s main'
+        'command -v tmux-session >/dev/null 2>&1 && exec tmux-session Main || PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" exec tmux new-session -A -s Main'
 
     # Reset terminal state after SSH exits
     # Fixes terminal corruption when connection drops unexpectedly

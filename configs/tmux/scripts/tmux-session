@@ -12,4 +12,4 @@
 # to PATH for every shell.
 
 [[ -f "${ZDOTDIR:-$HOME}/.zprofile" ]] && source "${ZDOTDIR:-$HOME}/.zprofile"
-exec tmux new-session -A -s "${1:-main}"
+exec tmux new-session -A -s "${1:-Main}"
