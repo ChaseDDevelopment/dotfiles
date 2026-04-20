@@ -37,7 +37,6 @@ var (
 	termIsTerminalFn   = term.IsTerminal
 	findRootDirFn      = findRootDir
 	detectPlatformFn   = platform.Detect
-	needsSudoFn        = executor.NeedsSudo
 	preAuthFn          = executor.PreAuth
 	hasSudoFn          = executor.HasSudo
 	newLogFileFn       = executor.NewLogFile
@@ -87,21 +86,22 @@ func main() {
 	}
 
 	// Pre-authenticate sudo before the TUI takes ownership of
-	// stdin. The keepalive goroutine refreshes the credential
-	// cache so long-running installs don't hit timeouts. Fail
-	// fast if auth doesn't succeed — sudo prompts inside the alt
-	// screen are hidden and every sudo task would silently error.
-	if needsSudoFn() {
+	// stdin. Call PreAuth unconditionally whenever sudo is on PATH:
+	// `sudo -v` prompts when the cache is stale and silently
+	// re-stamps when it's valid, so the result is either "freshly
+	// primed" or "freshly re-stamped" — never "maybe primed, maybe
+	// not". This closes the race where a maintenance task that
+	// probes `sudo -n -v` moments after startup saw a cache the
+	// startup probe had believed was valid. Fail fast if auth
+	// doesn't succeed — sudo prompts inside the TUI alt screen are
+	// hidden and every sudo task would silently error.
+	if hasSudoFn() {
 		if err := preAuthFn(); err != nil {
 			fmt.Fprintf(os.Stderr,
 				"Error: sudo authentication failed: %v\n", err,
 			)
 			os.Exit(1)
 		}
-	} else if hasSudoFn() {
-		fmt.Fprintln(os.Stderr,
-			"[sudo] Credentials already available.",
-		)
 	}
 	logFile, err := newLogFileFn(filepath.Join(rootDir, "install.log"))
 	if err != nil {

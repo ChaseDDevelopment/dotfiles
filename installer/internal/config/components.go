@@ -295,11 +295,18 @@ func EnsureLoginShellIsZsh(
 	}
 
 	if err := setDefaultShellZsh(ctx, sc, loginShell, zshPath); err != nil {
-		sc.Runner.Log.Write(fmt.Sprintf(
-			"chsh to %s failed (%v) — run "+
+		// Loud-fail: log with ERROR prefix for post-mortem grep, and
+		// also print to stderr so the user sees it after the TUI
+		// exits (install.log-only messages are easy to miss). The
+		// rest of the install succeeded — don't mark critical — but
+		// the user needs a clear signal this one step didn't happen.
+		msg := fmt.Sprintf(
+			"ERROR: chsh to %s failed (%v) — run "+
 				"'sudo chsh -s %s %s' manually to make zsh permanent",
 			zshPath, err, zshPath, user,
-		))
+		)
+		sc.Runner.Log.Write(msg)
+		fmt.Fprintln(os.Stderr, msg)
 		sc.Failures.Record(sc.Component,
 			"chsh to zsh failed", err)
 	}

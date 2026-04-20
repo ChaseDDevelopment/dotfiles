@@ -55,7 +55,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("PreAuth helper failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "[sudo] Password required") {
-		t.Fatalf("expected sudo prompt output, got %s", out)
+	if !strings.Contains(string(out), "[sudo] Priming credentials") {
+		t.Fatalf("expected sudo priming banner, got %s", out)
 	}
 }

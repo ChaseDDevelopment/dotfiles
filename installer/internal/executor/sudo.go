@@ -39,13 +39,19 @@ func NeedsSudo() bool {
 	return cmd.Run() != nil
 }
 
-// PreAuth prompts the user for their sudo password via
-// "sudo -v", caching credentials for subsequent non-interactive
-// use. Must be called before the TUI takes ownership of stdin.
+// PreAuth runs "sudo -v" to either re-stamp a valid cache or
+// prompt the user for their password when the cache is stale.
+// Called unconditionally at startup by main so every sudo task
+// downstream sees a freshly-primed timestamp; the banner wording
+// stays accurate whether or not sudo actually prompts, because
+// sudo's own semantics handle both cases transparently.
+//
+// Must be called before the TUI takes ownership of stdin.
 func PreAuth() error {
 	fmt.Fprintln(
 		os.Stderr,
-		"[sudo] Password required (cached for this session only):",
+		"[sudo] Priming credentials for this session "+
+			"(password prompt only if cache is stale):",
 	)
 	cmd := exec.Command("sudo", "-v")
 	cmd.Stdin = os.Stdin
@@ -61,11 +67,28 @@ func PreAuth() error {
 // the sudo credential cache at regular intervals. It stops when
 // ctx is cancelled. Call the returned function to stop early.
 // When log is non-nil, credential expiry is logged.
+//
+// An initial non-interactive refresh runs before the ticker loop
+// so tasks that execute inside the first sudoKeepaliveInterval
+// (e.g. maintenance tasks in the opening seconds of an install)
+// still benefit from a live cache. The initial refresh is
+// best-effort — PreAuth should have seeded the cache a moment
+// earlier; if it hasn't, the first ticker tick retries with the
+// existing failure-counting / logging path.
 func StartKeepalive(ctx context.Context, log *LogFile) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		ticker := time.NewTicker(sudoKeepaliveInterval)
 		defer ticker.Stop()
+		if ctx.Err() == nil {
+			initial := exec.CommandContext(
+				ctx, "sudo", "-n", "-v",
+			)
+			initial.Stdin = nil
+			initial.Stdout = nil
+			initial.Stderr = nil
+			_ = initial.Run()
+		}
 		failures := 0
 		for {
 			select {
