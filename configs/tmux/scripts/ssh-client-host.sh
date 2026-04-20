@@ -8,11 +8,11 @@
 # formats independently per attached client, so each client's bar
 # decision is made from its own PID walk.
 #
-# Styling: single-tone blue pill chained into powerkit's window
-# family via entry + exit chevrons (see styling block below). The
-# chevrons track window 1's active/inactive state so both cell
-# boundaries land on whatever bg powerkit's session→windows
-# chevron produces — no dark slivers around the pill.
+# Styling: single-tone blue pill at the leftmost position of the
+# bar (prepended to status-left by prepend-ssh-host.sh). LCAP on
+# bar-bg, exit chevron tracks powerkit's session-bg conditional so
+# the pill flows cleanly into the green Main pill on its right
+# without colliding with the session→windows chevron.
 client_pid="$1"
 [ -n "$client_pid" ] || exit 0
 
@@ -35,30 +35,31 @@ host=$(hostname -s 2>/dev/null)
 host_bg='#7aa2f7'
 host_fg='#1a1b26'
 
-# first_win_bg tracks window 1's state via the same conditional
-# powerkit uses in windows_get_first_bg
-# (~/.tmux/plugins/tmux-powerkit/src/renderer/entities/windows.sh).
-# It's the bg powerkit's session→windows chevron lands on AND the
-# bg the first window's leading index cell starts on — so our
-# entry chevron consumes that bg on its left, and our exit
-# chevron produces that bg on its right. Active lighter #b096df
-# or inactive lighter #626880.
-first_win_bg='#{?#{==:#{active_window_index},#{base-index}},#b096df,#626880}'
+# session_bg tracks powerkit's session pill color via the same
+# conditional session_build_bg_condition uses
+# (~/.tmux/plugins/tmux-powerkit/src/renderer/entities/session.sh).
+# Our exit chevron lands on this bg so its right edge matches the
+# session pill's leading cell. Prefix mode → #e0af68, copy mode
+# → #7dcfff, normal → #9ece6a.
+session_bg='#{?client_prefix,#e0af68,#{?pane_in_mode,#7dcfff,#9ece6a}}'
 
-# U+E0B4 (rounded right, POWERKIT_SEP_ROUND_RIGHT) — same glyph
-# powerkit's window format uses for its right-facing chevrons.
-# Emit via POSIX-portable `printf '%b'` + octal so dash renders
-# the bytes; hex `\xHH` in the format string is unparsed by dash.
+# U+E0B6 (rounded left, POWERKIT_SEP_ROUND_LEFT)  for the LCAP
+# U+E0B4 (rounded right, POWERKIT_SEP_ROUND_RIGHT) for the exit
+# chevron — same glyphs powerkit uses for bar-edge caps. Emit via
+# POSIX-portable `printf '%b'` + octal so dash renders the bytes;
+# hex `\xHH` in the format string is unparsed by dash.
+# U+E0B6 = 0xEE 0x82 0xB6 = \0356\0202\0266
 # U+E0B4 = 0xEE 0x82 0xB4 = \0356\0202\0264
-sep=$(printf '%b' '\0356\0202\0264')
+lcap=$(printf '%b' '\0356\0202\0266')
+rcap=$(printf '%b' '\0356\0202\0264')
 
-# Entry chevron (first_win_bg → blue) ◀ pill content ▶ exit
-# chevron (blue → first_win_bg). The exit chevron IS the
-# hostname→windows separator: powerkit skips its own leading
-# separator for the first window, so the window's leading cell
-# starts on first_win_bg — matching the right edge of our exit
-# chevron.
-printf '#[fg=%s,bg=%s]%s#[fg=%s,bg=%s,bold] @ %s #[fg=%s,bg=%s,nobold]%s#[default]' \
-    "$first_win_bg" "$host_bg" "$sep" \
+# Pill renders at the LEFTMOST position of the bar (prepended to
+# powerkit's status-left by prepend-ssh-host.sh). LCAP enters from
+# bar-bg → blue, pill content on blue, exit chevron transitions
+# blue → session_bg so the session pill's leading cell matches.
+# The session pill handles its own transition to the window list
+# via powerkit's native session→windows chevron.
+printf '#[fg=%s,bg=default]%s#[fg=%s,bg=%s,bold] @ %s #[fg=%s,bg=%s,nobold]%s#[default]' \
+    "$host_bg" "$lcap" \
     "$host_fg" "$host_bg" "$host" \
-    "$host_bg" "$first_win_bg" "$sep"
+    "$host_bg" "$session_bg" "$rcap"
