@@ -26,13 +26,17 @@ done
 host=$(hostname -s 2>/dev/null)
 [ -n "$host" ] || exit 0
 
-# Separator bytes via POSIX-portable printf. `\xHH` hex escapes in
+# Separator byte via POSIX-portable printf. `\xHH` hex escapes in
 # the format string aren't universally supported — dash (Linux
 # /bin/sh on Debian/Ubuntu) emits them literally. `%b` + octal
 # escapes IS in POSIX and works in dash, bash, and busybox.
 # U+E0B6 (left rounded) = 0xEE 0x82 0xB6 = \0356\0202\0266
-# U+E0B4 (right rounded) = 0xEE 0x82 0xB4 = \0356\0202\0264
 lcap=$(printf '%b' '\0356\0202\0266')
-rcap=$(printf '%b' '\0356\0202\0264')
 
-printf '#[fg=#bb9af7,bg=default]%s#[fg=#1a1b26,bg=#bb9af7,bold] %s #[fg=#bb9af7,bg=default,nobold]%s#[default]' "$lcap" "$host" "$rcap"
+# Rounded left cap, flat right (cut back to bar-bg). Matches the
+# asymmetric shape of powerkit's cpu/memory/battery segments,
+# which have only a left-rounded cap and transition flat on the
+# right — a full pill next to the "Main" full pill reads as
+# visually repetitive, while a half-pill punctuates the session
+# segment cleanly.
+printf '#[fg=#bb9af7,bg=default]%s#[fg=#1a1b26,bg=#bb9af7,bold] %s #[default]' "$lcap" "$host"
