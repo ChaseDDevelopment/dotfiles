@@ -26,11 +26,16 @@ unset _brew_bin _brew_cache
 typeset -U path
 
 # .NET SDK — point DOTNET_ROOT at whichever install layout is present.
-# Brew installs the formula at $HOMEBREW_PREFIX/opt/dotnet/libexec (caveat
-# output explicitly tells callers to set DOTNET_ROOT there). The script
-# installer (dotnet-install.sh) lands under ~/.dotnet. Prefer brew when both
-# exist so `brew upgrade dotnet` keeps control of the active toolchain.
-if [[ -n "${HOMEBREW_PREFIX:-}" && -d "${HOMEBREW_PREFIX}/opt/dotnet/libexec" ]]; then
+# Prefer the Microsoft pkg installer at /usr/local/share/dotnet when present:
+# it's the only layout that truly supports side-by-side SDKs/runtimes. Brew's
+# `dotnet` formula ships only the current major, so framework-dependent apps
+# targeting older LTS runtimes (e.g. net8.0) fail with "You must install or
+# update .NET to run this application" once brew moves to the next major.
+# Fall back to brew's dotnet, then to the script installer under ~/.dotnet.
+if [[ -d "/usr/local/share/dotnet" ]]; then
+    export DOTNET_ROOT="/usr/local/share/dotnet"
+    export PATH="${DOTNET_ROOT}:${PATH}"
+elif [[ -n "${HOMEBREW_PREFIX:-}" && -d "${HOMEBREW_PREFIX}/opt/dotnet/libexec" ]]; then
     export DOTNET_ROOT="${HOMEBREW_PREFIX}/opt/dotnet/libexec"
 elif [[ -d "${HOME}/.dotnet" ]]; then
     export DOTNET_ROOT="${HOME}/.dotnet"
