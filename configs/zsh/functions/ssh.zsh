@@ -4,15 +4,33 @@
 # Usage:
 #   ssht server1              # Attach to "main" session
 #   ssht user@192.168.1.10    # Works with full SSH syntax
+#   ssht -c server1           # Keep local Mac awake during session
 #
 function ssht() {
+    local caffeinate_mode=0
+
+    case "$1" in
+        -c|--caffeinate)
+            caffeinate_mode=1
+            shift
+            ;;
+    esac
+
     if [[ -z "$1" ]]; then
-        echo "Usage: ssht <host> [ssh-options...]"
+        echo "Usage: ssht [-c|--caffeinate] <host> [ssh-options...]"
         echo "Connects via SSH and attaches to tmux 'main' session"
+        echo "  -c, --caffeinate  prevent local idle sleep during session"
+        return 1
+    fi
+
+    if (( caffeinate_mode )) \
+        && ! (( $+commands[caffeinate] || $+functions[caffeinate] )); then
+        echo "ssht: caffeinate requested, but caffeinate was not found"
         return 1
     fi
 
     local host="$1"
+    local remote_cmd
     shift
 
     # -t forces TTY allocation (required for tmux).
@@ -28,8 +46,19 @@ function ssht() {
     # (cheap PATH existence check) — guards against cases where the
     # wrapper exists but errors on source, which would otherwise leak
     # stderr noise into the fallback path.
-    ssh -t "$@" "$host" \
-        'command -v tmux-session >/dev/null 2>&1 && exec tmux-session Main || PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" exec tmux new-session -A -s Main'
+    remote_cmd='command -v tmux-session >/dev/null 2>&1'
+    remote_cmd+=' && exec tmux-session Main'
+    remote_cmd+=' || PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin'
+    remote_cmd+=':/opt/homebrew/bin:/usr/local/bin:$PATH"'
+    remote_cmd+=' exec tmux new-session -A -s Main'
+
+    local -a ssh_cmd=(ssh -t "$@" "$host" "$remote_cmd")
+
+    if (( caffeinate_mode )); then
+        caffeinate -i "${ssh_cmd[@]}"
+    else
+        "${ssh_cmd[@]}"
+    fi
 
     # Reset terminal state after SSH exits
     # Fixes terminal corruption when connection drops unexpectedly
