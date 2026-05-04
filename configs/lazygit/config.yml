@@ -1,8 +1,8 @@
 # TokyoNight Night theme for lazygit
 git:
-  paging:
-    colorArg: always
-    pager: delta --dark --paging=never
+  pagers:
+    - colorArg: always
+      pager: delta --dark --paging=never
   autoFetch: true
 os:
   editPreset: "nvim"
@@ -10,21 +10,21 @@ gui:
   nerdFontsVersion: "3"
   theme:
     activeBorderColor:
-      - "#9ece6a"   # Green
+      - "#9ece6a" # Green
       - bold
     inactiveBorderColor:
-      - "#a9b1d6"   # Fg dark / overlay
+      - "#a9b1d6" # Fg dark / overlay
     optionsTextColor:
-      - "#7aa2f7"   # Blue
+      - "#7aa2f7" # Blue
     selectedLineBgColor:
-      - "#292e42"   # Surface0
+      - "#292e42" # Surface0
     cherryPickedCommitBgColor:
-      - "#414868"   # Surface1 / overlay
+      - "#414868" # Surface1 / overlay
     cherryPickedCommitFgColor:
-      - "#9ece6a"   # Green
+      - "#9ece6a" # Green
     unstagedChangesColor:
-      - "#f7768e"   # Red
+      - "#f7768e" # Red
     defaultFgColor:
-      - "#c0caf5"   # Text
+      - "#c0caf5" # Text
     searchingActiveBorderColor:
-      - "#e0af68"   # Yellow
+      - "#e0af68" # Yellow
