@@ -42,6 +42,9 @@ func AllSymlinks() []SymlinkEntry {
 		// Atuin
 		{Source: "atuin", Target: "$HOME/.config/atuin", IsDir: true, Component: "Atuin"},
 
+		// Pi
+		{Source: "pi/agent/aliases.bash", Target: "$HOME/.pi/agent/aliases.bash", IsDir: false, Component: "Pi"},
+
 		// Ghostty
 		{Source: "ghostty", Target: "$HOME/.config/ghostty", IsDir: true, Component: "Ghostty"},
 

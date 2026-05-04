@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,100 @@ func newComponentSetup(t *testing.T) (*SetupContext, string) {
 		Failures: NewTrackedFailures(),
 	}
 	return sc, home
+}
+
+func TestSetupPiCreatesSettings(t *testing.T) {
+	sc, home := newComponentSetup(t)
+
+	if err := setupPi(sc); err != nil {
+		t.Fatalf("setupPi: %v", err)
+	}
+
+	settingsPath := filepath.Join(home, ".pi", "agent", "settings.json")
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings["shellCommandPrefix"] != piShellCommandPrefix {
+		t.Fatalf(
+			"shellCommandPrefix = %q, want %q",
+			settings["shellCommandPrefix"], piShellCommandPrefix,
+		)
+	}
+}
+
+func TestSetupPiPreservesExistingSettings(t *testing.T) {
+	sc, home := newComponentSetup(t)
+	agentDir := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(agentDir, "settings.json")
+	existing := `{
+  "defaultProvider": "openai-codex",
+  "packages": ["npm:context-mode"],
+  "shellCommandPrefix": "old",
+  "terminal": {"showTerminalProgress": true}
+}
+`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := setupPi(sc); err != nil {
+		t.Fatalf("setupPi: %v", err)
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings["defaultProvider"] != "openai-codex" {
+		t.Fatalf("defaultProvider was not preserved: %#v", settings)
+	}
+	packages, ok := settings["packages"].([]any)
+	if !ok || len(packages) != 1 || packages[0] != "npm:context-mode" {
+		t.Fatalf("packages were not preserved: %#v", settings["packages"])
+	}
+	terminal, ok := settings["terminal"].(map[string]any)
+	if !ok || terminal["showTerminalProgress"] != true {
+		t.Fatalf("terminal settings were not preserved: %#v", settings["terminal"])
+	}
+	if settings["shellCommandPrefix"] != piShellCommandPrefix {
+		t.Fatalf(
+			"shellCommandPrefix = %q, want %q",
+			settings["shellCommandPrefix"], piShellCommandPrefix,
+		)
+	}
+}
+
+func TestSetupPiInvalidSettingsFailsLoudly(t *testing.T) {
+	sc, home := newComponentSetup(t)
+	agentDir := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(agentDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := setupPi(sc)
+	if err == nil {
+		t.Fatal("expected setupPi to reject invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "parse Pi settings") {
+		t.Fatalf("expected parse error, got %v", err)
+	}
 }
 
 func writeTool(t *testing.T, dir, name, body string) {

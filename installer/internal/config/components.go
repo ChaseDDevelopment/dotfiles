@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,6 +30,7 @@ func AllComponents() []Component {
 		{Name: "Neovim", Icon: " ", RequiredCmd: "nvim"},
 		{Name: "OhMyPosh", Icon: " ", RequiredCmd: "oh-my-posh"},
 		{Name: "Atuin", Icon: " ", RequiredCmd: "atuin"},
+		{Name: "Pi", Icon: "P"},
 		{Name: "Ghostty", Icon: "󰊠"},
 		{Name: "Yazi", Icon: " ", RequiredCmd: "yazi"},
 		{Name: "Git", Icon: " ", RequiredCmd: "git"},
@@ -152,12 +155,60 @@ func runPostInstall(ctx context.Context, name string, sc *SetupContext) error {
 		return setupNeovim(ctx, sc)
 	case "Yazi":
 		return setupYazi(ctx, sc)
+	case "Pi":
+		return setupPi(sc)
 	case "Ghostty":
 		return setupGhostty(ctx, sc)
 	case "Git":
 		return setupGit(ctx, sc)
 	case "Bat":
 		return setupBat(ctx, sc)
+	}
+	return nil
+}
+
+const piShellCommandPrefix = "shopt -s expand_aliases\nsource \"$HOME/.pi/agent/aliases.bash\""
+
+func setupPi(sc *SetupContext) error {
+	home := os.Getenv("HOME")
+	agentDir := filepath.Join(home, ".pi", "agent")
+	settingsPath := filepath.Join(agentDir, "settings.json")
+
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		return fmt.Errorf("create Pi agent dir %s: %w", agentDir, err)
+	}
+
+	settings := make(map[string]any)
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read Pi settings %s: %w", settingsPath, err)
+		}
+	} else {
+		if len(strings.TrimSpace(string(data))) == 0 {
+			return fmt.Errorf("parse Pi settings %s: empty JSON", settingsPath)
+		}
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("parse Pi settings %s: %w", settingsPath, err)
+		}
+	}
+
+	if settings["shellCommandPrefix"] == piShellCommandPrefix {
+		return nil
+	}
+	settings["shellCommandPrefix"] = piShellCommandPrefix
+
+	encoded, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode Pi settings %s: %w", settingsPath, err)
+	}
+	encoded = append(encoded, '\n')
+	if err := os.WriteFile(settingsPath, encoded, 0o644); err != nil {
+		return fmt.Errorf("write Pi settings %s: %w", settingsPath, err)
+	}
+
+	if sc.Runner != nil && sc.Runner.Log != nil {
+		sc.Runner.Log.Write("Pi: configured shellCommandPrefix")
 	}
 	return nil
 }
