@@ -811,26 +811,22 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	// Build blink.cmp fuzzy matcher if available.
-	blinkDir := filepath.Join(home, ".local", "share", "nvim", "site", "pack", "core", "opt", "blink.cmp")
-	if _, err := os.Stat(blinkDir); err == nil && platform.HasCommand("cargo") {
-		sc.Runner.EmitVerbose("Building blink.cmp fuzzy matcher")
-		bestEffort(sc, "blink.cmp cargo build failed", func() error {
-			return sc.Runner.RunInDir(ctx, blinkDir, "cargo", "build", "--release")
-		})
-	}
-
 	// Install missing plugins + pull updates to tracked branch tips.
 	// vim.pack.add (called from init.lua) only clones what's missing
 	// — it never updates. Without this explicit vim.pack.update call
 	// every re-install silently no-ops on the plugin set, leaving
 	// pinned versions stale indefinitely. force=true suppresses the
 	// confirmation prompt that would otherwise hang headless mode.
+	// The final blink.cmp build call uses the v2 plugin API when
+	// available, so it stays aligned with upstream.
 	if platform.HasCommand("nvim") {
+		blinkBuildCmd := "+lua pcall(function() local c=require('blink.cmp'); " +
+			"if c.build then c.build():wait(60000) end end)"
 		sc.Runner.EmitVerbose("Syncing Neovim plugins (headless update)")
 		bestEffort(sc, "headless nvim plugin update failed", func() error {
 			return sc.Runner.Run(ctx, "nvim", "--headless",
 				"+lua vim.pack.update(nil, {force = true})",
+				blinkBuildCmd,
 				"+q",
 			)
 		})

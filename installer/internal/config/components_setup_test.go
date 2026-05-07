@@ -142,7 +142,16 @@ func TestComponentSetupHelpers(t *testing.T) {
 	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("COMPONENT_LOG", filepath.Join(home, "commands.log"))
 
-	for _, name := range []string{"tmux", "pgrep", "cargo", "nvim", "ya", "git", "bash", "zsh", "brew"} {
+	for _, name := range []string{
+		"tmux",
+		"pgrep",
+		"nvim",
+		"ya",
+		"git",
+		"bash",
+		"zsh",
+		"brew",
+	} {
 		body := `#!/bin/sh
 printf '%s %s\n' "` + name + `" "$*" >> "$COMPONENT_LOG"
 if [ "` + name + `" = "pgrep" ]; then
@@ -186,10 +195,6 @@ exit 0
 		t.Fatalf("setupTmux: %v", err)
 	}
 
-	blinkDir := filepath.Join(home, ".local", "share", "nvim", "site", "pack", "core", "opt", "blink.cmp")
-	if err := os.MkdirAll(blinkDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	lazyDir := filepath.Join(home, ".local", "share", "nvim", "lazy")
 	if err := os.MkdirAll(lazyDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -220,7 +225,7 @@ exit 0
 	got := string(data)
 	for _, want := range []string{
 		"tmux source-file",
-		"cargo build --release",
+		"c.build():wait(60000)",
 		"nvim --headless",
 		"ya pkg install",
 		"git config --global user.name",

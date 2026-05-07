@@ -1,4 +1,42 @@
 -- PackChanged hooks: run after vim.pack installs/updates plugins
+local function build_blink_cmp()
+	local ok, cmp = pcall(require, 'blink.cmp')
+	if not ok then
+		vim.notify(
+			'blink.cmp load failed: ' .. tostring(cmp),
+			vim.log.levels.WARN
+		)
+		return
+	end
+
+	if type(cmp.build) == 'function' then
+		local build_ok, err = pcall(function()
+			cmp.build():wait(60000)
+		end)
+		if not build_ok then
+			vim.notify(
+				'blink.cmp build failed: ' .. tostring(err),
+				vim.log.levels.WARN
+			)
+		end
+		return
+	end
+
+	if vim.fn.executable('cargo') == 1 then
+		local dir = vim.fn.stdpath('data')
+			.. '/site/pack/core/opt/blink.cmp'
+		vim.system(
+			{ 'cargo', 'build', '--release' },
+			{ cwd = dir }
+		):wait()
+	else
+		vim.notify(
+			'blink.cmp: cargo not found, using lua fallback',
+			vim.log.levels.WARN
+		)
+	end
+end
+
 vim.api.nvim_create_autocmd('PackChanged', {
 	callback = function(ev)
 		local name = ev.data.spec.name
@@ -6,12 +44,8 @@ vim.api.nvim_create_autocmd('PackChanged', {
 			if not ev.data.active then vim.cmd.packadd('nvim-treesitter') end
 			vim.cmd('TSUpdate')
 		elseif name == 'blink.cmp' then
-			if vim.fn.executable('cargo') == 1 then
-				local dir = vim.fn.stdpath('data') .. '/site/pack/core/opt/blink.cmp'
-				vim.system({ 'cargo', 'build', '--release' }, { cwd = dir }):wait()
-			else
-				vim.notify('blink.cmp: cargo not found, fuzzy matching will use lua fallback', vim.log.levels.WARN)
-			end
+			if not ev.data.active then vim.cmd.packadd('blink.cmp') end
+			build_blink_cmp()
 		end
 	end,
 })

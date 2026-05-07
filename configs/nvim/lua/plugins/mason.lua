@@ -1,8 +1,8 @@
 require("mason").setup()
 
--- has() mirrors the blink.cmp cargo-vs-lua fallback pattern in
--- lua/core/autocmds.lua: if the SDK binary isn't on PATH, don't ask
--- Mason to install an LSP/tool whose language won't work anyway.
+-- has() keeps Mason installs best-effort: if the SDK binary isn't
+-- on PATH, don't ask Mason to install an LSP/tool whose language
+-- won't work anyway.
 local function has(bin)
 	return vim.fn.executable(bin) == 1
 end
