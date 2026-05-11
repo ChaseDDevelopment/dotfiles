@@ -9,7 +9,6 @@ if (( $+commands[eza] )); then
 
     # Tree views
     alias lt='eza --tree --level=2 --icons'
-    alias lt2='eza --tree --level=2 --icons'
     alias lt3='eza --tree --level=3 --icons'
 
     # Git-focused tree (great for repos)
@@ -89,12 +88,18 @@ alias now='date +"%Y-%m-%d %H:%M:%S"'
 alias snvim='sudoedit'
 
 # Quick edits
-alias zshrc='${EDITOR} ${ZDOTDIR}/.zshrc'
+alias zshrc='${EDITOR:-nvim} "${ZDOTDIR:-$HOME/.config/zsh}/.zshrc"'
 alias reload='source ${ZDOTDIR}/.zshrc'
 
 # Networking
 alias myip='curl -s ifconfig.me'
-alias ports='ss -tulanp'
+if [[ "$OSTYPE" == darwin* ]]; then
+    alias ports='lsof -nP -iTCP -sTCP:LISTEN -iUDP'
+elif (( $+commands[ss] )); then
+    alias ports='ss -tulanp'
+else
+    alias ports='netstat -tulanp 2>/dev/null || netstat -anv'
+fi
 
 # Quick parent directory navigation
 alias ..='cd ..'

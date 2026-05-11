@@ -22,7 +22,6 @@ alias 'gca!'='git commit -va --amend'
 alias gb='git branch'
 alias gba='git branch -a'
 alias gbd='git branch -d'
-alias gbD='git branch -D'
 alias gco='git checkout'
 alias gcb='git checkout -b'
 alias gsw='git switch'
@@ -39,7 +38,6 @@ alias gfa='git fetch --all --prune'
 alias gl='git pull'
 alias glr='git pull --rebase'
 alias gp='git push'
-alias gpf='git push --force-with-lease'
 alias gpsup='git push --set-upstream origin $(git branch --show-current)'
 
 # Rebase
@@ -50,7 +48,6 @@ alias grba='git rebase --abort'
 
 # Reset
 alias grh='git reset HEAD'
-alias grhh='git reset HEAD --hard'
 
 # Log (basic - forgit provides better interactive versions)
 alias glog='git log --oneline --graph --decorate'

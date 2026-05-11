@@ -6,7 +6,6 @@ if command -v eza >/dev/null 2>&1; then
     alias ll='eza -la --icons --git --header --group-directories-first --color-scale'
     alias la='eza -a --icons --group-directories-first'
     alias lt='eza --tree --level=2 --icons'
-    alias lt2='eza --tree --level=2 --icons'
     alias lt3='eza --tree --level=3 --icons'
     alias ltg='eza --tree --level=2 --icons --git'
 else
@@ -48,7 +47,13 @@ alias now='date +"%Y-%m-%d %H:%M:%S"'
 alias snvim='sudoedit'
 alias zshrc='${EDITOR:-nvim} "${ZDOTDIR:-$HOME/.config/zsh}/.zshrc"'
 alias myip='curl -s ifconfig.me'
-alias ports='ss -tulanp'
+if [[ "$OSTYPE" == darwin* ]]; then
+    alias ports='lsof -nP -iTCP -sTCP:LISTEN -iUDP'
+elif command -v ss >/dev/null 2>&1; then
+    alias ports='ss -tulanp'
+else
+    alias ports='netstat -tulanp 2>/dev/null || netstat -anv'
+fi
 
 alias ..='cd ..'
 alias ...='cd ../..'
@@ -74,7 +79,6 @@ alias gcm='git commit -m'
 alias gb='git branch'
 alias gba='git branch -a'
 alias gbd='git branch -d'
-alias gbD='git branch -D'
 alias gco='git checkout'
 alias gcb='git checkout -b'
 alias gsw='git switch'

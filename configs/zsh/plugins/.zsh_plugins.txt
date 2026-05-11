@@ -25,9 +25,6 @@ wfxr/forgit kind:defer
 # Abbreviations (fish-style)
 olets/zsh-abbr kind:defer
 
-# Remind you when an alias exists for a command
-MichaelAquilina/zsh-you-should-use
-
 # Auto-pair brackets, quotes, parentheses
 hlissner/zsh-autopair
 
