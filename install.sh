@@ -109,8 +109,13 @@ if [[ "$NEED_DOWNLOAD" == true ]]; then
     fi
 fi
 
-"$BINARY"
-code=$?
+# Capture the exit code without tripping `set -e`: a bare command
+# that exits non-zero (the TUI uses 10 as its "reload shell please"
+# contract) would abort the script here, before we ever read $? and
+# run the re-exec block below. `|| code=$?` keeps the command in a
+# tested context so errexit stays out of the way.
+code=0
+"$BINARY" || code=$?
 
 # Echo the exit code once so a later debug session can grep for it
 # in the user's scrollback or CI log without relaunching. Matches
