@@ -542,10 +542,22 @@ func installNerdFontLinux(ctx context.Context, ic *InstallContext) error {
 		return fmt.Errorf("extract nerd font: %w", err)
 	}
 
-	// Refresh font cache. A failure here shouldn't abort the install
-	// (the font files are already in place), but per the "errors must
-	// be loud" rule we surface it via the runner log so a broken
-	// font-cache binary doesn't disappear silently.
+	// Refresh font cache. fc-cache ships with fontconfig, which isn't
+	// guaranteed present yet on non-apt hosts — on pacman/dnf it only
+	// arrives as a transitive dep of tools installed later in the run.
+	// Probe first: blindly running it when absent logged a scary
+	// "executable file not found in $PATH" line on every such install
+	// (and on a headless server fc-cache is moot anyway — fonts render
+	// client-side). When fc-cache IS present a failure is still
+	// surfaced loudly: the font files are already in place so it's
+	// non-fatal, but a broken cache binary shouldn't vanish silently.
+	if _, err := exec.LookPath("fc-cache"); err != nil {
+		ic.Runner.Log.Write(
+			"fc-cache not on PATH (fontconfig not installed); " +
+				"skipping font cache refresh",
+		)
+		return nil
+	}
 	if err := ic.Runner.Run(ctx, "fc-cache", "-fv"); err != nil {
 		ic.Runner.Log.Write(fmt.Sprintf(
 			"WARNING: fc-cache refresh failed (non-fatal): %v", err,

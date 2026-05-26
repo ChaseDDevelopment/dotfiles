@@ -154,6 +154,69 @@ func TestNerdFontLinuxInstallsFontconfigOnApt(t *testing.T) {
 	}
 }
 
+// TestNerdFontLinuxSkipsFcCacheWhenAbsent covers the pacman fresh-install
+// path: fontconfig isn't installed yet (it arrives later as a transitive
+// dep), so fc-cache isn't on PATH. installNerdFontLinux must skip the
+// cache refresh cleanly — returning nil and logging a benign "skipping"
+// note rather than attempting fc-cache and logging the scary
+// "executable file not found in $PATH" failure.
+func TestNerdFontLinuxSkipsFcCacheWhenAbsent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	fakebin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// PATH is ONLY the fakebin (not appended to the real PATH) so the
+	// host's own fc-cache, if any, can't leak in. Stub curl + tar so
+	// download + extract succeed; deliberately omit fc-cache.
+	t.Setenv("PATH", fakebin)
+	for _, name := range []string{"curl", "tar"} {
+		if err := os.WriteFile(
+			filepath.Join(fakebin, name), []byte("#!/bin/sh\nexit 0\n"), 0o755,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	log, err := executor.NewLogFile(filepath.Join(home, "test.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+
+	// Pacman platform: the apt-only fontconfig pre-install is skipped,
+	// so fc-cache stays absent through the whole function.
+	ic := &InstallContext{
+		Runner: executor.NewRunner(log, false),
+		PkgMgr: &stubPkgMgr{name: "pacman"},
+		Platform: &platform.Platform{
+			OS: platform.Linux, Arch: platform.AMD64,
+			PackageManager: platform.PkgPacman,
+		},
+	}
+	origLatest := latestVersionFn
+	latestVersionFn = func(string, bool) (string, error) { return "3.4.0", nil }
+	defer func() { latestVersionFn = origLatest }()
+
+	if err := installNerdFontLinux(context.Background(), ic); err != nil {
+		t.Fatalf("installNerdFontLinux must not fail when fc-cache absent: %v", err)
+	}
+
+	data, err := os.ReadFile(log.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := string(data)
+	if !strings.Contains(logged, "skipping font cache refresh") {
+		t.Fatalf("expected benign skip note; log:\n%s", logged)
+	}
+	if strings.Contains(logged, "fc-cache refresh failed") ||
+		strings.Contains(logged, "executable file not found") {
+		t.Fatalf("fc-cache should not have been attempted; log:\n%s", logged)
+	}
+}
+
 // TestXcbDepsForPkgMgr covers the distro mapping and the nil-safe
 // no-op paths. brew/pacman return nil because jless has a prebuilt
 // path there — the caller should skip the pkgmgr step entirely.
