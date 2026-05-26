@@ -735,11 +735,18 @@ func installMissingTmuxPlugins(
 		})
 	}
 
-	bestEffort(sc, "tmux server start failed", func() error {
-		return sc.Runner.Run(ctx, "tmux", "start-server")
-	})
-	bestEffort(sc, "source tmux.conf into running server failed", func() error {
-		return sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf)
+	// Start the server and source the config in ONE tmux invocation.
+	// Run as two separate processes, `tmux start-server` spins up a
+	// server with zero sessions that exits before the follow-up
+	// `tmux source-file` connects — which then fails "no server
+	// running on …/default" and records a spurious warning (the fresh
+	// DEGRADED noise). A single client command keeps the server alive
+	// across both. The standalone ";" arg is tmux's command separator;
+	// runCmd uses exec.Command directly (no shell to swallow it).
+	bestEffort(sc, "start tmux server and source config failed", func() error {
+		return sc.Runner.Run(
+			ctx, "tmux", "start-server", ";", "source-file", tmuxConf,
+		)
 	})
 	bestEffort(sc, "chmod tpm install script failed", func() error {
 		return sc.Runner.Run(ctx, "chmod", "+x", tpmScript)

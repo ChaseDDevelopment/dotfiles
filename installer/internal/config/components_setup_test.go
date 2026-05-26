@@ -57,6 +57,87 @@ func TestSetupPiCreatesSettings(t *testing.T) {
 	}
 }
 
+// TestInstallMissingTmuxPluginsSourcesInSingleInvocation pins the
+// fresh-install DEGRADED fix: priming TPM must start the tmux server
+// and source the config in ONE `tmux` invocation. Two separate
+// processes raced — `start-server` left a sessionless server that
+// exited before the follow-up `source-file` connected, producing the
+// "no server running" warning. A DryRun runner records the issued
+// commands to the log without executing tmux; we assert the combined
+// command is present and no standalone `source-file` (the racy path)
+// remains.
+func TestInstallMissingTmuxPluginsSourcesInSingleInvocation(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// installMissingTmuxPlugins gates on tmux resolving via PATH. Plant
+	// a fake executable so the gate passes; the DryRun runner never
+	// actually execs it.
+	binDir := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(binDir, "tmux"), []byte("#!/bin/sh\nexit 0\n"), 0o755,
+	); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+
+	log, err := executor.NewLogFile(filepath.Join(home, "test.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { log.Close() })
+	sc := &SetupContext{
+		Runner:    executor.NewRunner(log, true), // DryRun: record, don't exec
+		RootDir:   home,
+		Backup:    backup.NewManager(false),
+		Platform:  &platform.Platform{OS: platform.Linux, Arch: platform.AMD64},
+		Failures:  NewTrackedFailures(),
+		Component: "Tmux",
+	}
+
+	// tmux.conf declares plugins that aren't on disk → "missing", so the
+	// priming + install path runs.
+	tmuxConf := filepath.Join(home, "tmux.conf")
+	if err := os.WriteFile(tmuxConf, []byte(sampleTmuxConf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pluginsDir := filepath.Join(home, "plugins")
+	tpmScripts := filepath.Join(pluginsDir, "tpm", "scripts")
+	if err := os.MkdirAll(tpmScripts, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(tpmScripts, "install_plugins.sh"),
+		[]byte("#!/bin/sh\nexit 0\n"), 0o755,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	installMissingTmuxPlugins(context.Background(), sc, tmuxConf, pluginsDir)
+
+	data, err := os.ReadFile(log.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := string(data)
+
+	want := "tmux start-server ; source-file " + tmuxConf
+	if !strings.Contains(logged, want) {
+		t.Fatalf("missing combined invocation %q in log:\n%s", want, logged)
+	}
+	// No standalone source-file — that's the old racy second process.
+	for _, line := range strings.Split(logged, "\n") {
+		if strings.Contains(line, "source-file") &&
+			!strings.Contains(line, "start-server") {
+			t.Fatalf("found standalone source-file (racy path): %q", line)
+		}
+	}
+	// Priming must not itself record a warning on the happy path.
+	if n := len(sc.Failures.Snapshot()); n != 0 {
+		t.Fatalf("priming recorded %d warning(s), want 0", n)
+	}
+}
+
 func TestSetupPiPreservesExistingSettings(t *testing.T) {
 	sc, home := newComponentSetup(t)
 	agentDir := filepath.Join(home, ".pi", "agent")
@@ -238,9 +319,10 @@ exit 0
 
 // TestMaintainTmuxPluginsInstallsMissing verifies the fresh-install
 // healing path: when tmux.conf declares plugins that aren't on disk
-// AND TPM is on disk, MaintainTmuxPlugins must start the tmux server,
-// source the config (so TPM can read TMUX_PLUGIN_MANAGER_PATH from
-// the running server), and run install_plugins.sh — in that order.
+// AND TPM is on disk, MaintainTmuxPlugins must start the tmux server
+// and source the config (so TPM can read TMUX_PLUGIN_MANAGER_PATH from
+// the running server) in a SINGLE tmux invocation, then run
+// install_plugins.sh — in that order.
 func TestMaintainTmuxPluginsInstallsMissing(t *testing.T) {
 	sc, home := newComponentSetup(t)
 
@@ -296,8 +378,9 @@ exit 0
 	}
 	logStr := string(data)
 	for _, want := range []string{
-		"tmux start-server",
-		"tmux source-file",
+		// Server start + config source in ONE invocation (the fix for
+		// the racy second process that hit "no server running").
+		"tmux start-server ; source-file",
 		"chmod +x",
 		"install_plugins.sh ran",
 	} {
