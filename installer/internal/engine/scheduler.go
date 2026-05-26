@@ -37,7 +37,12 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 		// Build DAG structures.
 		byID := make(map[string]*Task, len(tasks))
 		indegree := make(map[string]int, len(tasks))
-		dependents := make(map[string][]string) // parent → children
+		dependents := make(map[string][]string) // parent → hard children
+		// softDependents holds ordering-only (`After`) edges. They count
+		// toward indegree like hard deps, but skipDependents never
+		// follows them — a failed parent orders, never skips, its soft
+		// children.
+		softDependents := make(map[string][]string) // parent → soft children
 		state := make(map[string]TaskState, len(tasks))
 
 		for i := range tasks {
@@ -62,7 +67,16 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 				}
 				dependents[dep] = append(dependents[dep], t.ID)
 			}
-			indegree[t.ID] = len(t.DependsOn)
+			for _, dep := range t.After {
+				if _, ok := byID[dep]; !ok {
+					missing = append(missing, fmt.Sprintf(
+						"%s ordered after unknown %q", t.ID, dep,
+					))
+					continue
+				}
+				softDependents[dep] = append(softDependents[dep], t.ID)
+			}
+			indegree[t.ID] = len(t.DependsOn) + len(t.After)
 		}
 		if len(missing) > 0 {
 			sort.Strings(missing)
@@ -94,11 +108,17 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 				id := queue[0]
 				queue = queue[1:]
 				processed++
-				for _, child := range dependents[id] {
+				decr := func(child string) {
 					tempIn[child]--
 					if tempIn[child] == 0 {
 						queue = append(queue, child)
 					}
+				}
+				for _, child := range dependents[id] {
+					decr(child)
+				}
+				for _, child := range softDependents[id] {
+					decr(child)
 				}
 			}
 			if processed != len(tasks) {
@@ -344,12 +364,15 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 
 						// Unblock dependents — single critical
 						// section per child to prevent TOCTOU race
-						// with skipDependents.
-						for _, childID := range dependents[t.ID] {
+						// with skipDependents. Both hard (dependents)
+						// and soft (softDependents) children count
+						// toward indegree; a child already Skipped via a
+						// failed hard parent is left alone.
+						unblock := func(childID string) bool {
 							mu.Lock()
 							if state[childID] == Skipped {
 								mu.Unlock()
-								continue
+								return true
 							}
 							indegree[childID]--
 							ready := indegree[childID] == 0
@@ -363,9 +386,28 @@ func Run(ctx context.Context, tasks []Task, maxWorkers int) <-chan Event {
 									// bailing — otherwise pending drifts
 									// and hides hung-scheduler bugs.
 									markFinished()
-									return
+									return false
 								}
 							}
+							return true
+						}
+						aborted := false
+						for _, childID := range dependents[t.ID] {
+							if !unblock(childID) {
+								aborted = true
+								break
+							}
+						}
+						if !aborted {
+							for _, childID := range softDependents[t.ID] {
+								if !unblock(childID) {
+									aborted = true
+									break
+								}
+							}
+						}
+						if aborted {
+							return
 						}
 
 						markFinished()

@@ -80,6 +80,14 @@ func (bc *BuildConfig) shouldInstallTool(t *registry.Tool, plat *platform.Platfo
 	if bc.SkipDevTools && t.DevOnly {
 		return false
 	}
+	// Drop tools whose every strategy is restricted to a package
+	// manager other than the active one (e.g. an apt-only tool on
+	// pacman). Without this they pass the OS gate, get scheduled, then
+	// fail at execution with "no applicable install strategies" and
+	// flip the run to DEGRADED.
+	if !registry.HasApplicableStrategy(t, plat.PackageManager.String()) {
+		return false
+	}
 	return true
 }
 
@@ -458,10 +466,25 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			}
 		}
 
+		// Soft ordering: when a build dependency (e.g. tree-sitter,
+		// cargo) is being installed this run, order setup AFTER it so
+		// the component's native build finds the toolchain — without
+		// skipping setup if that install fails (see engine.Task.After).
+		var setupAfter []string
+		for _, bd := range comp.BuildDeps {
+			for _, tid := range toolIDs {
+				if tid == bd {
+					setupAfter = append(setupAfter, tid)
+					break
+				}
+			}
+		}
+
 		tasks = append(tasks, engine.Task{
 			ID:        taskID,
 			Label:     fmt.Sprintf("Setting up %s", comp.Name),
 			DependsOn: setupDeps,
+			After:     setupAfter,
 			Run: func(ctx context.Context) error {
 				return config.SetupComponent(ctx, comp, setupCtxBuilder())
 			},

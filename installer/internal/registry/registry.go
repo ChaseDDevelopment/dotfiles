@@ -81,6 +81,26 @@ func ShouldInstall(t *Tool, p *platform.Platform) bool {
 	return false
 }
 
+// HasApplicableStrategy reports whether the tool has at least one
+// install strategy that applies to the given package manager. A tool
+// with no strategies is treated as applicable (config-only / handled
+// outside the strategy ladder). This lets the orchestrator drop tools
+// whose every strategy is manager-restricted to a manager other than
+// the active one (e.g. an apt-only tool on pacman) before scheduling,
+// instead of letting them fail at execution with "no applicable
+// install strategies".
+func HasApplicableStrategy(t *Tool, mgrName string) bool {
+	if len(t.Strategies) == 0 {
+		return true
+	}
+	for i := range t.Strategies {
+		if t.Strategies[i].AppliesTo(mgrName) {
+			return true
+		}
+	}
+	return false
+}
+
 // ToolStatus represents the result of checking a tool's install state.
 type ToolStatus int
 

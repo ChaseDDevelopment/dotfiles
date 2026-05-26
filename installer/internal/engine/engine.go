@@ -51,7 +51,13 @@ type Task struct {
 	ID        string
 	Label     string
 	Critical  bool
-	DependsOn []string   // task IDs that must complete first
+	DependsOn []string // task IDs that must complete first
+	// After lists task IDs that must FINISH before this task starts,
+	// purely for ordering. Unlike DependsOn, a failed After-task does
+	// NOT skip this task — it still runs (and may degrade gracefully).
+	// Use for build steps that should wait for a toolchain install but
+	// must still run if that install fails.
+	After     []string
 	Resources []Resource // exclusive resources needed during execution
 	// Timeout caps how long Run may execute. Zero means use the
 	// scheduler default (long enough for package-manager installs

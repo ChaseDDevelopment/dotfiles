@@ -177,6 +177,85 @@ func TestFailedTaskSkipsDependents(t *testing.T) {
 	}
 }
 
+func TestSoftAfterEnforcesOrdering(t *testing.T) {
+	// A soft `After` edge must order B after A completes, just like a
+	// hard dependency does for the success case.
+	var mu sync.Mutex
+	var order []string
+
+	tasks := []Task{
+		{
+			ID: "a", Label: "A",
+			Run: func(_ context.Context) error {
+				time.Sleep(20 * time.Millisecond)
+				mu.Lock()
+				order = append(order, "a")
+				mu.Unlock()
+				return nil
+			},
+		},
+		{
+			ID: "b", Label: "B", After: []string{"a"},
+			Run: func(_ context.Context) error {
+				mu.Lock()
+				order = append(order, "b")
+				mu.Unlock()
+				return nil
+			},
+		},
+	}
+
+	collectEvents(Run(context.Background(), tasks, 5))
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 2 || order[0] != "a" || order[1] != "b" {
+		t.Errorf("expected order [a b], got %v", order)
+	}
+}
+
+func TestSoftAfterDoesNotSkipWhenParentFails(t *testing.T) {
+	// Unlike DependsOn, a soft `After` edge must NOT skip the child when
+	// the parent fails — the child still runs, ordered after the parent.
+	var mu sync.Mutex
+	var order []string
+
+	tasks := []Task{
+		{
+			ID: "a", Label: "A",
+			Run: func(_ context.Context) error {
+				time.Sleep(20 * time.Millisecond)
+				mu.Lock()
+				order = append(order, "a")
+				mu.Unlock()
+				return errors.New("a failed")
+			},
+		},
+		{
+			ID: "b", Label: "B", After: []string{"a"},
+			Run: func(_ context.Context) error {
+				mu.Lock()
+				order = append(order, "b")
+				mu.Unlock()
+				return nil
+			},
+		},
+	}
+
+	msgs := collectEvents(Run(context.Background(), tasks, 5))
+
+	for _, msg := range msgs {
+		if s, ok := msg.(TaskSkippedMsg); ok && s.ID == "b" {
+			t.Fatal("B was skipped on A's failure; soft After must not skip")
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 2 || order[0] != "a" || order[1] != "b" {
+		t.Errorf("expected order [a b], got %v", order)
+	}
+}
+
 func TestUnknownDependencyReportedLoudly(t *testing.T) {
 	// Task B depends on "nonexistent" — used to be silently stripped,
 	// now must emit a critical TaskDoneMsg so bad task wiring is

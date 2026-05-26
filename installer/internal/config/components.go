@@ -20,6 +20,13 @@ type Component struct {
 	Name        string
 	Icon        string // Nerd Font icon for TUI display
 	RequiredCmd string // binary that must exist before setup
+	// BuildDeps lists tool Command names whose install must FINISH
+	// before this component's setup runs, for ordering only. Used for
+	// setups that compile native artifacts against a toolchain (e.g.
+	// Neovim's headless plugin sync builds treesitter parsers and
+	// blink.cmp's Rust matcher). Wired as a soft engine.Task.After edge
+	// so a failed toolchain install orders — but never skips — setup.
+	BuildDeps []string
 }
 
 // AllComponents returns the ordered list of components.
@@ -27,7 +34,10 @@ func AllComponents() []Component {
 	return []Component{
 		{Name: "Zsh", Icon: " ", RequiredCmd: "zsh"},
 		{Name: "Tmux", Icon: " ", RequiredCmd: "tmux"},
-		{Name: "Neovim", Icon: " ", RequiredCmd: "nvim"},
+		{
+			Name: "Neovim", Icon: " ", RequiredCmd: "nvim",
+			BuildDeps: []string{"tree-sitter", "cargo"},
+		},
 		{Name: "OhMyPosh", Icon: " ", RequiredCmd: "oh-my-posh"},
 		{Name: "Atuin", Icon: " ", RequiredCmd: "atuin"},
 		{Name: "Pi", Icon: "P"},

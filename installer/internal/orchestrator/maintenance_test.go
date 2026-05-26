@@ -89,6 +89,44 @@ func TestMaintainTmuxDependsOnTpmWhenScheduled(t *testing.T) {
 	}
 }
 
+// TestSetupNeovimOrderedAfterToolchainsWhenScheduled covers the
+// build-race fix: the nvim headless plugin sync compiles treesitter
+// parsers (needs the tree-sitter CLI) and blink.cmp's Rust matcher
+// (needs cargo). When those toolchains are installed this run, the
+// setup must be ordered AFTER them — via a soft `After` edge, so a
+// toolchain install failure orders but never skips the nvim setup.
+func TestSetupNeovimOrderedAfterToolchainsWhenScheduled(t *testing.T) {
+	bc := newTestBuildConfig(t)
+	bc.DryRun = false
+	bc.ForceReinstall = true // force tree-sitter + cargo onto the schedule
+
+	result := BuildInstallTasks(bc)
+
+	var setupNvim *engine.Task
+	for i := range result.Tasks {
+		if result.Tasks[i].ID == "setup-Neovim" {
+			setupNvim = &result.Tasks[i]
+			break
+		}
+	}
+	if setupNvim == nil {
+		t.Fatal("setup-Neovim task missing from install graph")
+	}
+
+	wantAfter := map[string]bool{"tree-sitter": false, "cargo": false}
+	for _, dep := range setupNvim.After {
+		if _, ok := wantAfter[dep]; ok {
+			wantAfter[dep] = true
+		}
+	}
+	for dep, seen := range wantAfter {
+		if !seen {
+			t.Errorf("setup-Neovim missing soft-order dep %q (After = %v)",
+				dep, setupNvim.After)
+		}
+	}
+}
+
 // TestEnsureZshLoginDependsOnZshWhenScheduled covers the pluto
 // regression: chsh was buried inside setupZsh, which skips when
 // Zsh symlinks are already correct. Lifting it into a dedicated
