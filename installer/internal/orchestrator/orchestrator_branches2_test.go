@@ -78,18 +78,19 @@ func findTask(t *testing.T, tasks []engine.Task, id string) engine.Task {
 	return engine.Task{}
 }
 
-// TestBuildInstallTasksDriftSweepRestoresAndRecords drives the
-// sweep-repo-drift Run closure (orchestrator.go:338-362):
+// TestBuildInstallTasksDriftSweepRestoresWithoutWarning drives the
+// sweep-repo-drift Run closure:
 //
 //  1. seed a git repo with a tracked configs/<name>/file.txt + commit
 //  2. mutate the working tree so DetectRepoDrift returns the path
 //  3. invoke the sweep task's Run closure
 //  4. assert the file is restored to HEAD content
-//  5. assert a Failures.Record entry was added citing the backup dir
+//  5. assert NO Failures entry is recorded — restoring tool-mutated
+//     tracked configs is expected maintenance, not a DEGRADED warning.
 //
 // This test exercises the happy path through the closure: drift
-// detected → BackupAndReset succeeds → log + Failures.Record fire.
-func TestBuildInstallTasksDriftSweepRestoresAndRecords(t *testing.T) {
+// detected → BackupAndReset succeeds → log fires, Failures untouched.
+func TestBuildInstallTasksDriftSweepRestoresWithoutWarning(t *testing.T) {
 	root := initSeededRepo(t, "x")
 
 	// HOME drives the backup manager's destination dir; keep it inside
@@ -121,21 +122,12 @@ func TestBuildInstallTasksDriftSweepRestoresAndRecords(t *testing.T) {
 			string(got), "clean\n")
 	}
 
-	// Failures.Record was invoked with a non-empty backup-dir reference.
-	snap := bc.Failures.Snapshot()
-	if len(snap) == 0 {
-		t.Fatal("Failures.Record was not called; sweep did not " +
-			"surface the restored-files notice to the user")
-	}
-	found := false
-	for _, f := range snap {
-		if f.Err != nil && strings.Contains(f.Err.Error(), "originals saved to") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("no Failures entry mentions backup dir; got %+v", snap)
+	// The sweep restores silently: no warning recorded, so a clean
+	// install with only tool-mutated configs stays OK, not DEGRADED.
+	if snap := bc.Failures.Snapshot(); len(snap) != 0 {
+		t.Fatalf("sweep recorded %d warning(s); want 0 (drift restore "+
+			"is expected maintenance, not degradation): %+v",
+			len(snap), snap)
 	}
 }
 

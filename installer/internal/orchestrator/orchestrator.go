@@ -521,19 +521,20 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 				if rerr != nil {
 					return rerr
 				}
+				// Log only — do NOT record a warning. Tools rewrite
+				// tracked configs as part of normal setup (e.g.
+				// vim.pack rewrites nvim-pack-lock.json, `ya pkg`
+				// rewrites yazi/package.toml). Restoring them to the
+				// repo's canonical version is expected maintenance, not
+				// degradation; flipping every clean install to DEGRADED
+				// over it just trains the user to ignore the banner. The
+				// reactive blocked-pull recovery in app.go still records
+				// — a pull actually blocked by drift is worth surfacing.
 				runner.Log.Write(fmt.Sprintf(
-					"Drift sweep: restored %d config file(s); "+
-						"originals saved to %s",
+					"Drift sweep: restored %d config file(s) mutated by "+
+						"install scripts; originals saved to %s",
 					len(drifted), backupDir,
 				))
-				bc.Failures.Record(
-					"Repo",
-					fmt.Sprintf(
-						"restored %d file(s) mutated by install scripts",
-						len(drifted),
-					),
-					fmt.Errorf("originals saved to %s", backupDir),
-				)
 				return nil
 			},
 		})
