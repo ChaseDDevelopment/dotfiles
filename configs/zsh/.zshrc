@@ -280,3 +280,6 @@ TRAPINT() {
 # zprof
 
 # bun completions (loaded in tools/bun.zsh, not duplicated here)
+
+# bun completions
+[ -s "/Users/orion/.bun/_bun" ] && source "/Users/orion/.bun/_bun"

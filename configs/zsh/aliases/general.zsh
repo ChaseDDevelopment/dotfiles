@@ -85,6 +85,7 @@ alias now='date +"%Y-%m-%d %H:%M:%S"'
 
 # Privileged editing — sudoedit runs nvim as YOUR user with full config,
 # then writes the result back as root. Avoids permission/ownership issues.
+# Muscle-memory `sudo nvim <file>` is also routed here (see functions/sudo.zsh).
 alias snvim='sudoedit'
 
 # Quick edits
