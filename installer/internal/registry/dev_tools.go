@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
@@ -92,25 +93,72 @@ func devTools() []Tool {
 			},
 			CargoCrate: "tree-sitter-cli",
 		},
-		// uv — Python package manager
+		// uv — Python runtime/tool manager. BASE: it runs the server-tier
+		// Python LSPs (systemd/nginx), so it ships on every host. Installed
+		// system-wide on Linux (/usr/local/bin) so root/sudo nvim + headless
+		// Mason can reach the uv-managed tools; Homebrew on macOS.
 		{
 			Name: "uv", Command: "uv", Description: "Fast Python package manager",
-			DevOnly: true,
 			Strategies: []InstallStrategy{
-				{Method: MethodScript, Script: &ScriptConfig{
-					URL:             "https://astral.sh/uv/install.sh",
-					NoProfileModify: true,
-				}},
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "uv"},
+				{Method: MethodCustom, CustomFunc: installUvSystem, Requires: []string{"curl"}},
 			},
 		},
-		// ruff — Python linter/formatter
+		// ruff — Python linter/formatter (dev tier, via uv).
 		{
 			Name: "ruff", Command: "ruff", Description: "Python linter and formatter",
 			DevOnly:   true,
 			DependsOn: []string{"uv"},
 			Strategies: []InstallStrategy{
 				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
-					return ic.Runner.Run(ctx, "uv", "tool", "install", "ruff")
+					return uvToolInstall(ctx, ic, "ruff")
+				}},
+			},
+		},
+		// sqlfluff — SQL linter/formatter (dev tier, via uv).
+		{
+			Name: "sqlfluff", Command: "sqlfluff", Description: "SQL linter and formatter",
+			DevOnly:   true,
+			DependsOn: []string{"uv"},
+			Strategies: []InstallStrategy{
+				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+					return uvToolInstall(ctx, ic, "sqlfluff")
+				}},
+			},
+		},
+		// basedpyright — Python LSP (dev tier, via uv). basedpyright-langserver
+		// is the executable configs/nvim/lsp/basedpyright.lua spawns.
+		{
+			Name: "basedpyright", Command: "basedpyright-langserver", Description: "Python language server",
+			DevOnly:   true,
+			DependsOn: []string{"uv"},
+			Strategies: []InstallStrategy{
+				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+					return uvToolInstall(ctx, ic, "basedpyright")
+				}},
+			},
+		},
+		// systemd-language-server — .service/.socket/.timer LSP. BASE
+		// sysadmin tier; not in Mason, so installed via uv. Linux-only.
+		{
+			Name: "systemd-language-server", Command: "systemd-language-server", Description: "systemd unit LSP",
+			OSFilter:  []string{"linux"},
+			DependsOn: []string{"uv"},
+			Strategies: []InstallStrategy{
+				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+					return uvToolInstall(ctx, ic, "systemd-language-server")
+				}},
+			},
+		},
+		// nginx-language-server — nginx config LSP. BASE sysadmin tier,
+		// via uv. Linux-only.
+		{
+			Name: "nginx-language-server", Command: "nginx-language-server", Description: "nginx config LSP",
+			OSFilter:  []string{"linux"},
+			DependsOn: []string{"uv"},
+			Strategies: []InstallStrategy{
+				{Method: MethodCustom, CustomFunc: func(ctx context.Context, ic *InstallContext) error {
+					return uvToolInstall(ctx, ic, "nginx-language-server")
 				}},
 			},
 		},
@@ -232,6 +280,55 @@ func devTools() []Tool {
 			},
 		},
 	}
+}
+
+// installUvSystem installs uv into /usr/local/bin so every user (including
+// root via sudo nvim) and headless Mason can run uv-managed LSP tools. The
+// Linux path; macOS uses the brew strategy. Mirrors installNvm's
+// download-to-disk + sha256-log pattern (no curl|sh of in-flight bytes).
+func installUvSystem(ctx context.Context, ic *InstallContext) error {
+	f, err := os.CreateTemp("", "dotsetup-uv-install-*.sh")
+	if err != nil {
+		return fmt.Errorf("create temp uv installer: %w", err)
+	}
+	scriptPath := f.Name()
+	f.Close()
+	defer os.Remove(scriptPath)
+
+	if err := ic.Runner.Run(
+		ctx, "curl", "-fsSL", "https://astral.sh/uv/install.sh", "-o", scriptPath,
+	); err != nil {
+		return fmt.Errorf("download uv installer: %w", err)
+	}
+	if sum, err := github.Sha256File(scriptPath); err == nil {
+		ic.Runner.Log.Write(fmt.Sprintf("downloaded uv installer sha256=%s", sum))
+	}
+	// Install as root to /usr/local/bin. UV_NO_MODIFY_PATH stops the
+	// installer editing shell rc files (the repo manages PATH). `sudo env
+	// VAR=...` reliably passes the vars through sudo's env reset.
+	return ic.Runner.Run(ctx, "sudo", "env",
+		"UV_INSTALL_DIR=/usr/local/bin",
+		"UV_NO_MODIFY_PATH=1",
+		"sh", scriptPath,
+	)
+}
+
+// uvToolInstall installs a uv tool so its executable is on PATH. On Linux
+// it lands in /usr/local/bin with a system-wide managed Python under
+// /opt/uv/python (so root/sudo nvim + headless Mason can run it); on macOS
+// it installs per-user (~/.local/bin, already on PATH). Requires uv, which
+// is provisioned first as a base tool (DependsOn "uv").
+func uvToolInstall(ctx context.Context, ic *InstallContext, pkg string) error {
+	if runtime.GOOS == "darwin" {
+		return ic.Runner.Run(ctx, "uv", "tool", "install", pkg)
+	}
+	return ic.Runner.Run(ctx, "sudo", "env",
+		"UV_TOOL_BIN_DIR=/usr/local/bin",
+		"UV_TOOL_DIR=/usr/local/share/uv/tools",
+		"UV_PYTHON_INSTALL_DIR=/opt/uv/python",
+		"UV_CACHE_DIR=/var/cache/uv",
+		"uv", "tool", "install", pkg,
+	)
 }
 
 // Category C — env-bound real-shell branches.

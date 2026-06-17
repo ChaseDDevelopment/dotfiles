@@ -2,21 +2,32 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/github"
+	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
 var latestVersionFn = github.LatestVersion
+
+// latestNodeLTSFn is indirected so tests can stub the network fetch.
+var latestNodeLTSFn = latestNodeLTS
 
 func officialInstallerTools() []Tool {
 	return []Tool{
 		// nvm — Node Version Manager (shell function, not a binary)
 		{
 			Name: "nvm", Command: "nvm", Description: "Node Version Manager",
+			// Dev-tier only: a per-user version switcher, never the base
+			// LSP runtime (a shell function invisible to root/sudo nvim
+			// and headless Mason). See feedback_self_managed_runtimes.
+			DevOnly: true,
 			IsInstalledFunc: func() bool {
 				home := os.Getenv("HOME")
 				for _, p := range []string{
@@ -33,11 +44,16 @@ func officialInstallerTools() []Tool {
 				{Method: MethodCustom, CustomFunc: installNvm, Requires: []string{"curl"}},
 			},
 		},
-		// Node.js LTS (installed via package manager as base)
+		// Node.js LTS — base LSP runtime. Self-managed latest tarball on
+		// Linux (→ /opt + /usr/local/bin symlinks; npm bundled, so it's
+		// root/sudo + headless-Mason reachable and free of Debian's
+		// nodejs↔npm split), Homebrew on macOS. The runtime is NOT a dev
+		// SDK — node-based LSPs (yaml/json/bash/...) need it everywhere.
 		{
-			Name: "nodejs", Command: "node", Description: "Node.js runtime",
+			Name: "nodejs", Command: "node", Description: "Node.js runtime (latest LTS)",
 			Strategies: []InstallStrategy{
-				{Method: MethodPackageManager, Package: "nodejs"},
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "node"},
+				{Method: MethodCustom, CustomFunc: installNodeLinux, Requires: []string{"curl"}},
 			},
 		},
 		// Atuin — shell history
@@ -143,6 +159,97 @@ func installNvm(ctx context.Context, ic *InstallContext) error {
 		nvmDir,
 	)
 	return ic.Runner.RunShell(ctx, script)
+}
+
+// latestNodeLTS returns the newest Node.js LTS version tag (e.g.
+// "v24.16.0") from the official dist index. No silent fallback to a
+// pinned version — a fetch/parse failure surfaces to the caller.
+func latestNodeLTS(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, "https://nodejs.org/dist/index.json", nil,
+	)
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch node dist index: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(
+			"node dist index: HTTP %d", resp.StatusCode,
+		)
+	}
+	var entries []struct {
+		Version string          `json:"version"`
+		LTS     json.RawMessage `json:"lts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return "", fmt.Errorf("decode node dist index: %w", err)
+	}
+	// Entries are newest-first; the first with a non-false "lts" field
+	// (a codename string) is the newest release on the current LTS line.
+	for _, e := range entries {
+		if len(e.LTS) > 0 && string(e.LTS) != "false" {
+			return e.Version, nil
+		}
+	}
+	return "", fmt.Errorf("no Node.js LTS release found in dist index")
+}
+
+// installNodeLinux installs the latest official Node.js LTS to /opt and
+// symlinks node/npm/npx into /usr/local/bin. System-wide (not per-user
+// nvm) so root/`sudo nvim` and headless Mason resolve them; npm ships in
+// the tarball, sidestepping the distro nodejs↔npm package split. macOS is
+// handled by the brew strategy. Mirrors InstallNeovimApt's /opt pattern.
+func installNodeLinux(ctx context.Context, ic *InstallContext) error {
+	ver, err := latestNodeLTSFn(ctx)
+	if err != nil {
+		return fmt.Errorf("resolve latest Node LTS: %w", err)
+	}
+	arch := "x64"
+	if ic.Platform != nil && ic.Platform.Arch == platform.ARM64 {
+		arch = "arm64"
+	}
+	base := fmt.Sprintf("node-%s-linux-%s", ver, arch)
+	url := fmt.Sprintf("https://nodejs.org/dist/%s/%s.tar.gz", ver, base)
+
+	tmpDir, err := os.MkdirTemp("", "node-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tarPath := filepath.Join(tmpDir, base+".tar.gz")
+	if err := ic.Runner.Run(ctx, "curl", "-fsSL", url, "-o", tarPath); err != nil {
+		return fmt.Errorf("download node %s: %w", ver, err)
+	}
+	if sum, err := github.Sha256File(tarPath); err == nil {
+		ic.Runner.Log.Write(fmt.Sprintf("downloaded node %s sha256=%s", ver, sum))
+	}
+
+	// Remove prior /opt/node-* trees so stale majors don't accumulate.
+	// `rm -rf` on the unexpanded glob still exits 0 (-f) when nothing
+	// matches, so this is safe on a first install.
+	if err := ic.Runner.RunShell(ctx, "sudo rm -rf /opt/node-v*-linux-*"); err != nil {
+		return fmt.Errorf("clean old /opt/node: %w", err)
+	}
+	if err := ic.Runner.Run(ctx, "sudo", "tar", "-C", "/opt", "-xzf", tarPath); err != nil {
+		return fmt.Errorf("extract node: %w", err)
+	}
+
+	// Symlink the executables into /usr/local/bin (in sudoers
+	// secure_path, so root/sudo nvim and headless Mason find them).
+	for _, b := range []string{"node", "npm", "npx"} {
+		src := fmt.Sprintf("/opt/%s/bin/%s", base, b)
+		dst := "/usr/local/bin/" + b
+		if err := ic.Runner.Run(ctx, "sudo", "ln", "-sf", src, dst); err != nil {
+			return fmt.Errorf("symlink %s: %w", b, err)
+		}
+	}
+	return nil
 }
 
 func installAtuin(ctx context.Context, ic *InstallContext) error {

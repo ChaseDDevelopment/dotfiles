@@ -87,9 +87,21 @@ func TestDevAndOfficialToolCatalog(t *testing.T) {
 		t.Fatalf("neovim should prefer custom pacman/apt installers: %#v", neovim.Strategies)
 	}
 
+	// uv is a BASE LSP runtime (not dev-only): Homebrew on macOS, a
+	// system-wide installer (/usr/local/bin) on Linux so root/sudo nvim
+	// and headless Mason can run the uv-managed LSP tools.
 	uv := toolByCommand(t, dev, "uv")
-	if uv.Strategies[0].Script == nil || !uv.Strategies[0].Script.NoProfileModify {
-		t.Fatalf("uv installer should disable profile edits: %#v", uv.Strategies[0].Script)
+	if uv.DevOnly {
+		t.Fatalf("uv must be a base tool, not DevOnly: %#v", uv)
+	}
+	if len(uv.Strategies) != 2 {
+		t.Fatalf("unexpected uv strategies: %#v", uv.Strategies)
+	}
+	if uv.Strategies[0].Method != MethodPackageManager || uv.Strategies[0].Package != "uv" {
+		t.Fatalf("uv first strategy should be a brew package: %#v", uv.Strategies[0])
+	}
+	if uv.Strategies[1].Method != MethodCustom {
+		t.Fatalf("uv should have a custom system-wide installer: %#v", uv.Strategies[1])
 	}
 
 	// Oh-My-Posh: brew strategy must use the fully qualified formula
@@ -168,10 +180,21 @@ func TestDevAndOfficialToolCatalog(t *testing.T) {
 	if len(nvm.Strategies) != 1 || nvm.Strategies[0].Method != MethodCustom {
 		t.Fatalf("nvm strategies = %#v", nvm.Strategies)
 	}
+	if !nvm.DevOnly {
+		t.Fatalf("nvm should be dev-tier (DevOnly), never the base runtime: %#v", nvm)
+	}
 
+	// node is a base LSP runtime: Homebrew on macOS, self-managed latest
+	// tarball (→ /opt + /usr/local/bin symlinks) on Linux.
 	node := toolByCommand(t, official, "node")
-	if node.Strategies[0].Method != MethodPackageManager || node.Strategies[0].Package != "nodejs" {
-		t.Fatalf("nodejs strategy = %#v", node.Strategies[0])
+	if len(node.Strategies) != 2 {
+		t.Fatalf("unexpected nodejs strategies: %#v", node.Strategies)
+	}
+	if node.Strategies[0].Method != MethodPackageManager || node.Strategies[0].Package != "node" {
+		t.Fatalf("nodejs brew strategy = %#v", node.Strategies[0])
+	}
+	if node.Strategies[1].Method != MethodCustom {
+		t.Fatalf("nodejs should have a custom Linux installer: %#v", node.Strategies[1])
 	}
 
 	atuin := toolByCommand(t, official, "atuin")

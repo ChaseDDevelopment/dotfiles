@@ -152,6 +152,75 @@ printf 'tool-old 0.9.0'
 	}
 }
 
+// TestInstallNodeAndUvSystemwide locks in the system-wide install argv for
+// the base LSP runtimes: node → /opt + /usr/local/bin symlinks (npm
+// bundled), and uv → /usr/local/bin with profile edits suppressed.
+func TestInstallNodeAndUvSystemwide(t *testing.T) {
+	ic, home := newInstallerCtx(t)
+	fakebin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(fakebin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakebin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("REG_LOG", filepath.Join(home, "registry.log"))
+
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(fakebin, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// curl materializes the -o destination so Sha256File can read it.
+	write("curl", `#!/bin/sh
+dest=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then dest="$2"; shift 2; continue; fi
+  shift
+done
+: > "$dest"
+printf 'curl %s\n' "$*" >> "$REG_LOG"
+`)
+	write("sudo", `#!/bin/sh
+printf 'sudo %s\n' "$*" >> "$REG_LOG"
+exit 0
+`)
+	write("bash", `#!/bin/sh
+printf 'bash %s\n' "$*" >> "$REG_LOG"
+exit 0
+`)
+
+	origNode := latestNodeLTSFn
+	latestNodeLTSFn = func(context.Context) (string, error) { return "v9.9.9", nil }
+	defer func() { latestNodeLTSFn = origNode }()
+
+	if err := installNodeLinux(context.Background(), ic); err != nil {
+		t.Fatalf("installNodeLinux: %v", err)
+	}
+	if err := installUvSystem(context.Background(), ic); err != nil {
+		t.Fatalf("installUvSystem: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(home, "registry.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		// node: clean stale /opt trees, extract, symlink the trio.
+		"bash -c sudo rm -rf /opt/node-v",
+		"sudo tar -C /opt -xzf",
+		"sudo ln -sf /opt/node-v9.9.9-linux-x64/bin/node /usr/local/bin/node",
+		"sudo ln -sf /opt/node-v9.9.9-linux-x64/bin/npm /usr/local/bin/npm",
+		"sudo ln -sf /opt/node-v9.9.9-linux-x64/bin/npx /usr/local/bin/npx",
+		// uv: system-wide install dir, no profile edits.
+		"env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("registry log missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestAdditionalRegistryInstallersAndHelpers(t *testing.T) {
 	ic, home := newInstallerCtx(t)
 	fakebin := filepath.Join(home, "bin")

@@ -30,26 +30,27 @@ type PlanRow struct {
 
 // BuildConfig collects parameters needed to build task graphs.
 type BuildConfig struct {
-	Runner           *executor.Runner
-	PkgMgr           pkgmgr.PackageManager
-	Platform         *platform.Platform
-	State            *state.Store
-	RootDir          string
-	DryRun           bool
-	ForceReinstall   bool
-	SkipPackages     bool
-	SkipUpdate       bool
-	CleanBackup      bool
-	SelectedBackup   string
-	SelectedComps    []string // nil = all
+	Runner         *executor.Runner
+	PkgMgr         pkgmgr.PackageManager
+	Platform       *platform.Platform
+	State          *state.Store
+	RootDir        string
+	DryRun         bool
+	ForceReinstall bool
+	SkipPackages   bool
+	SkipUpdate     bool
+	CleanBackup    bool
+	SelectedBackup string
+	SelectedComps  []string // nil = all
 	// SkipDevTools, when true, drops tools flagged DevOnly in the
-	// registry (go, gopls, dotnet, uv, ruff, bun). Set by the TUI
+	// registry (go, gopls, dotnet, ruff, sqlfluff, basedpyright, bun,
+	// nvm). uv is NOT dev-only — it's a base LSP runtime. Set by the TUI
 	// when the user disables "Install dev tools" on the Options
 	// screen. Defaults to false so the zero-value preserves today's
 	// behavior for callers that don't know about the toggle (tests,
 	// Doctor, Update).
-	SkipDevTools     bool
-	Version          string   // build version for self-update
+	SkipDevTools bool
+	Version      string // build version for self-update
 	// Failures collects best-effort post-install warnings from
 	// component setup hooks. Shared across all tasks in one run so
 	// the summary screen can show everything that didn't succeed.

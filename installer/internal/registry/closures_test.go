@@ -173,6 +173,30 @@ func TestInlineCustomClosures_InvokeExpectedCommands(t *testing.T) {
 			findFn:   pickCustom("gopls", "brew"),
 			wantArgs: "go install golang.org/x/tools/gopls@latest",
 		},
+		{
+			tool:     "sqlfluff",
+			mgr:      "brew", // no Managers filter, matches any
+			findFn:   pickCustom("sqlfluff", "brew"),
+			wantArgs: "uv tool install sqlfluff",
+		},
+		{
+			tool:     "basedpyright",
+			mgr:      "brew", // no Managers filter, matches any
+			findFn:   pickCustom("basedpyright", "brew"),
+			wantArgs: "uv tool install basedpyright",
+		},
+		{
+			tool:     "systemd-language-server",
+			mgr:      "brew", // no Managers filter, matches any
+			findFn:   pickCustom("systemd-language-server", "brew"),
+			wantArgs: "uv tool install systemd-language-server",
+		},
+		{
+			tool:     "nginx-language-server",
+			mgr:      "brew", // no Managers filter, matches any
+			findFn:   pickCustom("nginx-language-server", "brew"),
+			wantArgs: "uv tool install nginx-language-server",
+		},
 	}
 
 	toolsByCat := [][]Tool{cliTools(), devTools(), officialInstallerTools()}
@@ -230,27 +254,33 @@ func TestAllCatalogCustomFuncs_AreReachable(t *testing.T) {
 	// anonymous closures render as "<pkg>.<parent>.func1" and fail
 	// this match, while named ones render as "<pkg>.installXxx".
 	namedCovered := map[string]struct{}{
-		"installNvm":           {},
-		"installAtuin":         {},
-		"installTPM":           {},
-		"installGhCLI":         {},
-		"installTailspin":      {},
-		"installTreeSitterCLI": {},
-		"installNeovimPacman":  {},
-		"InstallNeovimApt":     {},
-		"installYaziApt":       {},
-		"installNerdFontLinux":    {},
-		"installJlessFromSource":  {},
+		"installNodeLinux":       {},
+		"installUvSystem":        {},
+		"installNvm":             {},
+		"installAtuin":           {},
+		"installTPM":             {},
+		"installGhCLI":           {},
+		"installTailspin":        {},
+		"installTreeSitterCLI":   {},
+		"installNeovimPacman":    {},
+		"InstallNeovimApt":       {},
+		"installYaziApt":         {},
+		"installNerdFontLinux":   {},
+		"installJlessFromSource": {},
 	}
 	// Tools whose anonymous closures are asserted by
 	// TestInlineCustomClosures_InvokeExpectedCommands above.
 	inlineCoveredTools := map[string]struct{}{
-		"neovim":    {},
-		"yazi":      {},
-		"ghostty":   {},
-		"nerd-font": {},
-		"ruff":      {},
-		"gopls":     {},
+		"sqlfluff":                {},
+		"basedpyright":            {},
+		"systemd-language-server": {},
+		"nginx-language-server":   {},
+		"neovim":                  {},
+		"yazi":                    {},
+		"ghostty":                 {},
+		"nerd-font":               {},
+		"ruff":                    {},
+		"gopls":                   {},
 	}
 
 	for _, cat := range [][]Tool{

@@ -450,12 +450,14 @@ func TestBuildInstallTasksSkipDevTools(t *testing.T) {
 	// that the registry's DevOnly contract and the Options-menu
 	// toggle have gotten out of sync.
 	devOnlyNames := map[string]bool{
-		"uv":     true,
-		"ruff":   true,
-		"bun":    true,
-		"dotnet": true,
-		"go":     true,
-		"gopls":  true,
+		"ruff":         true,
+		"sqlfluff":     true,
+		"basedpyright": true,
+		"bun":          true,
+		"dotnet":       true,
+		"go":           true,
+		"gopls":        true,
+		"nvm":          true,
 	}
 
 	bc := newTestBuildConfig(t)

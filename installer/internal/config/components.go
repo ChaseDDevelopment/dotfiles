@@ -36,7 +36,9 @@ func AllComponents() []Component {
 		{Name: "Tmux", Icon: " ", RequiredCmd: "tmux"},
 		{
 			Name: "Neovim", Icon: " ", RequiredCmd: "nvim",
-			BuildDeps: []string{"tree-sitter", "cargo"},
+			// "make" = build-essential: a C compiler must exist before the
+			// headless plugin sync compiles treesitter parsers.
+			BuildDeps: []string{"tree-sitter", "cargo", "make"},
 		},
 		{Name: "OhMyPosh", Icon: " ", RequiredCmd: "oh-my-posh"},
 		{Name: "Atuin", Icon: " ", RequiredCmd: "atuin"},
