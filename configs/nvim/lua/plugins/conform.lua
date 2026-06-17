@@ -21,8 +21,12 @@ if has("node") then
 	formatters_by_ft.typescriptreact = { "prettier" }
 	formatters_by_ft.javascriptreact = { "prettier" }
 end
-if has("python3") then
+-- ruff/sqlfluff come from `uv tool install` (system PATH), so gate on the
+-- tool itself, not python3 — a uv-managed interpreter may not expose python3.
+if has("ruff") then
 	formatters_by_ft.python = { "ruff_format" }
+end
+if has("sqlfluff") then
 	formatters_by_ft.sql = { "sqlfluff" }
 end
 if has("go") then

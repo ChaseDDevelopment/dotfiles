@@ -7,7 +7,9 @@ local linters_by_ft = {
 	bash = { 'shellcheck' },
 	markdown = { 'markdownlint' },
 }
-if has('python3') then
+-- ruff is installed via `uv tool install` (system PATH); gate on the tool,
+-- not python3 (a uv-managed interpreter may not expose python3).
+if has('ruff') then
 	linters_by_ft.python = { 'ruff' }
 end
 if has('node') then

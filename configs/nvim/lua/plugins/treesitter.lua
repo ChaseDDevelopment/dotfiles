@@ -2,6 +2,9 @@ require("nvim-treesitter").setup()
 
 vim.treesitter.language.register("bash", "zsh")
 vim.treesitter.language.register("json", "jsonc")
+vim.treesitter.language.register("hcl", "terraform")
+vim.treesitter.language.register("hcl", "terraform-vars")
+vim.treesitter.language.register("yaml", "yaml.ansible")
 
 require("nvim-treesitter").install({
 	"lua",
@@ -62,6 +65,9 @@ vim.api.nvim_create_autocmd("FileType", {
 		"gitignore",
 		"vim",
 		"help",
+		"terraform",
+		"terraform-vars",
+		"yaml.ansible",
 	},
 	callback = function()
 		vim.treesitter.start()

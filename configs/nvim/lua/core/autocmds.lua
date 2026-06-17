@@ -135,3 +135,19 @@ vim.api.nvim_create_autocmd('LspAttach', {
 		end
 	end,
 })
+
+-- Ansible: map the canonical playbook/role layout to yaml.ansible so the
+-- ansible LSP (not yamlls) attaches. All other yaml stays plain yaml.
+vim.filetype.add({
+	pattern = {
+		['.*/playbooks/.*%.ya?ml'] = 'yaml.ansible',
+		['.*/roles/.*/tasks/.*%.ya?ml'] = 'yaml.ansible',
+		['.*/roles/.*/handlers/.*%.ya?ml'] = 'yaml.ansible',
+		['.*/tasks/.*%.ya?ml'] = 'yaml.ansible',
+		['.*/handlers/.*%.ya?ml'] = 'yaml.ansible',
+		['.*/group_vars/.*%.ya?ml'] = 'yaml.ansible',
+		['.*/host_vars/.*%.ya?ml'] = 'yaml.ansible',
+		['.*/playbook%.ya?ml'] = 'yaml.ansible',
+		['.*/site%.ya?ml'] = 'yaml.ansible',
+	},
+})

@@ -1,58 +1,35 @@
 require("mason").setup()
 
--- has() keeps Mason installs best-effort: if the SDK binary isn't
--- on PATH, don't ask Mason to install an LSP/tool whose language
--- won't work anyway.
+-- Single source of truth for which LSP servers to ensure. The list is
+-- already capability-gated (node group needs npm, dev servers need their
+-- SDK, uv-installed servers are excluded), so nothing doomed is attempted.
+local servers = require("core/servers")
+
+require("mason-lspconfig").setup({
+	ensure_installed = servers.mason_ensure(),
+	automatic_enable = false,
+})
+
 local function has(bin)
 	return vim.fn.executable(bin) == 1
 end
 
-local lsps = {
-	"lua_ls",
-	"yamlls",
-	"dockerls",
-	"docker_compose_language_service",
-	"jsonls",
-	"bashls",
-	"taplo",
-	"marksman",
-	"html",
-	"cssls",
-}
-if has("go") then
-	table.insert(lsps, "gopls")
-end
-if has("rustc") then
-	table.insert(lsps, "rust_analyzer")
-end
-if has("python3") then
-	table.insert(lsps, "basedpyright")
-end
-if has("dotnet") then
-	table.insert(lsps, "omnisharp")
-end
-if has("node") then
-	table.insert(lsps, "vtsls")
-end
-
-require("mason-lspconfig").setup({
-	ensure_installed = lsps,
-	automatic_enable = false,
-})
-
+-- Formatters/linters. stylua/shfmt/shellcheck are zero-runtime binaries and
+-- install anywhere; prettier/markdownlint are node-based (gate on npm).
+-- Python tools (ruff/sqlfluff) and the Python LSPs are installed via
+-- `uv tool install` by the installer, not Mason — uv brings its own
+-- interpreter, so they need no system python/venv.
 local tools = {
-	"prettier",
 	"stylua",
 	"shfmt",
 	"shellcheck",
-	"markdownlint",
 }
+if has("npm") then
+	table.insert(tools, "prettier")
+	table.insert(tools, "markdownlint")
+end
 if has("go") then
 	table.insert(tools, "goimports")
-end
-if has("python3") then
-	table.insert(tools, "ruff")
-	table.insert(tools, "sqlfluff")
 end
 if has("dotnet") then
 	table.insert(tools, "csharpier")

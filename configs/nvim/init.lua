@@ -49,6 +49,7 @@ vim.pack.add({
 	"https://github.com/coder/claudecode.nvim",
 	"https://github.com/christoomey/vim-tmux-navigator",
 	"https://github.com/m4xshen/hardtime.nvim",
+	"https://github.com/fei6409/log-highlight.nvim",
 })
 require("plugins/tokyonight")
 require("plugins/treesitter")
@@ -74,6 +75,7 @@ require("plugins/treesitter-context")
 require("plugins/todo-comments")
 require("plugins/lazydev")
 require("plugins/render-markdown")
+require("plugins/log")
 require("plugins/lint")
 require("plugins/diffview")
 require("plugins/persistence")
