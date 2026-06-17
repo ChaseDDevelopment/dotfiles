@@ -151,3 +151,29 @@ vim.filetype.add({
 		['.*/site%.ya?ml'] = 'yaml.ansible',
 	},
 })
+
+-- systemd units: Neovim only auto-detects these under canonical systemd
+-- paths, so a unit edited anywhere else gets no filetype (hence no
+-- highlighting). Map the unit extensions authoritatively — they're all
+-- systemd-specific; the shipped syntax/systemd.vim then highlights them.
+vim.filetype.add({
+	extension = {
+		service = 'systemd',
+		socket = 'systemd',
+		device = 'systemd',
+		mount = 'systemd',
+		automount = 'systemd',
+		swap = 'systemd',
+		target = 'systemd',
+		path = 'systemd',
+		timer = 'systemd',
+		slice = 'systemd',
+		scope = 'systemd',
+		netdev = 'systemd',
+		network = 'systemd',
+		link = 'systemd',
+		nspawn = 'systemd',
+		busname = 'systemd',
+		dnssd = 'systemd',
+	},
+})
