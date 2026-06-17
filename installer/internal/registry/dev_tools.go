@@ -322,12 +322,20 @@ func uvToolInstall(ctx context.Context, ic *InstallContext, pkg string) error {
 	if runtime.GOOS == "darwin" {
 		return ic.Runner.Run(ctx, "uv", "tool", "install", pkg)
 	}
+	// Resolve uv's absolute path: under sudo, `env` looks the command up
+	// in root's secure_path, which excludes a per-user ~/.local/bin/uv and
+	// fails with exit 127. An absolute path bypasses that lookup so a
+	// user-installed uv still drives the root-owned, system-wide install.
+	uvBin, err := exec.LookPath("uv")
+	if err != nil {
+		return fmt.Errorf("uv not found on PATH: %w", err)
+	}
 	return ic.Runner.Run(ctx, "sudo", "env",
 		"UV_TOOL_BIN_DIR=/usr/local/bin",
 		"UV_TOOL_DIR=/usr/local/share/uv/tools",
 		"UV_PYTHON_INSTALL_DIR=/opt/uv/python",
 		"UV_CACHE_DIR=/var/cache/uv",
-		"uv", "tool", "install", pkg,
+		uvBin, "tool", "install", pkg,
 	)
 }
 

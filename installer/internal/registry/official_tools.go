@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,6 +52,15 @@ func officialInstallerTools() []Tool {
 		// SDK — node-based LSPs (yaml/json/bash/...) need it everywhere.
 		{
 			Name: "nodejs", Command: "node", Description: "Node.js runtime (latest LTS)",
+			// Require BOTH node and npm. The distro can ship node without
+			// npm (the Pi's apt nodejs), and the tarball install provides
+			// both — checking node alone would SKIP a node-without-npm host
+			// and never restore npm.
+			IsInstalledFunc: func() bool {
+				_, nodeErr := exec.LookPath("node")
+				_, npmErr := exec.LookPath("npm")
+				return nodeErr == nil && npmErr == nil
+			},
 			Strategies: []InstallStrategy{
 				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "node"},
 				{Method: MethodCustom, CustomFunc: installNodeLinux, Requires: []string{"curl"}},
