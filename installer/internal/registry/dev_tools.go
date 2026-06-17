@@ -313,6 +313,13 @@ func installUvSystem(ctx context.Context, ic *InstallContext) error {
 	)
 }
 
+// uvToolPython pins the interpreter for uv-installed LSP tools to a CPython
+// with full wheel coverage. uv otherwise grabs the newest CPython (e.g.
+// 3.14), for which native deps like lxml (a systemd-language-server
+// dependency) ship no wheels — forcing a source build that fails without
+// libxml2/libxslt dev headers. lxml 5.4.0 has cp313 wheels (x86_64+aarch64).
+const uvToolPython = "3.13"
+
 // uvToolInstall installs a uv tool so its executable is on PATH. On Linux
 // it lands in /usr/local/bin with a system-wide managed Python under
 // /opt/uv/python (so root/sudo nvim + headless Mason can run it); on macOS
@@ -320,7 +327,7 @@ func installUvSystem(ctx context.Context, ic *InstallContext) error {
 // is provisioned first as a base tool (DependsOn "uv").
 func uvToolInstall(ctx context.Context, ic *InstallContext, pkg string) error {
 	if runtime.GOOS == "darwin" {
-		return ic.Runner.Run(ctx, "uv", "tool", "install", pkg)
+		return ic.Runner.Run(ctx, "uv", "tool", "install", "--python", uvToolPython, pkg)
 	}
 	// Resolve uv's absolute path: under sudo, `env` looks the command up
 	// in root's secure_path, which excludes a per-user ~/.local/bin/uv and
@@ -335,7 +342,7 @@ func uvToolInstall(ctx context.Context, ic *InstallContext, pkg string) error {
 		"UV_TOOL_DIR=/usr/local/share/uv/tools",
 		"UV_PYTHON_INSTALL_DIR=/opt/uv/python",
 		"UV_CACHE_DIR=/var/cache/uv",
-		uvBin, "tool", "install", pkg,
+		uvBin, "tool", "install", "--python", uvToolPython, pkg,
 	)
 }
 

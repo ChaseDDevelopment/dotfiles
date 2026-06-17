@@ -165,7 +165,7 @@ func TestInlineCustomClosures_InvokeExpectedCommands(t *testing.T) {
 			tool:     "ruff",
 			mgr:      "brew", // no Managers filter, matches any
 			findFn:   pickCustom("ruff", "brew"),
-			wantArgs: "uv tool install ruff",
+			wantArgs: "uv tool install --python 3.13 ruff",
 		},
 		{
 			tool:     "gopls",
@@ -177,25 +177,25 @@ func TestInlineCustomClosures_InvokeExpectedCommands(t *testing.T) {
 			tool:     "sqlfluff",
 			mgr:      "brew", // no Managers filter, matches any
 			findFn:   pickCustom("sqlfluff", "brew"),
-			wantArgs: "uv tool install sqlfluff",
+			wantArgs: "uv tool install --python 3.13 sqlfluff",
 		},
 		{
 			tool:     "basedpyright",
 			mgr:      "brew", // no Managers filter, matches any
 			findFn:   pickCustom("basedpyright", "brew"),
-			wantArgs: "uv tool install basedpyright",
+			wantArgs: "uv tool install --python 3.13 basedpyright",
 		},
 		{
 			tool:     "systemd-language-server",
 			mgr:      "brew", // no Managers filter, matches any
 			findFn:   pickCustom("systemd-language-server", "brew"),
-			wantArgs: "uv tool install systemd-language-server",
+			wantArgs: "uv tool install --python 3.13 systemd-language-server",
 		},
 		{
 			tool:     "nginx-language-server",
 			mgr:      "brew", // no Managers filter, matches any
 			findFn:   pickCustom("nginx-language-server", "brew"),
-			wantArgs: "uv tool install nginx-language-server",
+			wantArgs: "uv tool install --python 3.13 nginx-language-server",
 		},
 	}
 
