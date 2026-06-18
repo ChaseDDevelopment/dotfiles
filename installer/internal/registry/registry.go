@@ -321,6 +321,20 @@ func FirstPkgMgrStrategy(t *Tool, mgrName string) *InstallStrategy {
 	return nil
 }
 
+// ActiveStrategy returns the first strategy applicable under mgrName —
+// the one ExecuteInstall would use — or nil if none applies. Lets callers
+// (e.g. the update pass) tell which install method "owns" a tool on this
+// host: pkgmgr-owned tools are covered by the system-package upgrade, while
+// cargo/github/script-owned tools need their own update path.
+func ActiveStrategy(t *Tool, mgrName string) *InstallStrategy {
+	for i := range t.Strategies {
+		if t.Strategies[i].AppliesTo(mgrName) {
+			return &t.Strategies[i]
+		}
+	}
+	return nil
+}
+
 func executeStrategy(ctx context.Context, s *InstallStrategy, ic *InstallContext, p *platform.Platform) error {
 	switch s.Method {
 	case MethodPackageManager:

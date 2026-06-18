@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/chaseddevelopment/dotfiles/installer/internal/platform"
 )
 
 // TestSelfUpdateStepInvokesSelfUpdate verifies the returned step's
@@ -33,7 +35,10 @@ func TestSelfUpdateStepInvokesSelfUpdate(t *testing.T) {
 }
 
 // TestUpdateCargoBinariesAggregatesErrors covers the error-collection
-// branch when cargo install fails for at least one crate.
+// branch when `cargo install` fails for a cargo-OWNED tool. `dust` is
+// cargo-owned on apt (its active strategy there is MethodCargo), so the
+// gate lets `cargo install du-dust` run — and the failing cargo stub
+// surfaces the aggregated error.
 func TestUpdateCargoBinariesAggregatesErrors(t *testing.T) {
 	runner, dir := newTestRunner(t)
 	bin := filepath.Join(dir, "bin")
@@ -46,15 +51,44 @@ func TestUpdateCargoBinariesAggregatesErrors(t *testing.T) {
 		[]byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Also provide at least one tool binary so the "HasCommand" check
-	// passes for that tool.
-	if err := os.WriteFile(filepath.Join(bin, "eza"),
+	// dust must be on PATH so the HasCommand(t.Command) check passes.
+	if err := os.WriteFile(filepath.Join(bin, "dust"),
 		[]byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	err := updateCargoBinaries(context.Background(), runner)
+	err := updateCargoBinaries(context.Background(), runner, "apt")
 	if err == nil || !strings.Contains(err.Error(), "cargo update failures") {
 		t.Fatalf("expected aggregated cargo error, got %v", err)
+	}
+}
+
+// TestUpdateCargoBinariesSkipsPkgMgrOwned verifies the ownership gate:
+// on pacman, `eza` is package-manager-owned (active strategy is
+// MethodPackageManager), so the cargo-update pass must skip it entirely
+// — even though eza is on PATH and has a CargoCrate. No `cargo install`
+// runs, so the failing cargo stub never fires and the call returns nil.
+func TestUpdateCargoBinariesSkipsPkgMgrOwned(t *testing.T) {
+	runner, dir := newTestRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prependPath(t, bin)
+	logPath := filepath.Join(dir, "log")
+	t.Setenv("UPDATE_LOG", logPath)
+	// cargo stub logs + fails: if it ran, we'd both see the log line
+	// and get an aggregated error.
+	writeScript(t, bin, "cargo", `#!/bin/sh
+printf 'cargo %s\n' "$*" >> "$UPDATE_LOG"
+exit 1
+`)
+	writeScript(t, bin, "eza", "#!/bin/sh\nexit 0\n")
+
+	if err := updateCargoBinaries(context.Background(), runner, "pacman"); err != nil {
+		t.Fatalf("expected nil (eza is pacman-owned, skipped), got %v", err)
+	}
+	if data, err := os.ReadFile(logPath); err == nil && strings.Contains(string(data), "cargo install") {
+		t.Fatalf("cargo install must not run for pacman-owned eza:\n%s", data)
 	}
 }
 
@@ -63,13 +97,14 @@ func TestUpdateCargoBinariesAggregatesErrors(t *testing.T) {
 func TestUpdateCargoBinariesSkipsWhenCargoMissing(t *testing.T) {
 	runner, dir := newTestRunner(t)
 	t.Setenv("PATH", dir) // empty dir → no cargo
-	if err := updateCargoBinaries(context.Background(), runner); err != nil {
+	if err := updateCargoBinaries(context.Background(), runner, "apt"); err != nil {
 		t.Fatalf("expected no-op when cargo missing, got %v", err)
 	}
 }
 
-// TestUpdateAtuinPacmanPath covers the pacman branch (uncovered by
-// existing tests which only hit brew and apt+cargo).
+// TestUpdateAtuinPacmanPath covers the pacman branch: atuin is a pacman
+// package, already refreshed by the system upgrade, so updateAtuin issues
+// no command of its own and returns nil.
 func TestUpdateAtuinPacmanPath(t *testing.T) {
 	runner, dir := newTestRunner(t)
 	bin := filepath.Join(dir, "bin")
@@ -80,19 +115,44 @@ func TestUpdateAtuinPacmanPath(t *testing.T) {
 	logPath := filepath.Join(dir, "log")
 	t.Setenv("UPDATE_LOG", logPath)
 	writeScript(t, bin, "atuin", "#!/bin/sh\nexit 0\n")
+	// Any command stub here would record to UPDATE_LOG if invoked.
 	writeScript(t, bin, "sudo", `#!/bin/sh
 printf 'sudo %s\n' "$*" >> "$UPDATE_LOG"
 exit 0
 `)
-	if err := updateAtuin(context.Background(), runner, "pacman"); err != nil {
+	writeScript(t, bin, "curl", `#!/bin/sh
+printf 'curl %s\n' "$*" >> "$UPDATE_LOG"
+exit 0
+`)
+	if err := updateAtuin(context.Background(), runner, &testPkgMgr{name: "pacman"}, &platform.Platform{}); err != nil {
 		t.Fatalf("updateAtuin pacman: %v", err)
 	}
-	data, err := os.ReadFile(logPath)
-	if err != nil {
+	if data, err := os.ReadFile(logPath); err == nil && len(strings.TrimSpace(string(data))) != 0 {
+		t.Fatalf("pacman atuin path should issue no command, log:\n%s", data)
+	}
+}
+
+// TestUpdateAtuinBrewPath covers the brew branch: atuin is a brew package,
+// covered by the system upgrade → no command, returns nil.
+func TestUpdateAtuinBrewPath(t *testing.T) {
+	runner, dir := newTestRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "sudo pacman -S --noconfirm atuin") {
-		t.Fatalf("expected pacman command, log: %s", data)
+	prependPath(t, bin)
+	logPath := filepath.Join(dir, "log")
+	t.Setenv("UPDATE_LOG", logPath)
+	writeScript(t, bin, "atuin", "#!/bin/sh\nexit 0\n")
+	writeScript(t, bin, "brew", `#!/bin/sh
+printf 'brew %s\n' "$*" >> "$UPDATE_LOG"
+exit 0
+`)
+	if err := updateAtuin(context.Background(), runner, &testPkgMgr{name: "brew"}, &platform.Platform{}); err != nil {
+		t.Fatalf("updateAtuin brew: %v", err)
+	}
+	if data, err := os.ReadFile(logPath); err == nil && len(strings.TrimSpace(string(data))) != 0 {
+		t.Fatalf("brew atuin path should issue no command, log:\n%s", data)
 	}
 }
 
@@ -100,31 +160,64 @@ exit 0
 func TestUpdateAtuinMissingBinary(t *testing.T) {
 	runner, dir := newTestRunner(t)
 	t.Setenv("PATH", dir)
-	if err := updateAtuin(context.Background(), runner, "brew"); err != nil {
+	if err := updateAtuin(context.Background(), runner, &testPkgMgr{name: "brew"}, &platform.Platform{}); err != nil {
 		t.Fatalf("expected no-op when atuin missing, got %v", err)
 	}
 }
 
-// TestUpdateAtuinAptNoCargo covers the apt/dnf/yum branch falling
-// through when cargo is absent, producing the actionable error.
-func TestUpdateAtuinAptNoCargo(t *testing.T) {
+// TestUpdateAtuinAptInstaller covers the apt/dnf/yum branch: atuin is
+// installed via its official installer, so updateAtuin re-runs that
+// install strategy — `curl ... https://setup.atuin.sh -o <tmp>` then
+// `sh <tmp> --non-interactive`.
+func TestUpdateAtuinAptInstaller(t *testing.T) {
 	runner, dir := newTestRunner(t)
 	bin := filepath.Join(dir, "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", bin)
+	prependPath(t, bin)
+	t.Setenv("HOME", dir)
+	logPath := filepath.Join(dir, "log")
+	t.Setenv("UPDATE_LOG", logPath)
 	writeScript(t, bin, "atuin", "#!/bin/sh\nexit 0\n")
-	// Deliberately don't install cargo.
-	err := updateAtuin(context.Background(), runner, "apt")
-	if err == nil || !strings.Contains(err.Error(), "install cargo") {
-		t.Fatalf("expected cargo-missing error, got %v", err)
+	// curl logs its args and writes an exit-0 script to the -o dest.
+	writeScript(t, bin, "curl", `#!/bin/sh
+printf 'curl %s\n' "$*" >> "$UPDATE_LOG"
+dest=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    dest="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+cat > "$dest" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+exit 0
+`)
+	writeScript(t, bin, "sh", `#!/bin/sh
+printf 'sh %s\n' "$*" >> "$UPDATE_LOG"
+exit 0
+`)
+	if err := updateAtuin(context.Background(), runner, &testPkgMgr{name: "apt"}, &platform.Platform{}); err != nil {
+		t.Fatalf("updateAtuin apt: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "https://setup.atuin.sh") {
+		t.Fatalf("expected official atuin installer URL, log:\n%s", data)
 	}
 }
 
-// TestUpdateNeovimParuFallback covers the paru branch after yay fails.
-// Also exercises the sudo-pacman terminal fallback.
-func TestUpdateNeovimParuFallback(t *testing.T) {
+// TestUpdateNeovimBrewPath covers the brew branch: the --HEAD formula is
+// refreshed with `brew upgrade --fetch-HEAD neovim` (plain `brew upgrade`
+// skips HEAD formulae).
+func TestUpdateNeovimBrewPath(t *testing.T) {
 	runner, dir := newTestRunner(t)
 	bin := filepath.Join(dir, "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
@@ -134,33 +227,94 @@ func TestUpdateNeovimParuFallback(t *testing.T) {
 	logPath := filepath.Join(dir, "log")
 	t.Setenv("UPDATE_LOG", logPath)
 	writeScript(t, bin, "nvim", "#!/bin/sh\nexit 0\n")
-	// yay fails → continue
-	writeScript(t, bin, "yay", `#!/bin/sh
-printf 'yay %s\n' "$*" >> "$UPDATE_LOG"
-exit 1
-`)
-	// paru fails → continue
-	writeScript(t, bin, "paru", `#!/bin/sh
-printf 'paru %s\n' "$*" >> "$UPDATE_LOG"
-exit 1
-`)
-	// sudo pacman succeeds (terminal fallback).
-	writeScript(t, bin, "sudo", `#!/bin/sh
-printf 'sudo %s\n' "$*" >> "$UPDATE_LOG"
+	writeScript(t, bin, "brew", `#!/bin/sh
+printf 'brew %s\n' "$*" >> "$UPDATE_LOG"
 exit 0
 `)
-	if err := updateNeovim(context.Background(), runner, &testPkgMgr{name: "pacman"}, nil); err != nil {
-		t.Fatalf("updateNeovim pacman fallback: %v", err)
+	if err := updateNeovim(context.Background(), runner, &testPkgMgr{name: "brew"}, &platform.Platform{}); err != nil {
+		t.Fatalf("updateNeovim brew: %v", err)
 	}
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := string(data)
-	for _, want := range []string{"yay -S", "paru -S", "sudo pacman -S --noconfirm neovim"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("log missing %q:\n%s", want, got)
-		}
+	if !strings.Contains(string(data), "brew upgrade --fetch-HEAD neovim") {
+		t.Fatalf("expected brew HEAD upgrade, log:\n%s", data)
+	}
+}
+
+// TestUpdateNeovimAptPath covers the apt branch: nvim isn't an apt
+// package, so updateNeovim reuses InstallNeovimApt to fetch the latest
+// GitHub release tarball.
+func TestUpdateNeovimAptPath(t *testing.T) {
+	runner, dir := newTestRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prependPath(t, bin)
+	t.Setenv("HOME", dir)
+	logPath := filepath.Join(dir, "log")
+	t.Setenv("UPDATE_LOG", logPath)
+	writeScript(t, bin, "nvim", "#!/bin/sh\nexit 0\n")
+	writeScript(t, bin, "curl", `#!/bin/sh
+printf 'curl %s\n' "$*" >> "$UPDATE_LOG"
+dest=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    dest="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+cat > "$dest" <<'EOF'
+nvim
+EOF
+exit 0
+`)
+	writeScript(t, bin, "tar", `#!/bin/sh
+printf 'nvim-linux-x86_64/\nnvim-linux-x86_64/bin/nvim\n'
+`)
+	writeScript(t, bin, "sudo", `#!/bin/sh
+printf 'sudo %s\n' "$*" >> "$UPDATE_LOG"
+exit 0
+`)
+	plat := &platform.Platform{OS: platform.Linux, Arch: platform.AMD64}
+	if err := updateNeovim(context.Background(), runner, &testPkgMgr{name: "apt"}, plat); err != nil {
+		t.Fatalf("updateNeovim apt: %v", err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "https://github.com/neovim/neovim/releases") {
+		t.Fatalf("expected GitHub release download, log:\n%s", data)
+	}
+}
+
+// TestUpdateNeovimDefaultPath covers the default branch (pacman/dnf/…):
+// nvim is an official package refreshed by the system upgrade, so
+// updateNeovim issues no command and returns nil.
+func TestUpdateNeovimDefaultPath(t *testing.T) {
+	runner, dir := newTestRunner(t)
+	bin := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prependPath(t, bin)
+	logPath := filepath.Join(dir, "log")
+	t.Setenv("UPDATE_LOG", logPath)
+	writeScript(t, bin, "nvim", "#!/bin/sh\nexit 0\n")
+	writeScript(t, bin, "sudo", `#!/bin/sh
+printf 'sudo %s\n' "$*" >> "$UPDATE_LOG"
+exit 0
+`)
+	if err := updateNeovim(context.Background(), runner, &testPkgMgr{name: "pacman"}, &platform.Platform{}); err != nil {
+		t.Fatalf("updateNeovim pacman default: %v", err)
+	}
+	if data, err := os.ReadFile(logPath); err == nil && len(strings.TrimSpace(string(data))) != 0 {
+		t.Fatalf("default neovim path should issue no command, log:\n%s", data)
 	}
 }
 
@@ -173,7 +327,9 @@ func TestUpdateNeovimSkipsWhenAbsent(t *testing.T) {
 	}
 }
 
-// TestUpdateDotnetPacmanPath covers the pacman branch of updateDotnet.
+// TestUpdateDotnetPacmanPath covers the pacman branch of updateDotnet:
+// dotnet is a pacman package, refreshed by the system upgrade, so
+// updateDotnet issues no command of its own and returns nil.
 func TestUpdateDotnetPacmanPath(t *testing.T) {
 	runner, dir := newTestRunner(t)
 	bin := filepath.Join(dir, "bin")
@@ -188,15 +344,15 @@ func TestUpdateDotnetPacmanPath(t *testing.T) {
 printf 'sudo %s\n' "$*" >> "$UPDATE_LOG"
 exit 0
 `)
+	writeScript(t, bin, "curl", `#!/bin/sh
+printf 'curl %s\n' "$*" >> "$UPDATE_LOG"
+exit 0
+`)
 	if err := updateDotnet(context.Background(), runner, "pacman"); err != nil {
 		t.Fatalf("updateDotnet pacman: %v", err)
 	}
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "sudo pacman -S --noconfirm dotnet-sdk") {
-		t.Fatalf("expected pacman dotnet-sdk, log:\n%s", data)
+	if data, err := os.ReadFile(logPath); err == nil && len(strings.TrimSpace(string(data))) != 0 {
+		t.Fatalf("pacman dotnet path should issue no command, log:\n%s", data)
 	}
 }
 

@@ -16,7 +16,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/executor"
@@ -47,7 +46,7 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 			return runner.Run(ctx, "rustup", "update")
 		}},
 		{"Cargo binaries", func(ctx context.Context) error {
-			return updateCargoBinaries(ctx, runner)
+			return updateCargoBinaries(ctx, runner, mgrName)
 		}},
 		{"uv ecosystem", func(ctx context.Context) error {
 			if !platform.HasCommand("uv") {
@@ -74,7 +73,7 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 			return updateOhMyPosh(ctx, runner, mgr)
 		}},
 		{"Atuin", func(ctx context.Context) error {
-			return updateAtuin(ctx, runner, mgrName)
+			return updateAtuin(ctx, runner, mgr, plat)
 		}},
 		{"Neovim", func(ctx context.Context) error {
 			return updateNeovim(ctx, runner, mgr, plat)
@@ -86,7 +85,14 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 			if !platform.HasCommand("ya") {
 				return nil
 			}
-			return runner.Run(ctx, "ya", "pkg", "upgrade")
+			// Deploy plugins at the rev pinned in the version-controlled
+			// package.toml — NOT `ya pkg upgrade`, which chases upstream
+			// HEAD and rewrites package.toml (immediately reverted by the
+			// repo drift sweep) and aborts ("you have modified …") once the
+			// gitignored deploy drifts from the recorded hash. --discard
+			// force-redeploys the pinned rev, healing any drift without the
+			// abort, and never touches package.toml.
+			return runner.Run(ctx, "ya", "pkg", "install", "--discard")
 		}},
 		{"Tmux plugins", func(ctx context.Context) error {
 			script := filepath.Join(os.Getenv("HOME"), ".tmux", "plugins", "tpm", "scripts", "update_plugin.sh")
@@ -119,6 +125,7 @@ func SelfUpdateStep(
 func updateCargoBinaries(
 	ctx context.Context,
 	runner *executor.Runner,
+	mgrName string,
 ) error {
 	if !platform.HasCommand("cargo") {
 		return nil
@@ -131,6 +138,15 @@ func updateCargoBinaries(
 			continue
 		}
 		if !platform.HasCommand(t.Command) {
+			continue
+		}
+		// Only `cargo install` when cargo actually OWNS this tool on this
+		// host (its active install strategy is MethodCargo). On pacman/apt
+		// these tools are system/github-release packages already updated by
+		// the system-package upgrade — recompiling from source is wasteful
+		// and can fail (e.g. tree-sitter-cli's libclang build dep on Arch).
+		t := t
+		if s := registry.ActiveStrategy(&t, mgrName); s == nil || s.Method != registry.MethodCargo {
 			continue
 		}
 		if err := runner.Run(
@@ -179,29 +195,28 @@ func updateOhMyPosh(ctx context.Context, runner *executor.Runner, mgr pkgmgr.Pac
 	)
 }
 
-func updateAtuin(ctx context.Context, runner *executor.Runner, mgrName string) error {
+func updateAtuin(ctx context.Context, runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform.Platform) error {
 	if !platform.HasCommand("atuin") {
 		return nil
 	}
-	switch mgrName {
-	case "brew":
-		return runner.Run(ctx, "brew", "upgrade", "atuin")
-	case "pacman":
-		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "atuin")
-	case "apt", "dnf", "yum":
-		// atuin ships .deb/.rpm assets in their GitHub release —
-		// but the simplest path when it's installable via cargo is
-		// to upgrade that way rather than piping a remote shell
-		// script through sh.
-		if platform.HasCommand("cargo") {
-			return runner.Run(ctx, "cargo", "install", "atuin")
+	switch mgr.Name() {
+	case "brew", "pacman":
+		// atuin is a brew/pacman package here — already updated by the
+		// System packages upgrade (one transaction).
+		return nil
+	}
+	// Elsewhere (apt/dnf/yum/…) atuin is installed via its official
+	// installer (registry.installAtuin). Re-run the install strategy to
+	// update it — consistent with how it was installed, instead of the old
+	// `cargo install atuin` which recompiled it from source and diverged.
+	for _, t := range registry.AllTools() {
+		if t.Command == "atuin" {
+			t := t
+			ic := &registry.InstallContext{Runner: runner, PkgMgr: mgr, Platform: plat}
+			return registry.ExecuteInstall(ctx, &t, ic, plat)
 		}
 	}
-	return fmt.Errorf(
-		"no safe Atuin update path for package manager %q; "+
-			"install cargo or use a supported package manager",
-		mgrName,
-	)
+	return nil
 }
 
 func updateNeovim(ctx context.Context, runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform.Platform) error {
@@ -210,27 +225,18 @@ func updateNeovim(ctx context.Context, runner *executor.Runner, mgr pkgmgr.Packa
 	}
 	switch mgr.Name() {
 	case "brew":
-		return runner.Run(ctx, "brew", "upgrade", "neovim")
-	case "pacman":
-		for _, helper := range []string{"yay", "paru"} {
-			if _, err := exec.LookPath(helper); err != nil {
-				continue
-			}
-			if err := runner.Run(ctx, helper, "-S", "--noconfirm", "neovim-git"); err != nil {
-				runner.Log.Write(fmt.Sprintf(
-					"NOTE: %s neovim-git update failed: %v", helper, err,
-				))
-				continue
-			}
-			return nil
-		}
-		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "neovim")
+		// The brew formula is installed --HEAD; plain `brew upgrade` (the
+		// System packages step) skips HEAD formulae, so refresh it here.
+		return runner.Run(ctx, "brew", "upgrade", "--fetch-HEAD", "neovim")
 	case "apt":
-		// Reuse the same GitHub release install logic.
+		// Not an apt package — installed from the GitHub release. Reuse the
+		// install logic to fetch the latest.
 		ic := &registry.InstallContext{Runner: runner, PkgMgr: mgr, Platform: plat}
 		return registry.InstallNeovimApt(ctx, ic)
 	default:
-		return mgr.Install(ctx, "neovim")
+		// pacman/dnf/yum/zypper: official package, already updated by the
+		// System packages upgrade (one transaction).
+		return nil
 	}
 }
 
@@ -239,10 +245,10 @@ func updateDotnet(ctx context.Context, runner *executor.Runner, mgrName string) 
 		return nil
 	}
 	switch mgrName {
-	case "brew":
-		return runner.Run(ctx, "brew", "upgrade", "dotnet")
-	case "pacman":
-		return runner.Run(ctx, "sudo", "pacman", "-S", "--noconfirm", "dotnet-sdk")
+	case "brew", "pacman":
+		// dotnet is a brew/pacman package here — already updated by the
+		// System packages upgrade.
+		return nil
 	}
 	// No package-manager path: fall back to Microsoft's official
 	// dotnet-install.sh, but download to disk first (auditable), log

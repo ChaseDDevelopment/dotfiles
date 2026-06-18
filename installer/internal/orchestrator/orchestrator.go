@@ -685,7 +685,6 @@ func BuildUpdateTasks(bc *BuildConfig) BuildResult {
 	cargoSteps := map[string]bool{
 		"Rust toolchain": true, // rustup update — the toolchain mutator
 		"Cargo binaries": true, // cargo install <crate> loop
-		"Atuin":          true, // cargo install atuin on apt/dnf
 	}
 
 	sysID := ""
