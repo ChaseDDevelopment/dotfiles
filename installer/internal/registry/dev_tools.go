@@ -20,10 +20,11 @@ func rustToolchain() []Tool {
 			Strategies: []InstallStrategy{
 				{Method: MethodScript, Script: &ScriptConfig{
 					URL: "https://sh.rustup.rs",
-					// --no-modify-path: configs/zsh/.zprofile already
-					// prepends ~/.cargo/bin to PATH, so the installer
-					// writing its own `source ~/.cargo/env` line into
-					// .zshenv is redundant and pollutes the repo.
+					// --no-modify-path: configs/zsh/.zshenv already
+					// prepends ~/.cargo/bin to PATH (for every shell,
+					// login or not), so the installer writing its own
+					// `source ~/.cargo/env` line is redundant and
+					// pollutes the repo.
 					Args:            []string{"-y", "--no-modify-path"},
 					NoProfileModify: true,
 				}},

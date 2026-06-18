@@ -38,11 +38,17 @@ export CLAUDE_CODE_NO_FLICKER=1
 # — tmux panes, `ssh host cmd`, subshells spawned by the Go installer —
 # also see them. path_helper on macOS only reorders system dirs in
 # /etc/paths*, so $HOME-prefixed entries keep their prepended spot.
+# /usr/local/bin is where the installer puts the self-managed Linux
+# node/npm/uv runtimes and the uv-installed LSPs (symlinks); it is
+# normally on the system PATH already, but listing it here guarantees
+# nvim/Mason resolve those binaries even on minimal hosts/containers
+# whose base PATH omits it. `typeset -U` dedupes if it's already present.
 typeset -U path
 path=(
     "${HOME}/.local/bin"
     "${HOME}/.cargo/bin"
     "${HOME}/.bun/bin"
+    "/usr/local/bin"
     $path
 )
 export PATH

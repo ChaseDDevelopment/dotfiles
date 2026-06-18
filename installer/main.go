@@ -292,6 +292,12 @@ func findRootDir() (string, error) {
 // → cargo) couldn't resolve the binary. PATH tolerates missing
 // directories — POSIX shells and Go's exec.LookPath both just skip
 // entries that don't exist — so adding them always is safe.
+//
+// /usr/local/bin is included because the Linux self-managed node/npm/
+// uv runtimes and the uv-installed LSPs land there (symlinks); it is
+// normally already on PATH, but listing it guarantees the headless
+// `nvim --headless … vim.pack.update` plugin sync resolves npm/uv even
+// when ./install.sh was launched from a shell whose PATH omits it.
 func augmentPath() {
 	home := os.Getenv("HOME")
 	dirs := []string{
@@ -301,6 +307,7 @@ func augmentPath() {
 		filepath.Join(home, ".atuin", "bin"),
 		filepath.Join(home, ".dotnet"),
 		filepath.Join(home, "go", "bin"),
+		"/usr/local/bin",
 		"/usr/local/go/bin",
 	}
 	path := os.Getenv("PATH")
