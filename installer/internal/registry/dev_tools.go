@@ -338,13 +338,56 @@ func uvToolInstall(ctx context.Context, ic *InstallContext, pkg string) error {
 	if err != nil {
 		return fmt.Errorf("uv not found on PATH: %w", err)
 	}
-	return ic.Runner.Run(ctx, "sudo", "env",
+	args := append([]string{"sudo", "env"}, uvSystemToolEnv()...)
+	args = append(args, uvBin, "tool", "install", "--python", uvToolPython, pkg)
+	return ic.Runner.Run(ctx, args[0], args[1:]...)
+}
+
+// uvSystemToolEnv is the sudo-env prefix pointing uv at the system-wide tool
+// store / managed Python / cache backing the root-owned /usr/local/bin install.
+// Shared by uvToolInstall and UpdateUvEcosystem so install and update agree.
+func uvSystemToolEnv() []string {
+	return []string{
 		"UV_TOOL_BIN_DIR=/usr/local/bin",
 		"UV_TOOL_DIR=/usr/local/share/uv/tools",
 		"UV_PYTHON_INSTALL_DIR=/opt/uv/python",
 		"UV_CACHE_DIR=/var/cache/uv",
-		uvBin, "tool", "install", "--python", uvToolPython, pkg,
-	)
+	}
+}
+
+// UpdateUvEcosystem keeps uv and its managed tools current, mirroring how each
+// was installed. On macOS uv is a brew formula (updated by the System-packages
+// `brew upgrade`), so only the user-prefix tools are refreshed. On Linux uv
+// lives root-owned in /usr/local/bin (installUvSystem) — `uv self update` run
+// as the user can't replace it (exit 2) — so the binary is updated by re-running
+// the installer under sudo, and the system tool store via `sudo env … uv tool
+// upgrade --all`. Both sub-steps run regardless and errors are aggregated, so a
+// binary-update hiccup never hides (or blocks) the tool upgrade.
+func UpdateUvEcosystem(ctx context.Context, ic *InstallContext) error {
+	if runtime.GOOS == "darwin" {
+		return ic.Runner.Run(ctx, "uv", "tool", "upgrade", "--all")
+	}
+
+	var errs []error
+	// 1. Update the root-owned binary by re-running the installer (sudo).
+	if err := installUvSystem(ctx, ic); err != nil {
+		errs = append(errs, fmt.Errorf("uv reinstall: %w", err))
+	}
+	// 2. Upgrade the system-installed uv tools (root-owned /usr/local/bin). An
+	// absolute uv path bypasses sudo's secure_path lookup (see uvToolInstall).
+	if uvBin, err := exec.LookPath("uv"); err != nil {
+		errs = append(errs, fmt.Errorf("uv not found on PATH: %w", err))
+	} else {
+		args := append([]string{"sudo", "env"}, uvSystemToolEnv()...)
+		args = append(args, uvBin, "tool", "upgrade", "--all")
+		if err := ic.Runner.Run(ctx, args[0], args[1:]...); err != nil {
+			errs = append(errs, fmt.Errorf("uv tool upgrade --all: %w", err))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("uv ecosystem update: %v", errs)
+	}
+	return nil
 }
 
 // Category C — env-bound real-shell branches.

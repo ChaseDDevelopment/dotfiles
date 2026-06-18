@@ -320,7 +320,10 @@ func TestAllStepsAndCargoUpdates(t *testing.T) {
 	t.Setenv("UPDATE_LOG", logPath)
 	t.Setenv("HOME", dir)
 
-	for _, name := range []string{"rustup", "cargo", "uv", "bun", "brew", "ya", "eza", "oh-my-posh"} {
+	// sudo + curl stubs let the Linux uv-ecosystem branch (re-run the uv
+	// installer under sudo + `sudo env … uv tool upgrade --all`) run in CI;
+	// unused on macOS, where the uv step only runs `uv tool upgrade --all`.
+	for _, name := range []string{"rustup", "cargo", "uv", "bun", "brew", "ya", "eza", "oh-my-posh", "sudo", "curl"} {
 		writeScript(t, fakebin, name, fmt.Sprintf(`#!/usr/bin/env bash
 printf '%%s %%s\n' %q "$*" >> "$UPDATE_LOG"
 `, name))
@@ -355,8 +358,7 @@ printf 'tpm %s\n' "$*" >> "$UPDATE_LOG"
 	got := string(data)
 	for _, want := range []string{
 		"rustup update",
-		"uv self update",
-		"uv tool upgrade --all",
+		"tool upgrade --all", // uv tools — `uv …` (macOS) or `sudo env … uv …` (Linux)
 		"bun upgrade",
 		"brew upgrade oh-my-posh",
 		"brew upgrade --fetch-HEAD neovim",
@@ -371,5 +373,11 @@ printf 'tpm %s\n' "$*" >> "$UPDATE_LOG"
 	// skips it (no `cargo install eza`).
 	if strings.Contains(got, "cargo install eza") {
 		t.Fatalf("unexpected `cargo install eza` (eza is brew-owned):\n%s", got)
+	}
+	// The uv step must never run a user-level `uv self update` (root-owned
+	// /usr/local/bin/uv → exit 2 on Linux); it updates uv via its install
+	// method instead.
+	if strings.Contains(got, "uv self update") {
+		t.Fatalf("uv ecosystem must not run `uv self update`:\n%s", got)
 	}
 }

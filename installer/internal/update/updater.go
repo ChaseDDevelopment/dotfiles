@@ -52,10 +52,11 @@ func AllSteps(runner *executor.Runner, mgr pkgmgr.PackageManager, plat *platform
 			if !platform.HasCommand("uv") {
 				return nil
 			}
-			if err := runner.Run(ctx, "uv", "self", "update"); err != nil {
-				return err
-			}
-			return runner.Run(ctx, "uv", "tool", "upgrade", "--all")
+			// uv is root-owned in /usr/local/bin on Linux, so a user-level
+			// `uv self update` fails (exit 2); update it the way it was
+			// installed instead. See registry.UpdateUvEcosystem.
+			ic := &registry.InstallContext{Runner: runner, PkgMgr: mgr, Platform: plat}
+			return registry.UpdateUvEcosystem(ctx, ic)
 		}},
 		{"Bun", func(ctx context.Context) error {
 			if !platform.HasCommand("bun") {
