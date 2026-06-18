@@ -287,6 +287,13 @@ exit 0
 		t.Fatal("expected stale lazy dir to be removed")
 	}
 
+	// The headless plugin bootstrap moved out of setupNeovim (which is
+	// skipped once symlinks are configured) into the always-run
+	// MaintainNeovimPlugins task.
+	if err := MaintainNeovimPlugins(context.Background(), sc); err != nil {
+		t.Fatalf("MaintainNeovimPlugins: %v", err)
+	}
+
 	if err := setupYazi(context.Background(), sc); err != nil {
 		t.Fatalf("setupYazi: %v", err)
 	}
@@ -306,8 +313,8 @@ exit 0
 	got := string(data)
 	for _, want := range []string{
 		"tmux source-file",
-		"c.build():wait(60000)",
 		"nvim --headless",
+		"require('core.pack').bootstrap()",
 		"ya pkg install",
 		"git config --global user.name",
 	} {

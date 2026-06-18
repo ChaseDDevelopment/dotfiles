@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/backup"
 	"github.com/chaseddevelopment/dotfiles/installer/internal/config"
@@ -370,7 +371,15 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		type maintSpec struct {
 			id, label string
 			requires  []string
-			run       func(context.Context, *config.SetupContext) error
+			// after lists tool Command names this task should run AFTER
+			// when they're scheduled this run — soft ordering only (a
+			// failed dep orders but never skips the task).
+			after []string
+			// timeout overrides the engine's DefaultTaskTimeout; zero
+			// keeps the default. maintain-nvim needs a long one — a cold
+			// bootstrap clones ~40 repos and compiles parsers + Rust.
+			timeout time.Duration
+			run     func(context.Context, *config.SetupContext) error
 		}
 		// maintain-tmux requires both `tmux` (the binary, used to
 		// start a server and source the config) AND `tpm` (the plugin
@@ -386,7 +395,7 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		// "always run regardless of symlink state" contract.
 		specs := []maintSpec{
 			{id: "maintain-tmux", label: "Housekeeping tmux plugins", requires: []string{"tmux", "tpm"}, run: config.MaintainTmuxPlugins},
-			{id: "maintain-nvim", label: "Housekeeping Neovim plugins", requires: []string{"nvim"}, run: config.MaintainNeovimPlugins},
+			{id: "maintain-nvim", label: "Building Neovim plugins", requires: []string{"nvim"}, after: []string{"tree-sitter", "cargo", "make"}, timeout: 30 * time.Minute, run: config.MaintainNeovimPlugins},
 			{id: "ensure-zsh-login", label: "Ensuring login shell is zsh", requires: []string{"zsh"}, run: config.EnsureLoginShellIsZsh},
 		}
 		for _, s := range specs {
@@ -404,11 +413,25 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 					}
 				}
 			}
+			// Soft ordering after build-toolchain installs (same rule:
+			// only when scheduled this run) so a cold nvim bootstrap finds
+			// tree-sitter/cargo/make — without skipping if one fails.
+			var afterIDs []string
+			for _, a := range s.after {
+				for _, tid := range toolIDs {
+					if tid == a {
+						afterIDs = append(afterIDs, tid)
+						break
+					}
+				}
+			}
 			spec := s
 			tasks = append(tasks, engine.Task{
 				ID:        spec.id,
 				Label:     spec.label,
 				DependsOn: deps,
+				After:     afterIDs,
+				Timeout:   spec.timeout,
 				Run: func(ctx context.Context) error {
 					return spec.run(ctx, setupCtxBuilder())
 				},

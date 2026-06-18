@@ -1,6 +1,6 @@
-if vim.fn.has("nvim-0.11") == 0 then
+if vim.fn.has("nvim-0.12") == 0 then
 	vim.api.nvim_echo({
-		{ "This config requires Neovim 0.11+. You have: " .. tostring(vim.version()) .. "\n", "ErrorMsg" },
+		{ "This config requires Neovim 0.12+ (vim.pack). You have: " .. tostring(vim.version()) .. "\n", "ErrorMsg" },
 	}, true, {})
 	return
 end
@@ -50,7 +50,7 @@ vim.pack.add({
 	"https://github.com/christoomey/vim-tmux-navigator",
 	"https://github.com/m4xshen/hardtime.nvim",
 	"https://github.com/fei6409/log-highlight.nvim",
-})
+}, { confirm = false })
 require("plugins/tokyonight")
 require("plugins/treesitter")
 require("plugins/snacks")

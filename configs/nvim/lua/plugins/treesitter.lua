@@ -6,35 +6,9 @@ vim.treesitter.language.register("hcl", "terraform")
 vim.treesitter.language.register("hcl", "terraform-vars")
 vim.treesitter.language.register("yaml", "yaml.ansible")
 
-require("nvim-treesitter").install({
-	"lua",
-	"python",
-	"typescript",
-	"javascript",
-	"rust",
-	"yaml",
-	"json",
-	"markdown",
-	"bash",
-	"dockerfile",
-	"tsx",
-	"c_sharp",
-	"toml",
-	"xml",
-	"html",
-	"css",
-	"hcl",
-	"markdown_inline",
-	"git_config",
-	"gitcommit",
-	"gitignore",
-	"diff",
-	"sql",
-	"vim",
-	"vimdoc",
-	"luadoc",
-	"regex",
-})
+-- Parser list is the single source of truth in core/pack (shared with the
+-- installer's headless bootstrap).
+require("nvim-treesitter").install(require("core.pack").TS_LANGS)
 
 vim.api.nvim_create_autocmd("FileType", {
 	pattern = {

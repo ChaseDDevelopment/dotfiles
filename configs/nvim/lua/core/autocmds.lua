@@ -1,107 +1,15 @@
--- PackChanged hooks: run after vim.pack installs/updates plugins
-local function build_blink_cmp()
-	local ok, cmp = pcall(require, 'blink.cmp')
-	if not ok then
-		vim.notify(
-			'blink.cmp load failed: ' .. tostring(cmp),
-			vim.log.levels.WARN
-		)
-		return
-	end
+-- Plugin lifecycle (PackChanged auto-build + launch update check) lives in
+-- core/pack. setup() registers the PackChanged hook and MUST run before
+-- init.lua's vim.pack.add (this module is required just above it), so
+-- install-time PackChanged events are caught.
+local pack = require('core.pack')
+pack.setup()
 
-	if type(cmp.build) == 'function' then
-		local build_ok, err = pcall(function()
-			cmp.build():wait(60000)
-		end)
-		if not build_ok then
-			vim.notify(
-				'blink.cmp build failed: ' .. tostring(err),
-				vim.log.levels.WARN
-			)
-		end
-		return
-	end
-
-	if vim.fn.executable('cargo') == 1 then
-		local dir = vim.fn.stdpath('data')
-			.. '/site/pack/core/opt/blink.cmp'
-		vim.system(
-			{ 'cargo', 'build', '--release' },
-			{ cwd = dir }
-		):wait()
-	else
-		vim.notify(
-			'blink.cmp: cargo not found, using lua fallback',
-			vim.log.levels.WARN
-		)
-	end
-end
-
-vim.api.nvim_create_autocmd('PackChanged', {
-	callback = function(ev)
-		local name = ev.data.spec.name
-		if name == 'nvim-treesitter' then
-			if not ev.data.active then vim.cmd.packadd('nvim-treesitter') end
-			vim.cmd('TSUpdate')
-		elseif name == 'blink.cmp' then
-			if not ev.data.active then vim.cmd.packadd('blink.cmp') end
-			build_blink_cmp()
-		end
-	end,
-})
-
--- Check for plugin updates in background (non-blocking git fetch)
+-- Check for plugin updates in the background shortly after the UI is ready.
 vim.api.nvim_create_autocmd('UIEnter', {
 	once = true,
 	callback = function()
-		vim.defer_fn(function()
-			local pack_dir = vim.fn.stdpath('data') .. '/site/pack/core/opt'
-			local plugins = vim.fn.readdir(pack_dir)
-			local pending = #plugins
-			local updatable = {}
-
-			if pending == 0 then return end
-
-			for _, name in ipairs(plugins) do
-				local dir = pack_dir .. '/' .. name
-				if vim.fn.isdirectory(dir .. '/.git') == 1 then
-					vim.system({ 'git', 'fetch', '--quiet' }, { cwd = dir }, function(fetch_result)
-						if fetch_result.code == 0 then
-							vim.system(
-								{ 'git', 'rev-list', '--count', 'HEAD..@{u}' },
-								{ cwd = dir, text = true },
-								function(count_result)
-									local count = tonumber(vim.trim(count_result.stdout or '0')) or 0
-									if count > 0 then
-										table.insert(updatable, { name = name, commits = count })
-									end
-									pending = pending - 1
-									if pending == 0 then
-										vim.schedule(function()
-											if #updatable > 0 then
-												local lines = {}
-												for _, p in ipairs(updatable) do
-													table.insert(lines, ('  %s (%d new)'):format(p.name, p.commits))
-												end
-												vim.notify(
-													('%d plugin(s) have updates:\n%s\nRun <leader>pu to update'):format(
-														#updatable, table.concat(lines, '\n')),
-													vim.log.levels.INFO
-												)
-											end
-										end)
-									end
-								end
-							)
-						else
-							pending = pending - 1
-						end
-					end)
-				else
-					pending = pending - 1
-				end
-			end
-		end, 5000)
+		vim.defer_fn(pack.check_updates, 5000)
 	end,
 })
 

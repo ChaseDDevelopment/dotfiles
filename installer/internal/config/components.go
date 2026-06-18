@@ -778,29 +778,52 @@ var tmuxPluginSkipRecursive = map[string]string{
 // the repo's `version` spec changes (e.g. harpoon master → harpoon2)
 // and the on-disk clone stays on the old branch.
 func MaintainNeovimPlugins(ctx context.Context, sc *SetupContext) error {
-	_ = ctx
 	home := os.Getenv("HOME")
+
+	// First, wipe plugin clones whose HEAD drifted off the locked revision
+	// so vim.pack re-clones them clean. A scan failure is non-fatal — we
+	// still run the bootstrap below.
 	lockPath := filepath.Join(sc.RootDir, "configs", "nvim", "nvim-pack-lock.json")
-	drifted, err := nvimDriftedClones(lockPath, home)
-	if err != nil {
+	if drifted, err := nvimDriftedClones(lockPath, home); err != nil {
+		sc.Runner.Log.Write(fmt.Sprintf("nvim drift scan skipped: %v", err))
+	} else if len(drifted) > 0 {
 		sc.Runner.Log.Write(fmt.Sprintf(
-			"nvim drift scan skipped: %v", err,
+			"maintain-nvim: wiping %d drifted plugin clone(s)", len(drifted),
 		))
+		for _, dir := range drifted {
+			sc.Runner.EmitVerbose("Removing drifted nvim plugin clone: " + dir)
+			d := dir
+			bestEffort(sc, "remove drifted plugin "+filepath.Base(d), func() error {
+				return os.RemoveAll(d)
+			})
+		}
+	}
+
+	if !platform.HasCommand("nvim") {
 		return nil
 	}
-	if len(drifted) == 0 {
-		return nil
+
+	// Drive the headless plugin lifecycle. init.lua's blocking
+	// vim.pack.add(confirm=false) clones any missing plugins on startup;
+	// core/pack.bootstrap() then updates them to latest and SYNCHRONOUSLY
+	// builds native deps (treesitter parsers, blink.cmp's Rust matcher),
+	// exiting non-zero (cq) if any build failed so this is flagged DEGRADED
+	// with specifics in the log rather than silently passing. Runs every
+	// install (this task is not gated on symlink state) so re-runs keep
+	// parsers/matcher current. The orchestrator gives this task an extended
+	// Timeout — a cold build clones ~40 repos and compiles parsers + Rust.
+	if derr := os.MkdirAll(
+		filepath.Join(home, ".local", "share", "nvim"), 0o755,
+	); derr != nil {
+		return fmt.Errorf("create nvim data dir: %w", derr)
 	}
-	sc.Runner.Log.Write(fmt.Sprintf(
-		"maintain-nvim: wiping %d drifted plugin clone(s)", len(drifted),
-	))
-	for _, dir := range drifted {
-		sc.Runner.EmitVerbose("Removing drifted nvim plugin clone: " + dir)
-		d := dir
-		bestEffort(sc, "remove drifted plugin "+filepath.Base(d), func() error {
-			return os.RemoveAll(d)
-		})
-	}
+	sc.Runner.EmitVerbose("Bootstrapping Neovim plugins (headless build)")
+	bestEffort(sc, "headless nvim plugin bootstrap failed", func() error {
+		return sc.Runner.Run(ctx, "nvim", "--headless",
+			"+lua require('core.pack').bootstrap()",
+			"+qa",
+		)
+	})
 	return nil
 }
 
@@ -830,27 +853,10 @@ func setupNeovim(ctx context.Context, sc *SetupContext) error {
 		})
 	}
 
-	// Install missing plugins + pull updates to tracked branch tips.
-	// vim.pack.add (called from init.lua) only clones what's missing
-	// — it never updates. Without this explicit vim.pack.update call
-	// every re-install silently no-ops on the plugin set, leaving
-	// pinned versions stale indefinitely. force=true suppresses the
-	// confirmation prompt that would otherwise hang headless mode.
-	// The final blink.cmp build call uses the v2 plugin API when
-	// available, so it stays aligned with upstream.
-	if platform.HasCommand("nvim") {
-		blinkBuildCmd := "+lua pcall(function() local c=require('blink.cmp'); " +
-			"if c.build then c.build():wait(60000) end end)"
-		sc.Runner.EmitVerbose("Syncing Neovim plugins (headless update)")
-		bestEffort(sc, "headless nvim plugin update failed", func() error {
-			return sc.Runner.Run(ctx, "nvim", "--headless",
-				"+lua vim.pack.update(nil, {force = true})",
-				blinkBuildCmd,
-				"+q",
-			)
-		})
-	}
-
+	// The headless plugin lifecycle (clone-missing + update + native-dep
+	// build) lives in MaintainNeovimPlugins, which runs on EVERY install
+	// regardless of symlink state — this setup task is skipped once the
+	// nvim config is "already configured", so the build can't live here.
 	return nil
 }
 

@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"testing"
+	"time"
 
 	"github.com/chaseddevelopment/dotfiles/installer/internal/engine"
 )
@@ -162,5 +163,47 @@ func TestEnsureZshLoginDependsOnZshWhenScheduled(t *testing.T) {
 	if !foundZshDep {
 		t.Errorf("ensure-zsh-login missing zsh dep (deps = %v)",
 			ensure.DependsOn)
+	}
+}
+
+// TestMaintainNeovimTimeoutAndOrdering covers the bootstrap move: the heavy
+// headless build (clone ~40 repos + compile treesitter parsers + Rust matcher)
+// now lives in the always-run maintain-nvim task, so it must (a) carry a long
+// Timeout to survive multi-minute cold builds rather than the engine's 10-min
+// default, and (b) soft-order AFTER the build toolchain when it's scheduled.
+func TestMaintainNeovimTimeoutAndOrdering(t *testing.T) {
+	bc := newTestBuildConfig(t)
+	bc.DryRun = false
+	bc.ForceReinstall = true // force tree-sitter + cargo onto the schedule
+
+	result := BuildInstallTasks(bc)
+
+	var maintainNvim *engine.Task
+	for i := range result.Tasks {
+		if result.Tasks[i].ID == "maintain-nvim" {
+			maintainNvim = &result.Tasks[i]
+			break
+		}
+	}
+	if maintainNvim == nil {
+		t.Fatal("maintain-nvim task missing from install graph")
+	}
+
+	if maintainNvim.Timeout < 20*time.Minute {
+		t.Errorf("maintain-nvim Timeout = %v, want >= 20m for cold builds",
+			maintainNvim.Timeout)
+	}
+
+	wantAfter := map[string]bool{"tree-sitter": false, "cargo": false}
+	for _, dep := range maintainNvim.After {
+		if _, ok := wantAfter[dep]; ok {
+			wantAfter[dep] = true
+		}
+	}
+	for dep, seen := range wantAfter {
+		if !seen {
+			t.Errorf("maintain-nvim missing soft-order dep %q (After = %v)",
+				dep, maintainNvim.After)
+		}
 	}
 }
