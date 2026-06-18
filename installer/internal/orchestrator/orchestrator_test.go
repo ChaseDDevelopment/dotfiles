@@ -485,6 +485,85 @@ func TestBuildInstallTasksSkipDevTools(t *testing.T) {
 	}
 }
 
+// TestBuildInstallTasksFoldsUpdatePass verifies the install graph now
+// folds in the update pass (the standalone Update menu route was
+// removed). The system-package upgrade is gated by SkipUpdate; the
+// whole pass is gated by SkipPackages.
+func TestBuildInstallTasksFoldsUpdatePass(t *testing.T) {
+	t.Parallel()
+
+	hasTask := func(tasks []engine.Task, id string) bool {
+		for _, tk := range tasks {
+			if tk.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Default: a re-run brings everything current — the system-package
+	// upgrade plus the ecosystem upgrades are scheduled.
+	bc := newTestBuildConfig(t)
+	bc.DryRun = false
+	result := BuildInstallTasks(bc)
+	if !hasTask(result.Tasks, "update-System packages") {
+		t.Error("install should fold in the system-package upgrade")
+	}
+	if !hasTask(result.Tasks, "update-Cargo binaries") {
+		t.Error("install should fold in the ecosystem upgrade steps")
+	}
+
+	// SkipUpdate drops only the system-package upgrade; ecosystem
+	// upgrades still run.
+	bc = newTestBuildConfig(t)
+	bc.DryRun = false
+	bc.SkipUpdate = true
+	result = BuildInstallTasks(bc)
+	if hasTask(result.Tasks, "update-System packages") {
+		t.Error("SkipUpdate should drop the system-package upgrade")
+	}
+	if !hasTask(result.Tasks, "update-Cargo binaries") {
+		t.Error("SkipUpdate should keep the ecosystem upgrades")
+	}
+
+	// SkipPackages drops the entire package pass — installs and
+	// upgrades alike.
+	bc = newTestBuildConfig(t)
+	bc.DryRun = false
+	bc.SkipPackages = true
+	result = BuildInstallTasks(bc)
+	for _, tk := range result.Tasks {
+		if strings.HasPrefix(tk.ID, "update-") {
+			t.Errorf("SkipPackages should drop update task %q", tk.ID)
+		}
+	}
+}
+
+// TestBuildInstallTasksDryRunListsUpgrades verifies a dry-run install
+// surfaces the folded-in upgrade pass as plan rows rather than
+// executed tasks.
+func TestBuildInstallTasksDryRunListsUpgrades(t *testing.T) {
+	t.Parallel()
+	bc := newTestBuildConfig(t) // DryRun = true
+
+	result := BuildInstallTasks(bc)
+
+	found := false
+	for _, row := range result.PlanRows {
+		if row.Component == "System packages" &&
+			row.Status == "would upgrade" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error(
+			"dry-run install should list the system-package " +
+				"upgrade as a 'would upgrade' plan row",
+		)
+	}
+}
+
 func TestBuildInstallTasksPlanRows(t *testing.T) {
 	t.Parallel()
 	bc := newTestBuildConfig(t)
@@ -1646,6 +1725,7 @@ func TestBuildInstallTasksOutdatedPlanRow(t *testing.T) {
 			"already configured",
 			"would configure",
 			"would replace",
+			"would upgrade", // folded-in update pass (dry run)
 		}
 		valid := false
 		for _, vs := range validStatuses {

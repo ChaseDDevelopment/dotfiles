@@ -379,7 +379,7 @@ func TestInstallModeConstants(t *testing.T) {
 	// Verify each mode has a unique value.
 	modes := []InstallMode{
 		ModeInstall, ModeCustomInstall, ModeDryRun,
-		ModeUpdate, ModeRestore, ModeDoctor,
+		ModeRestore, ModeDoctor,
 		ModeUninstall, ModeExit,
 	}
 	seen := make(map[InstallMode]bool)
@@ -441,8 +441,8 @@ func TestAppModel_MainMenuSelectRestore(t *testing.T) {
 	app := NewApp(newTestConfig())
 	app.phase = PhaseMainMenu
 
-	// Navigate to Restore (index 4).
-	for i := 0; i < 4; i++ {
+	// Navigate to Restore (index 3: Install, Custom, Dry Run, Restore).
+	for i := 0; i < 3; i++ {
 		model, _ := app.Update(keyPress('j'))
 		app = model.(AppModel)
 	}
@@ -463,8 +463,9 @@ func TestAppModel_MainMenuSelectUninstall(t *testing.T) {
 	app := NewApp(newTestConfig())
 	app.phase = PhaseMainMenu
 
-	// Navigate to Uninstall (index 6).
-	for i := 0; i < 6; i++ {
+	// Navigate to Uninstall (index 5: Install, Custom, Dry Run,
+	// Restore, Doctor, Uninstall).
+	for i := 0; i < 5; i++ {
 		model, _ := app.Update(keyPress('j'))
 		app = model.(AppModel)
 	}

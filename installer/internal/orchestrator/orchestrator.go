@@ -493,6 +493,61 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		setupIDs = append(setupIDs, taskID)
 	}
 
+	// Fold the update pass into every install so re-running brings
+	// system packages and ecosystem tools current — the standalone
+	// "Update" menu route was removed in favor of this. Reuses
+	// BuildUpdateTasks; on apt the "System packages" upgrade is wired
+	// through the dpkg-doctor + ResDpkg semaphore so it serializes with
+	// the batched installs above (BuildUpdateTasks itself adds neither,
+	// since its old menu path had no doctor task). Ecosystem steps
+	// (cargo/uv/bun/…) self-guard on HasCommand, so on a fresh box they
+	// no-op and the install pass above does the first install; on a
+	// re-run they upgrade in place. Gated by SkipPackages (skip all
+	// package work); the system-package upgrade is additionally gated by
+	// SkipUpdate, handled inside BuildUpdateTasks.
+	if !bc.SkipPackages {
+		if bc.DryRun {
+			for _, s := range update.AllSteps(bc.Runner, bc.PkgMgr, bc.Platform) {
+				if bc.SkipUpdate && s.Name == "System packages" {
+					continue
+				}
+				rows = append(rows, PlanRow{
+					Component: s.Name, Action: "Upgrade",
+					Status: "would upgrade",
+				})
+			}
+			if step := update.SelfUpdateStep(bc.Runner, bc.Version); step != nil {
+				rows = append(rows, PlanRow{
+					Component: step.Name, Action: "Upgrade",
+					Status: "would upgrade",
+				})
+			}
+		} else {
+			// Serialize the system-package upgrade with the batched
+			// installs above: both hit the same package-manager DB, so
+			// the upgrade task takes that manager's engine resource
+			// (ResDpkg/ResBrew/ResPacman/ResRpm) to share the semaphore.
+			// On apt it additionally waits for the dpkg-doctor
+			// pseudo-task, exactly like the install tasks do.
+			upd := BuildUpdateTasks(bc)
+			sysRes, hasRes := pkgMgrResource(mgrName)
+			for i := range upd.Tasks {
+				if upd.Tasks[i].ID != "update-System packages" {
+					continue
+				}
+				if hasRes {
+					upd.Tasks[i].Resources = []engine.Resource{sysRes}
+				}
+				if dpkgDoctorID != "" {
+					upd.Tasks[i].DependsOn = append(
+						upd.Tasks[i].DependsOn, dpkgDoctorID,
+					)
+				}
+			}
+			tasks = append(tasks, upd.Tasks...)
+		}
+	}
+
 	// Post-install drift sweep: if any install script slipped an
 	// append past the NoProfileModify env vars, restore the repo
 	// configs to HEAD and record the backup dir as a warning. This
@@ -688,7 +743,7 @@ func BuildDoctorTasks(bc *BuildConfig) BuildResult {
 				case registry.StatusOutdated:
 					ver := registry.InstalledVersion(&t)
 					return fmt.Errorf(
-						"outdated: have %s, need %s (fix: run Update from main menu)",
+						"outdated: have %s, need %s (fix: run Install from main menu)",
 						ver, t.MinVersion,
 					)
 				}

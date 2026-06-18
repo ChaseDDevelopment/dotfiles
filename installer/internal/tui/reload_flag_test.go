@@ -21,10 +21,10 @@ func TestShellReloadArmsOnInstall(t *testing.T) {
 	}
 }
 
-// TestShellReloadArmsOnCustomInstall and Update — the other two
-// modes that produce a fresh config state worth reloading into.
-func TestShellReloadArmsOnCustomInstallAndUpdate(t *testing.T) {
-	for _, mode := range []InstallMode{ModeCustomInstall, ModeUpdate} {
+// TestShellReloadArmsOnCustomInstall — the other mode that produces
+// a fresh config state worth reloading into.
+func TestShellReloadArmsOnCustomInstall(t *testing.T) {
+	for _, mode := range []InstallMode{ModeCustomInstall} {
 		cfg := newTestConfig()
 		cfg.Mode = mode
 		app := NewApp(cfg)

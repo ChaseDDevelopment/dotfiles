@@ -41,7 +41,7 @@ func TestNewMainMenu(t *testing.T) {
 	}
 	expectedModes := []InstallMode{
 		ModeInstall, ModeCustomInstall, ModeDryRun,
-		ModeUpdate, ModeRestore, ModeDoctor,
+		ModeRestore, ModeDoctor,
 		ModeUninstall, ModeExit,
 	}
 	for _, mode := range expectedModes {
@@ -198,10 +198,10 @@ func TestNewOptionsMenu(t *testing.T) {
 		t.Errorf("cursor should start at 0, got %d", m.cursor)
 	}
 
-	// All options start disabled EXCEPT install_dev_tools, which
-	// defaults on so today's "install everything" behavior holds
-	// and only server operators flip it off.
-	defaultsOn := map[string]bool{"install_dev_tools": true}
+	// All options start disabled, including install_dev_tools: the
+	// default install is the sysadmin baseline, and dev SDKs are
+	// opt-in (flipped on per dev box).
+	defaultsOn := map[string]bool{}
 	for _, opt := range m.options {
 		want := defaultsOn[opt.key]
 		if opt.enabled != want {

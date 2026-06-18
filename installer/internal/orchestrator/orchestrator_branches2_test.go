@@ -345,7 +345,7 @@ echo "fake-outdated 0.1.0"
 			case registry.StatusOutdated:
 				ver := registry.InstalledVersion(&tool)
 				return fmt.Errorf(
-					"outdated: have %s, need %s (fix: run Update from main menu)",
+					"outdated: have %s, need %s (fix: run Install from main menu)",
 					ver, tool.MinVersion,
 				)
 			}

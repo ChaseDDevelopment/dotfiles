@@ -41,7 +41,6 @@ const (
 	ModeInstall InstallMode = iota
 	ModeCustomInstall
 	ModeDryRun
-	ModeUpdate
 	ModeRestore
 	ModeDoctor
 	ModeUninstall
@@ -127,7 +126,7 @@ func (m AppModel) ShellReloadPending() bool {
 
 // armShellReloadIfApplicable sets shellReloadPending when the
 // current mode is one the user would want to reload their shell
-// after (install / custom install / update — all mutate the config
+// after (install / custom install — both mutate the config
 // tree). Doctor / restore / uninstall are skipped: doctor made no
 // changes, and restore/uninstall intentionally put the user back
 // to a state where a reloaded zsh could be counterproductive.
@@ -141,7 +140,7 @@ func (m *AppModel) armShellReloadIfApplicable() {
 		return
 	}
 	switch m.config.Mode {
-	case ModeInstall, ModeCustomInstall, ModeUpdate:
+	case ModeInstall, ModeCustomInstall:
 		if !m.shellReloadPending {
 			m.shellReloadPending = true
 			if m.config.Runner != nil && m.config.Runner.Log != nil {
@@ -325,7 +324,7 @@ func (m AppModel) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config.Mode = ModeInstall
 			m.summary = newSummaryModel(true)
 			m.phase = PhaseOptionsMenu
-		case ModeUpdate, ModeDoctor:
+		case ModeDoctor:
 			m.phase = PhaseInstalling
 			return m, m.startInstall()
 		case ModeRestore:
@@ -356,8 +355,9 @@ func (m AppModel) updateOptionsMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.config.Runner.Verbose = m.config.Verbose
 			m.config.CleanBackup = m.options.optionEnabled("clean_backup")
 			m.config.ForceReinstall = m.options.optionEnabled("force_reinstall")
-			// install_dev_tools defaults on; SkipDevTools is its inverse
-			// so the zero-value of BuildConfig keeps today's behavior.
+			// install_dev_tools defaults OFF (server baseline); flip it
+			// on for a dev box. SkipDevTools is its inverse, so the
+			// default skips DevOnly SDKs while keeping the baseline.
 			m.config.SkipDevTools = !m.options.optionEnabled("install_dev_tools")
 
 			if m.config.Mode == ModeCustomInstall {
@@ -1071,7 +1071,7 @@ func (m *AppModel) startInstall() tea.Cmd {
 func (m *AppModel) runInstallTasks() tea.Cmd {
 	// Pre-flight: only for fresh install / update (other modes don't
 	// shell out to apt at session start).
-	if m.config.Mode == ModeInstall || m.config.Mode == ModeCustomInstall || m.config.Mode == ModeUpdate {
+	if m.config.Mode == ModeInstall || m.config.Mode == ModeCustomInstall {
 		if cmd, blocked := m.preflightDpkgHealth(); blocked {
 			return cmd
 		}
@@ -1081,8 +1081,6 @@ func (m *AppModel) runInstallTasks() tea.Cmd {
 	var tasks []engine.Task
 
 	switch m.config.Mode {
-	case ModeUpdate:
-		tasks = m.applyResult(orchestrator.BuildUpdateTasks(bc))
 	case ModeRestore:
 		tasks = m.applyResult(orchestrator.BuildRestoreTasks(bc))
 	case ModeDoctor:

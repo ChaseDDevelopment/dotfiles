@@ -33,7 +33,6 @@ func newMainMenu() mainMenuModel {
 			{icon: " ", label: "Install", desc: "Full installation (recommended)", mode: ModeInstall},
 			{icon: " ", label: "Custom Install", desc: "Pick individual components", mode: ModeCustomInstall},
 			{icon: " ", label: "Dry Run", desc: "Preview changes without modifying", mode: ModeDryRun},
-			{icon: "󰚰 ", label: "Update", desc: "Update all installed tools", mode: ModeUpdate},
 			{icon: " ", label: "Restore", desc: "Restore from a backup", mode: ModeRestore},
 			{icon: " ", label: "Doctor", desc: "Verify installation health", mode: ModeDoctor},
 			{icon: " ", label: "Uninstall", desc: "Remove component symlinks", mode: ModeUninstall},
@@ -133,10 +132,13 @@ func newOptionsMenu() optionsMenuModel {
 			{key: "force_reinstall", label: "Force reinstall"},
 			{key: "verbose", label: "Verbose output"},
 			{key: "clean_backup", label: "Clean backup after"},
-			// Defaults on: server operators explicitly flip this off
-			// to skip Go/.NET/uv/Bun on machines that only need the
-			// terminal + nvim for logs/yaml/docker.
-			{key: "install_dev_tools", label: "Install dev tools (Go, .NET, uv, Bun)", enabled: true},
+			// Defaults OFF: most hosts are servers that only need the
+			// terminal + nvim for logs/yaml/docker, so dev SDKs
+			// (Go/.NET/Bun + the Python dev linters) are opt-in. Flip
+			// this on for a dev box. The sysadmin baseline — CLI tools,
+			// cargo, uv, node, and the systemd/nginx LSPs — installs
+			// regardless (those tools carry no DevOnly flag).
+			{key: "install_dev_tools", label: "Install dev tools (Go, .NET, uv, Bun)", enabled: false},
 		},
 	}
 }
