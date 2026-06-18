@@ -379,7 +379,12 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 			// keeps the default. maintain-nvim needs a long one — a cold
 			// bootstrap clones ~40 repos and compiles parsers + Rust.
 			timeout time.Duration
-			run     func(context.Context, *config.SetupContext) error
+			// resources are engine resource locks the task holds. nil
+			// for none. maintain-nvim takes ResCargo because its nvim
+			// bootstrap compiles the blink matcher via cargo, which must
+			// not overlap `rustup update`.
+			resources []engine.Resource
+			run       func(context.Context, *config.SetupContext) error
 		}
 		// maintain-tmux requires both `tmux` (the binary, used to
 		// start a server and source the config) AND `tpm` (the plugin
@@ -395,7 +400,7 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 		// "always run regardless of symlink state" contract.
 		specs := []maintSpec{
 			{id: "maintain-tmux", label: "Housekeeping tmux plugins", requires: []string{"tmux", "tpm"}, run: config.MaintainTmuxPlugins},
-			{id: "maintain-nvim", label: "Building Neovim plugins", requires: []string{"nvim"}, after: []string{"tree-sitter", "cargo", "make"}, timeout: 30 * time.Minute, run: config.MaintainNeovimPlugins},
+			{id: "maintain-nvim", label: "Building Neovim plugins", requires: []string{"nvim"}, after: []string{"tree-sitter", "cargo", "make"}, timeout: 30 * time.Minute, resources: []engine.Resource{engine.ResCargo}, run: config.MaintainNeovimPlugins},
 			{id: "ensure-zsh-login", label: "Ensuring login shell is zsh", requires: []string{"zsh"}, run: config.EnsureLoginShellIsZsh},
 		}
 		for _, s := range specs {
@@ -432,6 +437,7 @@ func BuildInstallTasks(bc *BuildConfig) BuildResult {
 				DependsOn: deps,
 				After:     afterIDs,
 				Timeout:   spec.timeout,
+				Resources: spec.resources,
 				Run: func(ctx context.Context) error {
 					return spec.run(ctx, setupCtxBuilder())
 				},
@@ -671,6 +677,17 @@ func BuildUpdateTasks(bc *BuildConfig) BuildResult {
 		updateSteps = append(updateSteps, *step)
 	}
 
+	// Steps that run `rustup update` or `cargo install` must hold the
+	// cargo lock so they never overlap each other or the install-pass's
+	// MethodCargo tasks — `rustup update` rewrites the shared toolchain
+	// and would otherwise corrupt an in-flight compile (the observed
+	// "rustc not applicable to toolchain" failures).
+	cargoSteps := map[string]bool{
+		"Rust toolchain": true, // rustup update — the toolchain mutator
+		"Cargo binaries": true, // cargo install <crate> loop
+		"Atuin":          true, // cargo install atuin on apt/dnf
+	}
+
 	sysID := ""
 	for _, s := range updateSteps {
 		s := s
@@ -684,10 +701,15 @@ func BuildUpdateTasks(bc *BuildConfig) BuildResult {
 		} else if sysID != "" {
 			deps = []string{sysID}
 		}
+		var res []engine.Resource
+		if cargoSteps[s.Name] {
+			res = []engine.Resource{engine.ResCargo}
+		}
 		tasks = append(tasks, engine.Task{
 			ID:        id,
 			Label:     fmt.Sprintf("Updating %s", s.Name),
 			DependsOn: deps,
+			Resources: res,
 			Run: func(ctx context.Context) error {
 				return s.Fn(ctx)
 			},
@@ -855,6 +877,12 @@ func resourcesForTool(
 			// out to apt for a pre-install step.
 			if s.AcquiresDpkg {
 				add(engine.ResDpkg)
+			}
+			// Honor AcquiresCargo so rustup-install / cargo-build
+			// scripts serialize against `rustup update` and other
+			// cargo work on the shared ResCargo lock.
+			if s.AcquiresCargo {
+				add(engine.ResCargo)
 			}
 			// Legacy Managers-based detection for MethodCustom:
 			// kept so existing strategy declarations don't silently

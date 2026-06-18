@@ -18,7 +18,7 @@ func rustToolchain() []Tool {
 		{
 			Name: "rust", Command: "cargo", Description: "Rust toolchain via rustup",
 			Strategies: []InstallStrategy{
-				{Method: MethodScript, Script: &ScriptConfig{
+				{Method: MethodScript, AcquiresCargo: true, Script: &ScriptConfig{
 					URL: "https://sh.rustup.rs",
 					// --no-modify-path: configs/zsh/.zshenv already
 					// prepends ~/.cargo/bin to PATH (for every shell,

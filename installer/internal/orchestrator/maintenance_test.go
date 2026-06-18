@@ -206,4 +206,46 @@ func TestMaintainNeovimTimeoutAndOrdering(t *testing.T) {
 				dep, maintainNvim.After)
 		}
 	}
+
+	// Its nvim bootstrap compiles the blink matcher via cargo, so it must
+	// hold ResCargo to never overlap `rustup update`.
+	if !hasResource(maintainNvim.Resources, engine.ResCargo) {
+		t.Errorf("maintain-nvim missing ResCargo (Resources = %v)",
+			maintainNvim.Resources)
+	}
+}
+
+// TestCargoWorkSerializedOnResCargo guards the toolchain-corruption fix: every
+// task that runs rustup/cargo/rustc must hold the single ResCargo lock so
+// `rustup update` can't rewrite the shared toolchain under a running compile.
+func TestCargoWorkSerializedOnResCargo(t *testing.T) {
+	t.Parallel()
+	bc := newTestBuildConfig(t)
+	bc.DryRun = false
+	bc.ForceReinstall = true // schedule rust + the cargo-update pass
+
+	result := BuildInstallTasks(bc)
+	byID := map[string]*engine.Task{}
+	for i := range result.Tasks {
+		byID[result.Tasks[i].ID] = &result.Tasks[i]
+	}
+
+	// Folded update-pass steps that run `rustup update` / `cargo install`.
+	for _, id := range []string{"update-Rust toolchain", "update-Cargo binaries"} {
+		tk := byID[id]
+		if tk == nil {
+			t.Fatalf("%s task missing from install graph", id)
+		}
+		if !hasResource(tk.Resources, engine.ResCargo) {
+			t.Errorf("%s missing ResCargo (Resources = %v)", id, tk.Resources)
+		}
+	}
+
+	// The rust toolchain install (Command "cargo", MethodScript rustup.sh
+	// with AcquiresCargo) must lock cargo too.
+	if tk := byID["cargo"]; tk == nil {
+		t.Fatal("rust install task (cargo) missing from install graph")
+	} else if !hasResource(tk.Resources, engine.ResCargo) {
+		t.Errorf("rust install task missing ResCargo (Resources = %v)", tk.Resources)
+	}
 }

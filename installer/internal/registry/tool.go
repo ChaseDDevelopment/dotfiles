@@ -129,6 +129,15 @@ type InstallStrategy struct {
 	// (misses add-apt-repository, apt-key, locale variants).
 	AcquiresDpkg bool
 
+	// AcquiresCargo signals that this strategy invokes cargo/rustc or
+	// mutates the rustup toolchain (e.g. a MethodScript rustup install,
+	// or a MethodCustom that shells out to `cargo install`). It makes the
+	// task hold the cargo resource semaphore so it can't run concurrently
+	// with `rustup update` — which rewrites the shared toolchain and
+	// would otherwise corrupt an in-flight compile. MethodCargo gets this
+	// automatically; declare it for MethodScript/MethodCustom that don't.
+	AcquiresCargo bool
+
 	// PostInstall actions run after a successful install.
 	PostInstall []PostAction
 }
