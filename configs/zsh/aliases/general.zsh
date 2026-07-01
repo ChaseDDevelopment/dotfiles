@@ -1,7 +1,7 @@
 # Modern ls replacement with maximum beauty/info
-if (( $+commands[eza] )); then
+if (($+commands[eza])); then
     # Basic listing with icons
-    alias ls='eza --icons --group-directories-first'
+    alias ls='eza -a --icons --group-directories-first'
 
     # Long format with git status, headers, and size coloring
     alias ll='eza -la --icons --git --header --group-directories-first --color-scale'
@@ -27,18 +27,21 @@ fi
 # collapses every timestamp to `constant.numeric`, which paints the
 # whole file in TokyoNight orange. tailspin has dedicated highlighters
 # for dates, severities, paths, k=v, etc., so logs look varied instead.
-if (( $+commands[batcat] && ! $+commands[bat] )); then
+if (($+commands[batcat] && !$+commands[bat])); then
     alias bat='batcat'
 fi
-if (( $+commands[bat] || $+commands[batcat] )); then
+if (($+commands[bat] || $+commands[batcat])); then
     cat() {
         local _bat
-        (( $+commands[bat] )) && _bat=bat || _bat=batcat
-        if (( $+commands[tspin] )); then
+        (($+commands[bat])) && _bat=bat || _bat=batcat
+        if (($+commands[tspin])); then
             local arg
             for arg in "$@"; do
                 case $arg in
-                    *.log) tspin -p "$@"; return $? ;;
+                *.log)
+                    tspin -p "$@"
+                    return $?
+                    ;;
                 esac
             done
         fi
@@ -46,22 +49,22 @@ if (( $+commands[bat] || $+commands[batcat] )); then
     }
 fi
 
-if (( $+commands[rg] )); then
+if (($+commands[rg])); then
     alias grep='rg'
 fi
 
 # fd / fdfind (Ubuntu/Debian names it fdfind due to package conflict)
-if (( $+commands[fd] )); then
+if (($+commands[fd])); then
     alias find='fd'
-elif (( $+commands[fdfind] )); then
+elif (($+commands[fdfind])); then
     alias find='fdfind'
     alias fd='fdfind'
 fi
 
 # tailspin for pretty log viewing (tspin is the binary)
-if (( $+commands[tspin] )); then
-    alias tails='tspin -f'      # Follow mode (like tail -f but pretty)
-    alias tailspin='tspin'      # Full name alias
+if (($+commands[tspin])); then
+    alias tails='tspin -f' # Follow mode (like tail -f but pretty)
+    alias tailspin='tspin' # Full name alias
 fi
 
 # Safety
@@ -96,7 +99,7 @@ alias reload='source ${ZDOTDIR}/.zshrc'
 alias myip='curl -s ifconfig.me'
 if [[ "$OSTYPE" == darwin* ]]; then
     alias ports='lsof -nP -iTCP -sTCP:LISTEN -iUDP'
-elif (( $+commands[ss] )); then
+elif (($+commands[ss])); then
     alias ports='ss -tulanp'
 else
     alias ports='netstat -tulanp 2>/dev/null || netstat -anv'
@@ -109,11 +112,11 @@ alias ....='cd ../../..'
 alias .....='cd ../../../..'
 
 # Modern du replacement + storage-sleuthing shortcuts
-if (( $+commands[dust] )); then
+if (($+commands[dust])); then
     alias du='dust'
-    alias bigdirs='dust -n 30 -d 3'     # top 30 dirs, max depth 3
-    alias bigfiles='dust -n 30 -F'      # top 30 files (skip dirs)
-    alias biggest='dust -n 20 -x /'     # whole-root, one filesystem
+    alias bigdirs='dust -n 30 -d 3' # top 30 dirs, max depth 3
+    alias bigfiles='dust -n 30 -F'  # top 30 files (skip dirs)
+    alias biggest='dust -n 20 -x /' # whole-root, one filesystem
 fi
 
 # Docker compose shorthand
@@ -123,9 +126,9 @@ alias dc='docker compose'
 #   `report.json`  → jless report.json
 #   `./notes.md`   → bat notes.md
 # Only fires when the filename is the first word; `cat file.json` is unaffected.
-if (( $+commands[bat] )); then
+if (($+commands[bat])); then
     _view_cmd='bat'
-elif (( $+commands[batcat] )); then
+elif (($+commands[batcat])); then
     _view_cmd='batcat'
 else
     _view_cmd='less'
@@ -135,7 +138,7 @@ for _ext in txt log md yml yaml toml ini conf; do
 done
 unset _ext
 
-if (( $+commands[jless] )); then
+if (($+commands[jless])); then
     alias -s json='jless'
     alias -s ndjson='jless'
 else
