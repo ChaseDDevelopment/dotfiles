@@ -52,13 +52,25 @@ if [[ -d "/Applications/Obsidian.app/Contents/MacOS" ]]; then
     path+=("/Applications/Obsidian.app/Contents/MacOS")
 fi
 
+# Machine-local pre-tmux overrides — sourced here, BEFORE the auto-attach
+# hand-off below, because .zprofile runs before .zshrc (which sources
+# local.zsh — too late to gate this block). Set DOTFILES_TMUX_AUTOSTART=0
+# here to disable auto-attach on this machine. Gitignored via `local.*`;
+# see local.zprofile.example.
+[[ -f "${ZDOTDIR}/local.zprofile" ]] && source "${ZDOTDIR}/local.zprofile"
+
 # Tmux auto-attach — runs in the login shell BEFORE .zshrc so the outer
 # process hands off to tmux without paying the antidote / compinit /
 # plugin-source tax in .zshrc. Inner zsh (spawned by tmux as default-
 # command) is NOT a login shell, so it skips this block and loads .zshrc
 # normally. The $TMUX / $SSH_TTY / $VSCODE_PID guards prevent launching
-# tmux in nested or non-interactive contexts.
-if [[ -z "$TMUX" && -z "$SSH_TTY" && -z "$VSCODE_PID" ]] \
+# tmux in nested or non-interactive contexts. $SUPACODE_SOCKET_PATH skips
+# it inside Supacode, whose zmx layer already provides session
+# persistence (same rationale as the VS Code / Cursor guards); tmux there
+# would be redundant and fight zmx. DOTFILES_TMUX_AUTOSTART=0 force-
+# disables regardless of context.
+if [[ "$DOTFILES_TMUX_AUTOSTART" != "0" ]] \
+   && [[ -z "$TMUX" && -z "$SSH_TTY" && -z "$VSCODE_PID" && -z "$SUPACODE_SOCKET_PATH" ]] \
    && [[ "$TERM_PROGRAM" != "vscode" && "$TERM_PROGRAM" != "cursor" ]] \
    && [[ -t 0 ]] \
    && (( $+commands[tmux] )); then

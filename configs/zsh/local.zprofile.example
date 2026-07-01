@@ -1,0 +1,16 @@
+# local.zprofile - Machine-specific LOGIN-shell configuration (not tracked in git)
+#
+# Copy this file to local.zprofile and customize for your machine:
+#   cp local.zprofile.example local.zprofile
+#
+# This file is sourced from .zprofile BEFORE the tmux auto-attach block,
+# so unlike local.zsh (sourced too late, from .zshrc) it can gate that
+# hand-off. Use it only for login-shell / pre-tmux overrides; put
+# everything else in local.zsh.
+
+# Disable tmux auto-attach on shell startup for this machine. Leave unset
+# (or anything other than 0) to keep the default: auto-attach to the Main
+# session. Auto-attach is already skipped automatically inside Supacode,
+# VS Code/Cursor, SSH sessions, and existing tmux — this switch is the
+# manual override for any other case.
+# export DOTFILES_TMUX_AUTOSTART=0
