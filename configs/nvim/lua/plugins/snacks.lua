@@ -1,6 +1,11 @@
 require("snacks").setup({
 	picker = { enabled = true },
 	toggle = { enabled = true },
+	-- Dashboard disabled: a bare `nvim` (e.g. Supacode's "$EDITOR" button, which
+	-- runs plain `nvim` in the worktree) now opens the snacks explorer via the
+	-- UIEnter autocmd in core/autocmds.lua. To bring the dashboard back, delete
+	-- the surrounding --[==[ ]==] markers (level-2 so the header's [[ ]] is safe).
+	--[==[
 	dashboard = {
 		enabled = true,
 		preset = {
@@ -47,6 +52,7 @@ require("snacks").setup({
 			{ title = " Recent Files", section = "recent_files", indent = 2, gap = 0, padding = 1 },
 		},
 	},
+	]==]
 })
 -- File explorer
 vim.keymap.set("n", "<leader>e", function()

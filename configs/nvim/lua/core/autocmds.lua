@@ -13,15 +13,30 @@ vim.api.nvim_create_autocmd('UIEnter', {
 	end,
 })
 
--- Replace netrw: open snacks explorer when nvim is launched with a directory
+-- Land in the snacks explorer instead of an empty buffer: open it for
+-- `nvim <dir>` and for a bare `nvim` (no file args). The latter makes
+-- Supacode's "$EDITOR" button — which runs plain `nvim` in the worktree —
+-- open the project. Files and piped stdin are left untouched.
 vim.api.nvim_create_autocmd('UIEnter', {
 	callback = function()
-		local bufname = vim.api.nvim_buf_get_name(0)
-		if bufname ~= '' and vim.fn.isdirectory(bufname) == 1 then
-			vim.fn.chdir(bufname)
-			vim.api.nvim_buf_delete(0, { force = true })
-			Snacks.picker.explorer({ cwd = bufname })
+		local ui = vim.api.nvim_list_uis()[1]
+		if ui and ui.stdout_tty and not ui.stdin_tty then
+			return -- input is piped (e.g. `echo x | nvim`)
 		end
+
+		local bufname = vim.api.nvim_buf_get_name(0)
+		local dir
+		if bufname ~= '' and vim.fn.isdirectory(bufname) == 1 then
+			dir = bufname -- nvim <dir>
+		elseif bufname == '' and vim.fn.argc(-1) == 0 then
+			dir = vim.fn.getcwd() -- bare nvim
+		else
+			return -- files passed → open them as-is
+		end
+
+		vim.fn.chdir(dir)
+		vim.api.nvim_buf_delete(0, { force = true })
+		Snacks.picker.explorer({ cwd = dir })
 	end,
 })
 
