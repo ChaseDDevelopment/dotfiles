@@ -44,6 +44,7 @@ func AllComponents() []Component {
 		{Name: "Atuin", Icon: " ", RequiredCmd: "atuin"},
 		{Name: "Pi", Icon: "P"},
 		{Name: "Ghostty", Icon: "󰊠"},
+		{Name: "Herdr", Icon: "H", RequiredCmd: "herdr"},
 		{Name: "Yazi", Icon: " ", RequiredCmd: "yazi"},
 		{Name: "Git", Icon: " ", RequiredCmd: "git"},
 		{Name: "Bat", Icon: "󱉶 ", RequiredCmd: "bat"},
@@ -717,26 +718,6 @@ func installMissingTmuxPlugins(
 		len(missing), strings.Join(missing, ", "),
 	))
 
-	// Pre-clone plugins whose upstream ships submodules we don't need
-	// (docs/wiki) and that break TPM's `git clone --recursive`. Shallow
-	// + --no-recurse-submodules dodges the submodule update that causes
-	// TPM to report `"<plugin>" download fail` despite a successful
-	// main clone. TPM then sees the target dir on disk and logs
-	// `Already installed "<plugin>"`, skipping its own broken attempt.
-	for _, name := range missing {
-		url, ok := tmuxPluginSkipRecursive[name]
-		if !ok {
-			continue
-		}
-		target := filepath.Join(tmuxPluginsDir, name)
-		bestEffort(sc, "pre-clone "+name+" failed", func() error {
-			return sc.Runner.Run(ctx,
-				"git", "clone", "--depth=1", "--single-branch",
-				"--no-recurse-submodules", url, target,
-			)
-		})
-	}
-
 	// Start the server and source the config in ONE tmux invocation.
 	// Run as two separate processes, `tmux start-server` spins up a
 	// server with zero sessions that exits before the follow-up
@@ -756,20 +737,6 @@ func installMissingTmuxPlugins(
 	bestEffort(sc, "TPM plugin install failed", func() error {
 		return sc.Runner.Run(ctx, tpmScript)
 	})
-}
-
-// tmuxPluginSkipRecursive maps plugin basenames (as they appear in
-// ~/.tmux/plugins/) to their canonical clone URLs. Any plugin in this
-// map is pre-cloned shallow + non-recursive by `installMissingTmuxPlugins`
-// so TPM doesn't trip over useless submodules. Keep the map minimal:
-// only add entries when TPM's `git clone --recursive` has been observed
-// to fail cosmetically on a plugin we actually want.
-var tmuxPluginSkipRecursive = map[string]string{
-	// tmux-powerkit ships a `wiki` git submodule pointing at its
-	// GitHub wiki (docs/screenshots only). Runtime doesn't need it,
-	// and its stored SHA diverges from the wiki HEAD, causing TPM's
-	// recursive clone to exit non-zero.
-	"tmux-powerkit": "https://github.com/fabioluciano/tmux-powerkit.git",
 }
 
 // MaintainNeovimPlugins wipes plugin clones whose HEAD doesn't match

@@ -1,0 +1,229 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+setopt no_unset pipe_fail
+umask 077
+
+fail() {
+    print -u2 -- "herdr-worktree-create: $*"
+    if [[ -t 0 && -t 1 ]]; then
+        read -r "?Press Enter to close..."
+    fi
+    return 1
+}
+
+abort_with_status() {
+    local exit_status=$1
+    shift
+    fail "$@"
+    exit "$exit_status"
+}
+
+workspace_id=${HERDR_ACTIVE_WORKSPACE_ID:-}
+start_dir=${HERDR_ACTIVE_PANE_CWD:-$PWD}
+[[ -n "$workspace_id" ]] || fail "run this from a Herdr workspace" || exit $?
+source_root=$(git -C "$start_dir" rev-parse --show-toplevel 2>/dev/null) ||
+    { fail "active workspace is not a Git repository"; exit $?; }
+cd "$source_root" || abort_with_status $? "cannot enter source worktree: $source_root"
+
+if git -C "$source_root" remote get-url origin >/dev/null 2>&1; then
+    git -C "$source_root" fetch --quiet --prune origin ||
+        abort_with_status $? "failed to fetch origin"
+fi
+
+print -n -r -- "Branch: "
+IFS= read -r branch || branch=
+[[ -n "$branch" && "$branch" != -* ]] ||
+    { fail "enter a valid branch name"; exit $?; }
+validated_branch=$(git check-ref-format --branch "$branch" 2>/dev/null) ||
+    { fail "invalid branch: $branch"; exit $?; }
+[[ "$validated_branch" == "$branch" ]] ||
+    { fail "invalid branch: $branch"; exit $?; }
+
+print -n -r -- "Base [HEAD]: "
+IFS= read -r base || base=
+base=${base:-HEAD}
+[[ "$base" != -* ]] || { fail "invalid base: $base"; exit $?; }
+git -C "$source_root" rev-parse --verify --quiet --end-of-options \
+    "${base}^{commit}" >/dev/null || { fail "invalid base: $base"; exit $?; }
+
+worktree_root=${HERDR_WORKTREE_ROOT:-$HOME/.herdr/worktrees}
+repo_name=${source_root:t}
+branch_slug=${branch//\//-}
+target="$worktree_root/$repo_name/$branch_slug"
+[[ ! -e "$target" && ! -L "$target" ]] ||
+    { fail "target already exists: $target"; exit $?; }
+
+typeset -A copy_paths tracked_paths
+typeset -a pipeline_status
+relative=
+
+git -C "$source_root" ls-files -z |
+    while IFS= read -r -d '' relative; do
+        tracked_paths+=("$relative" 1)
+    done
+pipeline_status=("${pipestatus[@]}")
+(( pipeline_status[1] == 0 )) ||
+    abort_with_status "$pipeline_status[1]" "could not inspect tracked files"
+(( pipeline_status[2] == 0 )) ||
+    { fail "could not inspect tracked files"; exit $?; }
+
+validate_relative_path() {
+    local relative=$1 component
+    local -a components
+
+    [[ -n "$relative" && "$relative" != /* ]] ||
+        { fail "invalid copy path: $relative"; return 1; }
+    components=("${(@s:/:)relative}")
+    for component in "${components[@]}"; do
+        [[ "$component" != .. && "${component:l}" != .git ]] ||
+            { fail "invalid copy path: $relative"; return 1; }
+    done
+}
+
+has_source_symlink_ancestor() {
+    local relative=$1 current=$source_root
+    local -a components
+    integer index
+
+    components=("${(@s:/:)relative}")
+    for (( index = 1; index < ${#components}; index++ )); do
+        current="$current/${components[index]}"
+        [[ -L "$current" ]] && return 0
+    done
+    return 1
+}
+
+add_copy_path() {
+    local relative=$1 source_path="$source_root/$1"
+
+    validate_relative_path "$relative" || return 1
+    has_source_symlink_ancestor "$relative" &&
+        { fail "copy path crosses a symlink: $relative"; return 1; }
+    [[ -f "$source_path" || -L "$source_path" ]] || return 0
+    [[ "${tracked_paths[$relative]-}" == 1 ]] && return 0
+    copy_paths+=("$relative" 1)
+}
+
+collect_pattern() {
+    local pattern=$1 relative
+    integer collect_failed=0
+
+    git -C "$source_root" ls-files --others --ignored --exclude-standard -z -- \
+        ":(top,glob)$pattern" |
+        while IFS= read -r -d '' relative; do
+            add_copy_path "$relative" || collect_failed=1
+        done
+    pipeline_status=("${pipestatus[@]}")
+    (( pipeline_status[1] == 0 )) ||
+        abort_with_status "$pipeline_status[1]" "could not collect ignored files: $pattern"
+    (( collect_failed == 0 && pipeline_status[2] == 0 )) ||
+        { fail "could not collect ignored files: $pattern"; return 1; }
+}
+
+integer untracked_failed=0
+git -C "$source_root" ls-files --others --exclude-standard -z |
+    while IFS= read -r -d '' relative; do
+        add_copy_path "$relative" || untracked_failed=1
+    done
+pipeline_status=("${pipestatus[@]}")
+(( pipeline_status[1] == 0 )) ||
+    abort_with_status "$pipeline_status[1]" "could not collect untracked files"
+(( untracked_failed == 0 && pipeline_status[2] == 0 )) ||
+    { fail "could not collect untracked files"; exit $?; }
+
+for pattern in .env '.env.*' .envrc; do
+    collect_pattern "$pattern" || exit $?
+done
+
+normalize_manifest_entry() {
+    local entry=$1 component
+    local -a components normalized
+
+    [[ -n "$entry" && "$entry" != /* ]] ||
+        { fail "invalid .worktree-copy entry: $entry"; return 1; }
+    components=("${(@s:/:)entry}")
+    for component in "${components[@]}"; do
+        [[ -z "$component" || "$component" == . ]] && continue
+        [[ "$component" != .. && "${component:l}" != .git ]] ||
+            { fail "invalid .worktree-copy entry: $entry"; return 1; }
+        normalized+=("$component")
+    done
+    (( ${#normalized} )) ||
+        { fail "invalid .worktree-copy entry: $entry"; return 1; }
+    normalized_entry="${(j:/:)normalized}"
+}
+
+if [[ "${tracked_paths[.worktree-copy]-}" == 1 ]]; then
+    manifest="$source_root/.worktree-copy"
+    [[ ! -L "$manifest" && -f "$manifest" ]] ||
+        { fail ".worktree-copy must be a regular tracked file"; exit $?; }
+    while IFS= read -r manifest_entry || [[ -n "$manifest_entry" ]]; do
+        [[ -z "$manifest_entry" || "$manifest_entry" == \#* ]] && continue
+        normalize_manifest_entry "$manifest_entry" || exit $?
+        collect_pattern "$normalized_entry" || exit $?
+    done < "$manifest"
+fi
+
+mkdir -p "${target:h}" ||
+    abort_with_status $? "could not create worktree directory: ${target:h}"
+herdr worktree create \
+    --workspace "$workspace_id" \
+    --branch "$branch" \
+    --base "$base" \
+    --path "$target" \
+    --label "$branch" \
+    --no-focus >/dev/null ||
+    abort_with_status $? "failed to create worktree: $target"
+
+[[ -d "$target" && ! -L "$target" ]] ||
+    { fail "created worktree is not a directory: $target"; exit $?; }
+chmod go-rwx "$target" ||
+    abort_with_status $? "could not restrict worktree permissions: $target"
+
+preflight_destination() {
+    local relative=$1 destination="$target/$1" current=$target component
+    local -a components
+    integer index
+
+    [[ ! -e "$destination" && ! -L "$destination" ]] ||
+        { fail "destination already exists: $relative"; return 1; }
+    components=("${(@s:/:)relative}")
+    for (( index = 1; index < ${#components}; index++ )); do
+        component=${components[index]}
+        current="$current/$component"
+        [[ ! -L "$current" ]] ||
+            { fail "destination parent is a symlink: $relative"; return 1; }
+        [[ ! -e "$current" || -d "$current" ]] ||
+            { fail "destination parent is not a directory: $relative"; return 1; }
+    done
+}
+
+for relative in "${(@k)copy_paths}"; do
+    preflight_destination "$relative" || exit $?
+done
+
+integer copied=0
+for relative in "${(@k)copy_paths}"; do
+    source_path="$source_root/$relative"
+    destination="$target/$relative"
+    has_source_symlink_ancestor "$relative" &&
+        { fail "copy path crosses a symlink: $relative"; exit $?; }
+    mkdir -p "${destination:h}" ||
+        abort_with_status $? "could not create destination directory: ${relative:h}"
+    preflight_destination "$relative" || exit $?
+    if [[ -L "$source_path" ]]; then
+        cp -P -n "$source_path" "$destination" ||
+            abort_with_status $? "could not copy symlink: $relative"
+    else
+        cp -p -n "$source_path" "$destination" ||
+            abort_with_status $? "could not copy file: $relative"
+    fi
+    (( copied++ ))
+done
+
+print -r -- "Copied $copied local file(s) to $target"
+herdr worktree open \
+    --workspace "$workspace_id" \
+    --path "$target" \
+    --focus >/dev/null || abort_with_status $? "could not focus worktree: $target"

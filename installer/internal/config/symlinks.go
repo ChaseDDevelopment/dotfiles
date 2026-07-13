@@ -48,6 +48,10 @@ func AllSymlinks() []SymlinkEntry {
 		// Ghostty
 		{Source: "ghostty", Target: "$HOME/.config/ghostty", IsDir: true, Component: "Ghostty"},
 
+		// Herdr (single files to preserve machine-local runtime state)
+		{Source: "herdr/config.toml", Target: "$HOME/.config/herdr/config.toml", IsDir: false, Component: "Herdr"},
+		{Source: "herdr/scripts/herdr-worktree-create", Target: "$HOME/.local/bin/herdr-worktree-create", IsDir: false, Component: "Herdr"},
+
 		// Yazi
 		{Source: "yazi", Target: "$HOME/.config/yazi", IsDir: true, Component: "Yazi"},
 

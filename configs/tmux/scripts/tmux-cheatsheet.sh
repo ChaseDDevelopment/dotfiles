@@ -42,7 +42,7 @@ row() {
     printf "${BLUE}  │                            Tmux Keybinding Cheatsheet                            │${RESET}\n"
     printf "${BLUE}  ╰──────────────────────────────────────────────────────────────────────────────────╯${RESET}\n"
     printf '\n'
-    printf "  ${SUBTEXT}prefix = ${GREEN}C-Space${RESET}          ${SUBTEXT}All bindings below require prefix unless noted${RESET}\n"
+    printf "  ${SUBTEXT}prefix = ${GREEN}C-b${RESET}              ${SUBTEXT}All bindings below require prefix unless noted${RESET}\n"
     printf '\n'
 
     sep

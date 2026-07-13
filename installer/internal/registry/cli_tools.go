@@ -233,6 +233,16 @@ func cliTools() []Tool {
 				},
 			},
 		},
+		{
+			Name: "herdr", Command: "herdr",
+			Description: "Terminal workspace manager for AI coding agents",
+			Strategies: []InstallStrategy{
+				{Managers: []string{"brew"}, Method: MethodPackageManager, Package: "herdr"},
+				{Method: MethodScript, Script: &ScriptConfig{
+					URL: "https://herdr.dev/install.sh", Shell: "sh", NoProfileModify: true,
+				}},
+			},
+		},
 		// gh — GitHub CLI
 		{
 			Name: "gh", Command: "gh", Description: "GitHub CLI",

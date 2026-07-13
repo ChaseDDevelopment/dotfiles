@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -68,6 +69,25 @@ func TestManagedTargets_SubsetOfAllSymlinks(t *testing.T) {
 				tgt,
 			)
 		}
+	}
+}
+
+func TestHerdrComponentOwnsOnlyConfigAndHelper(t *testing.T) {
+	want := map[string]string{
+		"herdr/config.toml":                   "$HOME/.config/herdr/config.toml",
+		"herdr/scripts/herdr-worktree-create": "$HOME/.local/bin/herdr-worktree-create",
+	}
+	got := map[string]string{}
+	for _, entry := range AllSymlinks() {
+		if entry.Component == "Herdr" {
+			got[entry.Source] = entry.Target
+			if entry.IsDir {
+				t.Fatalf("Herdr must not symlink a directory: %#v", entry)
+			}
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Herdr symlinks = %#v, want %#v", got, want)
 	}
 }
 
@@ -774,6 +794,18 @@ func TestAllComponents_NonEmpty(t *testing.T) {
 			t.Errorf("component[%d] %q: Icon is empty", i, c.Name)
 		}
 	}
+}
+
+func TestAllComponents_IncludesHerdr(t *testing.T) {
+	for _, component := range AllComponents() {
+		if component.Name == "Herdr" {
+			if component.RequiredCmd != "herdr" {
+				t.Fatalf("Herdr RequiredCmd = %q, want herdr", component.RequiredCmd)
+			}
+			return
+		}
+	}
+	t.Fatal("AllComponents() does not include Herdr")
 }
 
 func TestManagedTargets_CountMatchesUniqueTargets(t *testing.T) {

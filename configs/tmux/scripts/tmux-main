@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+if (( $+commands[tmux] )); then
+    exec tmux new-session -A -s Main -n macbook \
+        "/bin/zsh -lc 'command -v herdr >/dev/null 2>&1 && herdr; exec /bin/zsh -l'"
+fi
+
+if (( $+commands[herdr] )); then
+    exec herdr
+fi
+
+exec /bin/zsh -l

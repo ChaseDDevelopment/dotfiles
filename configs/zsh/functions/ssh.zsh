@@ -1,26 +1,45 @@
-# SSH with auto-attach to tmux session on remote server
-# Always attaches to "main" session (creates if doesn't exist)
+# SSH with attach-or-create tmux sessions on remote servers.
 #
 # Usage:
-#   ssht server1              # Attach to "main" session
-#   ssht user@192.168.1.10    # Works with full SSH syntax
-#   ssht -c server1           # Keep local Mac awake during session
+#   ssht server1                    # Attach to "Main"
+#   ssht -s SandyClam server1       # Attach to "SandyClam"
+#   ssht -c -s SandyClam server1    # Keep the Mac awake too
 #
 function ssht() {
     local caffeinate_mode=0
+    local session="Main"
 
-    case "$1" in
-        -c|--caffeinate)
-            caffeinate_mode=1
-            shift
-            ;;
-    esac
+    while (( $# )); do
+        case "$1" in
+            -c|--caffeinate)
+                caffeinate_mode=1
+                shift
+                ;;
+            -s|--session)
+                if (( $# < 2 )) || [[ -z "$2" ]]; then
+                    echo "ssht: --session requires a name"
+                    return 2
+                fi
+                session="$2"
+                shift 2
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
 
-    if [[ -z "$1" ]]; then
-        echo "Usage: ssht [-c|--caffeinate] <host> [ssh-options...]"
-        echo "Connects via SSH and attaches to tmux 'main' session"
-        echo "  -c, --caffeinate  prevent local idle sleep during session"
-        return 1
+    if [[ -z "${1:-}" ]]; then
+        echo "Usage: ssht [-c|--caffeinate] [-s|--session SESSION] <host> [ssh-options...]"
+        return 2
+    fi
+    if [[ -z "$session" || "$session" == *[^A-Za-z0-9_-]* ]]; then
+        echo "ssht: session names may contain only letters, numbers, _ and -"
+        return 2
     fi
 
     if (( caffeinate_mode )) \
@@ -68,10 +87,10 @@ function ssht() {
     # wrapper exists but errors on source, which would otherwise leak
     # stderr noise into the fallback path.
     remote_cmd+='command -v tmux-session >/dev/null 2>&1'
-    remote_cmd+=' && exec tmux-session Main'
+    remote_cmd+=" && exec tmux-session $session"
     remote_cmd+=' || PATH="$HOME/.local/bin:/home/linuxbrew/.linuxbrew/bin'
     remote_cmd+=':/opt/homebrew/bin:/usr/local/bin:$PATH"'
-    remote_cmd+=' exec tmux new-session -A -s Main'
+    remote_cmd+=" exec tmux new-session -A -s $session"
 
     # Call the real ssh binary, NOT Ghostty/Supacode's shell-integration
     # `ssh` wrapper function: with ssh-terminfo enabled its terminfo step
@@ -82,16 +101,20 @@ function ssht() {
     ssh_bin=$(whence -p ssh) || ssh_bin=ssh
     local -a ssh_cmd=("$ssh_bin" -t "$@" "$host" "$remote_cmd")
 
+    local ssh_status
     if (( caffeinate_mode )); then
         caffeinate -i "${ssh_cmd[@]}"
+        ssh_status=$?
     else
         "${ssh_cmd[@]}"
+        ssh_status=$?
     fi
 
     # Reset terminal state after SSH exits
     # Fixes terminal corruption when connection drops unexpectedly
     stty sane 2>/dev/null
     echo
+    return $ssh_status
 }
 
 # Completion: reuse ssh completions for ssht

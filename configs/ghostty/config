@@ -4,6 +4,7 @@
 # Font
 font-family = "JetBrainsMono Nerd Font"
 font-size = 14
+adjust-cell-height = 1
 font-thicken = true
 
 # Theme
@@ -22,6 +23,7 @@ cursor-style-blink = false
 
 # Shell integration (auto-detected, but can be explicit)
 shell-integration = zsh
+initial-command = /bin/zsh -lc 'exec ~/.config/tmux/scripts/tmux-main'
 
 # Copy/paste behavior
 copy-on-select = clipboard
@@ -39,7 +41,7 @@ keybind = cmd+w=close_surface
 keybind = cmd+shift+enter=new_split:right
 keybind = cmd+enter=new_split:down
 
-# SSH integration (pass through ctrl+space for remote tmux)
+# SSH integration (preserve terminal capabilities for remote shells and Herdr)
 shell-integration-features = ssh-terminfo,ssh-env
 
 # Jump between command prompts (Warp-like navigation)

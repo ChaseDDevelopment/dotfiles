@@ -71,6 +71,20 @@ func TestCliToolsCatalog(t *testing.T) {
 	if tailspin.CargoCrate != "tailspin" {
 		t.Fatalf("tailspin cargo crate = %q", tailspin.CargoCrate)
 	}
+
+	herdr := toolByCommand(t, tools, "herdr")
+	if len(herdr.Strategies) != 2 {
+		t.Fatalf("herdr strategies = %#v", herdr.Strategies)
+	}
+	if got := herdr.Strategies[0]; got.Method != MethodPackageManager || got.Package != "herdr" ||
+		len(got.Managers) != 1 || got.Managers[0] != "brew" {
+		t.Fatalf("herdr brew strategy = %#v", got)
+	}
+	if got := herdr.Strategies[1]; got.Method != MethodScript || got.Script == nil ||
+		got.Script.URL != "https://herdr.dev/install.sh" || got.Script.Shell != "sh" ||
+		!got.Script.NoProfileModify {
+		t.Fatalf("herdr script strategy = %#v", got)
+	}
 }
 
 func TestDevAndOfficialToolCatalog(t *testing.T) {

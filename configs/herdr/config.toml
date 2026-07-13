@@ -1,0 +1,35 @@
+onboarding = false
+[theme]
+name = "tokyo-night"
+auto_switch = false
+
+[ui.toast]
+delivery = "system"
+
+[ui]
+show_agent_labels_on_pane_borders = true
+
+[keys]
+prefix = "ctrl+space"
+detach = ["prefix+q", "prefix+d"]
+previous_tab = ["prefix+p"]
+next_tab = ["prefix+n"]
+new_worktree = ""
+open_worktree = "prefix+shift+o"
+remove_worktree = "prefix+alt+d"
+
+[[keys.command]]
+key = "prefix+shift+g"
+type = "pane"
+command = "herdr-worktree-create"
+description = "create worktree with local files"
+
+[worktrees]
+directory = "~/.herdr/worktrees"
+
+[remote]
+manage_ssh_config = true
+
+[experimental]
+pane_history = false
+allow_nested = false

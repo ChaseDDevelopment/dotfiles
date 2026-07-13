@@ -8,6 +8,7 @@
 ![Oh-My-Posh](https://img.shields.io/badge/Oh--My--Posh-Prompt-fab387?style=for-the-badge)
 ![Yazi](https://img.shields.io/badge/Yazi-File_Manager-f5c2e7?style=for-the-badge)
 ![Ghostty](https://img.shields.io/badge/Ghostty-Terminal-94e2d5?style=for-the-badge)
+![Herdr](https://img.shields.io/badge/Herdr-Command_Center-7aa2f7?style=for-the-badge)
 ![TokyoNight](https://img.shields.io/badge/Theme-TokyoNight-1a1b26?style=for-the-badge)
 
 ## Philosophy
@@ -23,7 +24,8 @@
 This setup provides a complete, modern shell environment with:
 
 - **Zsh Shell** - Feature-rich shell with Antidote plugin manager (16 plugins)
-- **Tmux** - Terminal multiplexer with session persistence and TokyoNight theme (11 plugins)
+- **Tmux** - Local `Main` command center with named machine windows and TokyoNight theme
+- **Herdr** - Per-machine project workspaces for local and remote coding-agent work
 - **Neovim** - Modern editor with vim.pack built-in package manager (33 plugins, 14 LSP servers)
 - **Oh-My-Posh** - Fast, customizable prompt with Git integration
 - **Yazi** - Terminal file manager with image preview and TokyoNight theme (8 plugins)
@@ -60,12 +62,13 @@ chmod +x install.sh
 - **Custom Aliases** - Modern tool replacements (eza, bat, rg, fd)
 - **Modular Configuration** - Organized in `~/.config/zsh/`
 
-### Tmux Configuration
-- **TPM (Tmux Plugin Manager)** - Plugin management
-- **TokyoNight Theme** - Beautiful color scheme
-- **Vim-Tmux Navigator** - Seamless navigation between Vim and Tmux
-- **Tmux Sensible** - Better default settings
-- **Custom Key Bindings** - Ctrl+Space prefix and intuitive shortcuts
+### Tmux Main + Herdr Command Center
+- **First-surface startup** - A fresh Ghostty process starts or attaches local tmux session `Main`
+- **Named machine windows** - `macbook` runs local Herdr; `hw HOST` opens the host's remote Herdr UI
+- **Project workspaces** - Herdr manages projects, tabs, panes, agents, and native worktrees inside each machine window
+- **Separate key layers** - `Ctrl+B` controls outer tmux; `Ctrl+Space` controls inner Herdr
+- **Native top bar** - Tmux owns the TokyoNight machine/window bar without per-refresh subprocesses
+- **Tmux tooling** - TPM, tmux-sensible, vim-tmux-navigator, tmux-yank, Extrakto, and Floax
 
 ### Neovim Setup
 - **vim.pack** - Neovim's built-in plugin manager (0.12+)
@@ -120,6 +123,7 @@ chmod +x install.sh
 - **JetBrainsMono Nerd Font** - Ligatures and icons
 - **Semi-transparent Background** - With wallpaper support
 - **SSH Integration** - Warp-like prompt navigation
+- **Main Startup** - Only the first surface starts or attaches tmux `Main`; later tabs remain plain shells
 
 ### Shell Enhancements
 - **Atuin** - Magical shell history with sync and search
@@ -173,19 +177,101 @@ cd installer && go build -o dotsetup . && cd .. && ./install.sh
 | `->` | Accept autosuggestion |
 | `Ctrl+X Ctrl+E` | Edit command in $EDITOR |
 
-### Tmux
-| Key Combination | Action |
-|-----------------|--------|
-| `Ctrl+Space` | Prefix key |
-| `Prefix + \|` | Split horizontally |
-| `Prefix + -` | Split vertically |
-| `Prefix + c` | New window |
-| `Alt+H` | Previous window |
-| `Alt+L` | Next window |
-| `Ctrl+H/J/K/L` | Navigate panes (with vim-tmux-navigator) |
-| `Prefix + I` | Install TPM plugins |
-| `Prefix + U` | Update TPM plugins |
-| `Prefix + r` | Reload configuration |
+### Tmux Main and Herdr
+
+The first fresh Ghostty surface runs `tmux-main`, which starts or attaches the
+local tmux session `Main`. Its initial `macbook` window runs local Herdr and
+returns to a login shell when Herdr exits. Later, `Cmd+T` opens a plain shell.
+
+```text
+Ghostty -> local tmux Main
+  macbook -> herdr
+  hydra   -> herdr --remote hydra
+```
+
+Tmux windows are machines; Herdr workspaces are projects on each machine. Tmux
+owns the native top bar and its machine/window context. Herdr owns the inner
+workspace, tab, pane, and agent UI.
+
+| Command | Action |
+|---------|--------|
+| `tw NAME` | Select or create a named outer tmux shell window at the current directory |
+| `hw HOST` | Select or create a named outer window running `herdr --remote HOST` |
+| `herdr` | Create or attach the current machine's local Herdr session |
+| `hr hydra` | Run the direct remote Herdr client from a plain shell |
+
+Inside tmux, `tw` and `hw` use the current session. From a local Herdr pane,
+whose server-owned shell does not inherit `$TMUX`, they target local session
+`Main`. `hw` keeps the remote client out of the current Herdr pane, and nested
+Herdr remains disabled. Each machine owns its own persistent Herdr server,
+sessions, and runtime state.
+
+| Key Combination | Owner | Action |
+|-----------------|-------|--------|
+| `Ctrl+B` | Outer tmux | Prefix key |
+| `Alt+Shift+H` / `Alt+Shift+L` | Outer tmux | Previous / next machine window |
+| `Tmux Prefix+C` | Outer tmux | New window |
+| `Tmux Prefix+\|` / `Tmux Prefix+-` | Outer tmux | Horizontal / vertical split |
+| `Ctrl+Space` | Inner Herdr | Prefix key |
+| `Herdr Prefix+Q` or `Herdr Prefix+D` | Inner Herdr | Detach |
+| `Herdr Prefix+P` / `Herdr Prefix+N` | Inner Herdr | Previous / next project tab |
+| `Herdr Prefix+Shift+G` | Inner Herdr | Create a worktree with approved local files |
+| `Herdr Prefix+Shift+O` | Inner Herdr | Open an existing worktree |
+| `Herdr Prefix+Alt+D` | Inner Herdr | Start Herdr's confirmed native worktree-removal flow |
+
+Herdr retains its compatible native bindings for creating and selecting tabs,
+pane navigation, zoom, copy/help, splits, resize mode, and pane-swap mode. In
+the worktree section below, `Prefix` means Herdr's `Ctrl+Space` prefix.
+
+#### Worktrees
+
+From a Git workspace, `Prefix+Shift+G` fetches `origin` when present, prompts
+for a branch and base ref, and creates a grouped checkout under
+`~/.herdr/worktrees`. It copies these one time from the requesting worktree:
+
+- every untracked, non-ignored file;
+- root `.env`, `.env.*`, and `.envrc` files; and
+- root-anchored Git glob pathspecs listed in an optional tracked
+  `.worktree-copy` manifest.
+
+Put one repository-relative path or Git glob pathspec on each `.worktree-copy`
+line; blank lines and `#` comments are ignored. Entries are anchored at the
+repository root, ordinary `*` does not cross `/`, and an explicit ignored
+directory entry recurses. Matching never traverses symlink directories; a
+matching symlink object is preserved without following its target. The helper
+also rejects paths outside the repository, never overwrites checkout files, and
+does not copy ignored dependency/build trees unless they are explicitly
+allowlisted. Regular files preserve their source modes, while the target root
+and copy-created parent directories remove group/other access so the copied
+worktree stays private. This is bootstrap copying, not synchronization, and
+modified tracked files are not copied from the source checkout.
+
+Removal is manual through Herdr's native action and safe by default. Dirty or
+untracked worktrees are not silently discarded; if safe removal refuses one,
+Herdr can offer force only behind a second explicit confirmation. Dotfiles
+never schedules or triggers automatic or unconfirmed force. Closing a
+workspace does not delete its checkout, branches are retained until you
+explicitly delete them, and there is no timed cleanup or automatic branch
+deletion.
+
+### Additional Tmux and Remote Paths
+
+Tmux `Main` is the normal local outer layer, while these commands remain for
+additional sessions and deliberately non-Herdr remote access. When a smaller
+recovery client attaches, tmux 2.9+ keeps the largest attached client's window
+size; older tmux versions skip that unsupported setting.
+
+| Command | Action |
+|---------|--------|
+| `t` | Create or attach a session named after the Git worktree/current directory |
+| `t NAME` | Create or attach an explicitly named local session |
+| `ts` | Select an existing local session |
+| `ssh HOST` | Open a plain remote shell without Herdr or remote tmux |
+| `ssht hydra` | Attach or create Hydra's remote tmux session `Main` without Herdr |
+| `ssht -s NAME hydra` | Attach or create a named remote tmux session without Herdr |
+
+From a phone or generic SSH client, use `ssh hydra`, then `herdr` to reach the
+same host-owned Herdr session.
 
 ### Neovim
 | Key Combination | Action |
@@ -383,6 +469,9 @@ dotfiles/
 │   │   └── config.toml         # Atuin configuration
 │   ├── ghostty/
 │   │   └── config              # Ghostty terminal configuration
+│   ├── herdr/
+│   │   ├── config.toml         # Herdr UI, keys, remote, and worktree configuration
+│   │   └── scripts/            # Worktree bootstrap helper
 │   ├── git/
 │   │   └── config              # Git config (delta pager, merge settings)
 │   ├── lazygit/
@@ -415,6 +504,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Zsh](https://www.zsh.org/) - Powerful shell
 - [Antidote](https://github.com/mattmc3/antidote) - Fast Zsh plugin manager
 - [Tmux](https://github.com/tmux/tmux) - Terminal multiplexer
+- [Herdr](https://herdr.dev/) - Persistent terminal command center for coding agents
 - [Neovim](https://neovim.io/) - Hyperextensible Vim-based text editor
 - [Oh-My-Posh](https://ohmyposh.dev/) - Cross-shell prompt
 - [Yazi](https://yazi-rs.github.io/) - Terminal file manager
