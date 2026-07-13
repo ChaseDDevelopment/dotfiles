@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=\"$CLAUDE_FILE_PATH\"; case \"$file\" in */go.sum|*/.env|*/install.log) echo 'BLOCK: Protected file — do not edit go.sum, .env, or install.log'; exit 2;; esac"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=\"$CLAUDE_FILE_PATH\"; [[ \"$file\" == *.go ]] && gofmt -w \"$file\" || true"
+          }
+        ]
+      }
+    ]
+  }
+}
