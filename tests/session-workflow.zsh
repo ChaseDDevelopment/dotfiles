@@ -27,6 +27,12 @@ assert_eq() {
     [[ "$1" == "$2" ]] || fail "$3 (got: $1, want: $2)"
 }
 
+assert_order() {
+    local rest="${1#*$2}"
+    [[ "$rest" != "$1" && "$rest" == *"$3"* ]] || \
+        fail "$4 (expected $2 before $3)"
+}
+
 print -r -- '#!/usr/bin/env zsh
 print -r -- "$*" >> "$TEST_LOG"
 if [[ "$1" == has-session ]]; then
@@ -37,13 +43,35 @@ if [[ "$1" == list-sessions ]]; then
     print -r -- Alpha
     print -r -- Beta
 fi
+if [[ "$1" == list-windows ]]; then
+    (( ${FAKE_TMUX_WINDOWS_STATUS:-0} == 0 )) || exit "$FAKE_TMUX_WINDOWS_STATUS"
+    print -r -- "${FAKE_TMUX_WINDOWS:-}"
+fi
 if [[ "$1" == display-message ]]; then
     exit_status="${FAKE_TMUX_DISPLAY_STATUS:-0}"
     (( exit_status == 0 )) || exit "$exit_status"
-    print -r -- "${FAKE_TMUX_SESSION:-Main}"
+    [[ " $* " == *" -p "* ]] && print -r -- "${FAKE_TMUX_SESSION:-Main}"
 fi
 if [[ "$1" == select-window ]]; then
     exit "${FAKE_TMUX_SELECT_STATUS:-1}"
+fi
+if [[ "$1" == list-panes ]]; then
+    target=""
+    for (( i = 2; i <= $#; i++ )); do
+        if [[ "${@[i - 1]}" == -t ]]; then
+            target="${@[i]}"
+            break
+        fi
+    done
+    if [[ -n "${TMUX_PANE:-}" && "$target" == "$TMUX_PANE" ]]; then
+        exit_status="${FAKE_TMUX_CURRENT_STATUS:-0}"
+        panes="${FAKE_TMUX_CURRENT_PANES:-}"
+    else
+        exit_status="${FAKE_TMUX_TARGET_STATUS:-1}"
+        panes="${FAKE_TMUX_TARGET_PANES:-}"
+    fi
+    (( exit_status == 0 )) || exit "$exit_status"
+    print -r -- "$panes"
 fi' > "$tmp_dir/tmux"
 
 print -r -- '#!/usr/bin/env zsh
@@ -56,7 +84,27 @@ exit "${FAKE_SSH_STATUS:-0}"' > "$tmp_dir/ssh"
 print -r -- '#!/usr/bin/env zsh
 print -r -- "$*" >> "$TEST_LOG"' > "$tmp_dir/herdr"
 
-chmod +x "$tmp_dir"/{tmux,fzf,ssh,herdr}
+print -r -- '#!/usr/bin/env zsh
+(( ${FAKE_HOSTNAME_STATUS:-0} == 0 )) || exit "$FAKE_HOSTNAME_STATUS"
+[[ "${1:-}" == -s ]] && print -r -- "${FAKE_HOSTNAME-Chases-MacBook-Pro}"' > "$tmp_dir/hostname"
+
+print -r -- '#!/usr/bin/env zsh
+print -r -- "pgrep $*" >> "$TEST_LOG"
+if [[ -n "${FAKE_PGREP_STATUS:-}" ]]; then
+    (( FAKE_PGREP_STATUS == 0 )) && print -rl -- ${=FAKE_CHILD_PIDS}
+    exit "$FAKE_PGREP_STATUS"
+fi
+if [[ "$*" == "-P ${FAKE_CHILD_PARENT:-}" && -n "${FAKE_CHILD_PIDS:-}" ]]; then
+    print -rl -- ${=FAKE_CHILD_PIDS}
+    exit 0
+fi
+exit 1' > "$tmp_dir/pgrep"
+
+print -r -- '#!/usr/bin/env zsh
+print -r -- "ps $*" >> "$TEST_LOG"
+print -r -- "${FAKE_CHILD_COMMAND:-}"' > "$tmp_dir/ps"
+
+chmod +x "$tmp_dir"/{tmux,fzf,ssh,herdr,hostname,pgrep,ps}
 export PATH="$tmp_dir:$PATH"
 rehash
 
@@ -75,13 +123,31 @@ source "$repo_root/configs/zsh/functions/herdr.zsh"
 cd "$repo_root" || fail "cannot enter repository"
 
 : > "$TEST_LOG"
+export FAKE_HOSTNAME=Chases-MacBook-Pro
 "$tmux_main" >/dev/null || fail "tmux Main bootstrap failed"
 log=$(<"$TEST_LOG")
-assert_contains "$log" 'new-session -A -s Main -n macbook' \
+assert_contains "$log" 'new-session -A -s Main -n Macbook' \
     "tmux Main bootstrap must attach or create the named session and window"
 assert_contains "$log" \
     "/bin/zsh -lc 'command -v herdr >/dev/null 2>&1 && herdr; exec /bin/zsh -l'" \
     "tmux Main bootstrap must start Herdr with a login-shell fallback"
+assert_not_contains "$log" '--remote' \
+    "tmux Main bootstrap must leave remote windows to tmux-resurrect"
+
+typeset -a startup_hosts startup_windows
+startup_hosts=(Chases-Mac-mini devbox build-node '')
+startup_windows=(Mac-Mini DevBox Build-node Local)
+for (( i = 1; i <= $#startup_hosts; i++ )); do
+    export FAKE_HOSTNAME="${startup_hosts[i]}"
+    : > "$TEST_LOG"
+    "$tmux_main" >/dev/null || fail "tmux Main bootstrap failed for ${startup_windows[i]}"
+    log=$(<"$TEST_LOG")
+    assert_contains "$log" "new-session -A -s Main -n ${startup_windows[i]}" \
+        "tmux Main bootstrap must map ${startup_hosts[i]:-an empty hostname} to ${startup_windows[i]}"
+    assert_not_contains "$log" '--remote' \
+        "tmux Main bootstrap must not start remote Herdr on ${startup_windows[i]}"
+done
+unset FAKE_HOSTNAME
 
 unset TMUX
 export FAKE_TMUX_DISPLAY_STATUS=1
@@ -103,16 +169,6 @@ assert_contains "$log" 'select-window -t =Main:=logs' \
     "tw from a Herdr pane must select the outer Main window"
 
 : > "$TEST_LOG"
-export FAKE_TMUX_SELECT_STATUS=1
-HERDR_ENV=1 hw hydra >/dev/null || fail "hw from a Herdr pane failed"
-log=$(<"$TEST_LOG")
-assert_contains "$log" 'display-message -p -t =Main: #{session_name}' \
-    "hw must resolve local Main from a Herdr pane"
-assert_contains "$log" 'new-window -t =Main: -n hydra' \
-    "hw from a Herdr pane must create the outer Main host window"
-unset HERDR_ENV
-
-: > "$TEST_LOG"
 t 'Project One' >/dev/null || fail "t explicit session failed"
 log=$(<"$TEST_LOG")
 assert_contains "$log" "new-session -A -s Project-One -c $repo_root" \
@@ -125,6 +181,7 @@ assert_contains "$log" 'new-session -A -s dotfiles' \
     "t must derive the Git worktree name"
 
 export TMUX=/tmp/fake-tmux
+export TMUX_PANE=%1
 export FAKE_TMUX_HAS_SESSION=0
 : > "$TEST_LOG"
 t Inside >/dev/null || fail "t inside tmux failed"
@@ -141,8 +198,8 @@ export FAKE_TMUX_SELECT_STATUS=0
 : > "$TEST_LOG"
 tw logs >/dev/null || fail "tw existing window failed"
 log=$(<"$TEST_LOG")
-assert_contains "$log" 'display-message -p #{session_name}' \
-    "tw must resolve the current outer session"
+assert_contains "$log" 'display-message -p -t %1 #{session_name}' \
+    "tw must resolve the current outer session from the invoking pane"
 assert_contains "$log" 'select-window -t =Main:=logs' \
     "tw must select the exact existing named window"
 assert_not_contains "$log" 'new-window' \
@@ -163,32 +220,336 @@ rc=$?
 assert_eq "$rc" 2 "tw must reject unsafe window names"
 [[ ! -s "$TEST_LOG" ]] || fail "tw must reject unsafe names before invoking tmux"
 
-export FAKE_TMUX_SELECT_STATUS=0
-: > "$TEST_LOG"
-hw hydra >/dev/null || fail "hw existing window failed"
-log=$(<"$TEST_LOG")
-assert_contains "$log" 'select-window -t =Main:=hydra' \
-    "hw must select the exact existing host window"
-assert_not_contains "$log" 'new-window' \
-    "hw must not recreate an existing host window"
+reset_hw_state() {
+    export FAKE_TMUX_SESSION=Main
+    export FAKE_TMUX_DISPLAY_STATUS=0
+    export FAKE_TMUX_SELECT_STATUS=0
+    export FAKE_TMUX_TARGET_STATUS=0
+    export FAKE_TMUX_CURRENT_STATUS=0
+    export FAKE_TMUX_WINDOWS_STATUS=0
+    export FAKE_TMUX_WINDOWS=scratch
+    export FAKE_TMUX_TARGET_PANES='%2|4200|zsh|0|0|1|0|Mac-Mini'
+    export FAKE_TMUX_CURRENT_PANES='%1|4100|zsh|0|0|1|0|scratch'
+    unset FAKE_CHILD_PARENT FAKE_CHILD_PIDS FAKE_CHILD_COMMAND FAKE_PGREP_STATUS HERDR_ENV
+}
 
-export FAKE_TMUX_SELECT_STATUS=1
+reset_hw_state
+export FAKE_CHILD_PARENT=4200
+export FAKE_CHILD_PIDS=5001
+export FAKE_CHILD_COMMAND='/opt/homebrew/bin/herdr --remote hydra'
 : > "$TEST_LOG"
-hw hydra >/dev/null || fail "hw new window failed"
+hw hydra >/dev/null || fail "hw matching remote client failed"
 log=$(<"$TEST_LOG")
-assert_contains "$log" 'select-window -t =Main:=hydra' \
-    "hw must check for the exact host window before creating it"
-assert_contains "$log" 'new-window -t =Main: -n hydra' \
-    "hw must create a named window in Main"
+assert_contains "$log" 'display-message -p -t %1 #{session_name}' \
+    "hw must resolve the outer session from the explicit invoking pane"
+assert_contains "$log" 'list-panes -t =Main:=Mac-Mini' \
+    "hw hydra must inspect the exact Mac-Mini target"
+assert_contains "$log" 'pgrep -P 4200' \
+    "hw must inspect direct children of the target pane PID"
+assert_contains "$log" 'ps -p 5001 -o command=' \
+    "hw must inspect the direct child's full command line"
+assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
+    "hw must select an existing matching remote client"
+assert_not_contains "$log" 'send-keys' \
+    "hw must not send keys to a matching remote client"
+assert_not_contains "$log" 'new-window' \
+    "hw must not duplicate a matching remote client"
+assert_not_contains "$log" '--remote hydra' \
+    "hw must not launch a second matching remote client"
+
+typeset -a near_miss_names near_miss_commands
+near_miss_names=(wrong-host wrong-binary extra-arguments)
+near_miss_commands=(
+    '/opt/homebrew/bin/herdr --remote atlas'
+    '/opt/homebrew/bin/not-herdr --remote hydra'
+    '/opt/homebrew/bin/herdr --remote hydra --verbose'
+)
+for (( i = 1; i <= $#near_miss_names; i++ )); do
+    reset_hw_state
+    export FAKE_CHILD_PARENT=4200
+    export FAKE_CHILD_PIDS=5001
+    export FAKE_CHILD_COMMAND="${near_miss_commands[i]}"
+    : > "$TEST_LOG"
+    busy=$(hw hydra 2>&1)
+    rc=$?
+    assert_eq "$rc" 1 "hw must reject ${near_miss_names[i]} Herdr commands"
+    log=$(<"$TEST_LOG")
+    assert_not_contains "$log" 'send-keys' \
+        "hw must not launch over ${near_miss_names[i]} Herdr commands"
+    assert_not_contains "$log" 'new-window' \
+        "hw must not duplicate ${near_miss_names[i]} Herdr commands"
+done
+
+reset_hw_state
+export FAKE_PGREP_STATUS=2
+: > "$TEST_LOG"
+busy=$(hw hydra 2>&1)
+rc=$?
+assert_eq "$rc" 1 "hw must treat child-process inspection errors as busy"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'display-message -t %2 hw: Mac-Mini is busy' \
+    "hw must report a target whose child processes cannot be inspected"
+assert_not_contains "$log" 'send-keys' \
+    "hw must not launch when child-process inspection fails"
+assert_not_contains "$log" 'new-window' \
+    "hw must not create over an uninspectable target"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=2
+export FAKE_TMUX_WINDOWS=$'scratch\nMac-Mini'
+: > "$TEST_LOG"
+busy=$(hw hydra 2>&1)
+rc=$?
+assert_eq "$rc" 1 "hw must preserve an existing target when pane inspection fails"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'list-windows -t =Main:' \
+    "hw must distinguish an uninspectable target from an absent target"
+assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
+    "hw must focus an existing uninspectable target"
+assert_not_contains "$log" 'send-keys' \
+    "hw must not send keys to an uninspectable target"
+assert_not_contains "$log" 'new-window' \
+    "hw must not duplicate an uninspectable target"
+assert_not_contains "$log" 'rename-window' \
+    "hw must not rename another window over an uninspectable target"
+
+reset_hw_state
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw idle other-pane launch failed"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
+    "hw must select the idle restored target"
+assert_contains "$log" 'send-keys -t %2 C-c' \
+    "hw must clear the idle restored shell before launching"
+assert_contains "$log" 'send-keys -t %2 -l herdr --remote hydra' \
+    "hw must send the remote command literally"
+assert_contains "$log" 'send-keys -t %2 Enter' \
+    "hw must submit the remote command"
+assert_order "$log" 'send-keys -t %2 C-c' \
+    'send-keys -t %2 -l herdr --remote hydra' \
+    "hw must clear before sending the remote command"
+assert_order "$log" 'send-keys -t %2 -l herdr --remote hydra' \
+    'send-keys -t %2 Enter' \
+    "hw must send the remote command before Enter"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_PANES='%1|4100|zsh|0|0|1|0|Mac-Mini'
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw current target direct launch failed"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
+    "hw must select the current target before launching"
+assert_contains "$log" '--remote hydra' \
+    "hw must invoke Herdr directly in the current target pane"
+assert_not_contains "$log" 'send-keys' \
+    "hw must not send keys to its invoking pane"
+assert_not_contains "$log" 'new-window' \
+    "hw must not recreate the current target"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_PANES='%2|4200|herdr|0|0|1|0|Mac-Mini'
+export FAKE_CHILD_PARENT=4200
+export FAKE_CHILD_PIDS=5001
+export FAKE_CHILD_COMMAND='/bin/sleep 99'
+: > "$TEST_LOG"
+busy=$(hw hydra 2>&1)
+rc=$?
+assert_eq "$rc" 1 "hw must reject a target with a non-Herdr child"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
+    "hw must focus a busy target for inspection"
+assert_contains "$log" 'display-message -t %2 hw: Mac-Mini is busy' \
+    "hw must report a concise busy message"
+assert_not_contains "$log" 'send-keys' \
+    "hw must not send keys to a busy target"
+assert_not_contains "$log" 'new-window' \
+    "hw must not create over a busy target"
+assert_not_contains "$log" 'kill-' \
+    "hw must never kill a busy target"
+assert_not_contains "$log" 'respawn-' \
+    "hw must never respawn a busy target"
+
+typeset -a unsafe_names unsafe_panes
+unsafe_names=(multiple-panes copy-mode dead linked non-zsh)
+unsafe_panes=(
+    $'%2|4200|zsh|0|0|2|0|Mac-Mini\n%3|4300|zsh|0|0|2|0|Mac-Mini'
+    '%2|4200|zsh|0|1|1|0|Mac-Mini'
+    '%2|4200|zsh|1|0|1|0|Mac-Mini'
+    '%2|4200|zsh|0|0|1|1|Mac-Mini'
+    '%2|4200|vim|0|0|1|0|Mac-Mini'
+)
+for (( i = 1; i <= $#unsafe_names; i++ )); do
+    reset_hw_state
+    export FAKE_TMUX_TARGET_PANES="${unsafe_panes[i]}"
+    : > "$TEST_LOG"
+    busy=$(hw hydra 2>&1)
+    rc=$?
+    assert_eq "$rc" 1 "hw must reject ${unsafe_names[i]} targets"
+    log=$(<"$TEST_LOG")
+    assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
+        "hw must focus ${unsafe_names[i]} targets"
+    assert_contains "$log" 'display-message -t %2 hw: Mac-Mini is busy' \
+        "hw must report ${unsafe_names[i]} targets as busy"
+    assert_not_contains "$log" 'send-keys' \
+        "hw must not send keys to ${unsafe_names[i]} targets"
+    assert_not_contains "$log" 'new-window' \
+        "hw must not create over ${unsafe_names[i]} targets"
+    assert_not_contains "$log" 'kill-' \
+        "hw must not kill ${unsafe_names[i]} targets"
+    assert_not_contains "$log" 'respawn-' \
+        "hw must not respawn ${unsafe_names[i]} targets"
+done
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=1
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw safe invoking-window reuse failed"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'list-panes -t %1' \
+    "hw must inspect the explicit invoking pane before reuse"
+assert_contains "$log" 'rename-window -t %1 Mac-Mini' \
+    "hw must rename a safe invoking window to Mac-Mini"
+assert_contains "$log" '--remote hydra' \
+    "hw must invoke Herdr directly after safe reuse"
+assert_not_contains "$log" 'new-window' \
+    "hw must not create a window when safe reuse is available"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=1
+export FAKE_PGREP_STATUS=2
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw pgrep-error fallback failed"
+log=$(<"$TEST_LOG")
+assert_not_contains "$log" 'rename-window' \
+    "hw must not reuse a pane whose child processes cannot be inspected"
+assert_contains "$log" 'new-window -t =Main: -n Mac-Mini' \
+    "hw must create a separate target when invoking-pane inspection fails"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=1
+export FAKE_TMUX_CURRENT_PANES='%1|4100|zsh|0|0|1|0|macbook'
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw protected macbook path failed"
+log=$(<"$TEST_LOG")
+assert_not_contains "$log" 'rename-window' \
+    "hw must not reuse the protected macbook window"
+assert_contains "$log" 'new-window -t =Main: -n Mac-Mini' \
+    "hw must create Mac-Mini when the invoking window is protected"
 assert_contains "$log" \
     "/bin/zsh -lc 'herdr --remote hydra; exec /bin/zsh -l'" \
-    "hw must run remote Herdr with a login-shell fallback"
+    "hw must retain a login-shell fallback in new windows"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=1
+export HERDR_ENV=1
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw Herdr environment path failed"
+log=$(<"$TEST_LOG")
+assert_not_contains "$log" 'rename-window' \
+    "hw must not reuse a Herdr-managed invoking window"
+assert_contains "$log" 'new-window -t =Main: -n Mac-Mini' \
+    "hw must create Mac-Mini from a Herdr-managed pane"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=1
+export FAKE_TMUX_CURRENT_PANES='%1|4100|zsh|0|0|1|0|macbook'
+: > "$TEST_LOG"
+hw atlas >/dev/null || fail "hw other-host naming failed"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'list-panes -t =Main:=atlas' \
+    "hw must use the host string for non-hydra targets"
+assert_contains "$log" 'new-window -t =Main: -n atlas' \
+    "hw must name non-hydra windows after the host"
+assert_contains "$log" \
+    "/bin/zsh -lc 'herdr --remote atlas; exec /bin/zsh -l'" \
+    "hw must launch the requested non-hydra host"
+assert_not_contains "$log" 'Mac-Mini' \
+    "hw must map only hydra to Mac-Mini"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=1
+export FAKE_TMUX_CURRENT_PANES='%1|4100|zsh|0|0|1|0|Macbook'
+: > "$TEST_LOG"
+hw devbox >/dev/null || fail "hw DevBox mapping failed"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'list-panes -t =Main:=DevBox' \
+    "hw devbox must inspect the friendly DevBox target"
+assert_not_contains "$log" 'rename-window' \
+    "hw must not reuse the protected Macbook window"
+assert_contains "$log" 'new-window -t =Main: -n DevBox' \
+    "hw devbox must create the friendly DevBox window"
+assert_contains "$log" \
+    "/bin/zsh -lc 'herdr --remote devbox; exec /bin/zsh -l'" \
+    "hw devbox must launch the devbox remote"
+
+reset_hw_state
+export FAKE_TMUX_TARGET_STATUS=1
+unset TMUX_PANE
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw implicit-pane fallback failed"
+log=$(<"$TEST_LOG")
+assert_contains "$log" 'display-message -p -t =Main: #{session_name}' \
+    "hw must target Main when the invoking pane is not explicit"
+assert_not_contains "$log" 'display-message -p #{session_name}' \
+    "hw must never resolve a session through implicit client focus"
+assert_not_contains "$log" 'rename-window' \
+    "hw must not reuse a window without an explicit pane identity"
+assert_contains "$log" 'new-window -t =Main: -n Mac-Mini' \
+    "hw must create the target without an explicit pane identity"
+export TMUX_PANE=%1
+
+mv "$tmp_dir/herdr" "$tmp_dir/herdr.off"
+old_path=$PATH
+PATH="$tmp_dir:/usr/bin:/bin"
+rehash
+reset_hw_state
+export FAKE_CHILD_PARENT=4200
+export FAKE_CHILD_PIDS=5001
+export FAKE_CHILD_COMMAND='/usr/local/bin/herdr --remote hydra'
+: > "$TEST_LOG"
+hw hydra >/dev/null || fail "hw must select a running client without a local Herdr binary"
+assert_not_contains "$(<"$TEST_LOG")" 'new-window' \
+    "hw must not require Herdr when no launch is needed"
+
+reset_hw_state
+: > "$TEST_LOG"
+missing=$(hw hydra 2>&1)
+rc=$?
+assert_eq "$rc" 127 "hw must report a missing Herdr binary when launch is needed"
+assert_contains "$missing" 'hw: herdr is not installed' \
+    "hw must explain when Herdr is unavailable"
+log=$(<"$TEST_LOG")
+assert_not_contains "$log" 'send-keys' \
+    "hw must not send a missing command"
+assert_not_contains "$log" 'new-window' \
+    "hw must not create a window for a missing command"
+assert_not_contains "$log" 'rename-window' \
+    "hw must not rename a window for a missing command"
+PATH=$old_path
+rehash
+mv "$tmp_dir/herdr.off" "$tmp_dir/herdr"
+rehash
+
+: > "$TEST_LOG"
+usage=$(hw 2>&1)
+rc=$?
+assert_eq "$rc" 2 "hw without a host must return usage status"
+assert_contains "$usage" 'Usage: hw <host>' \
+    "hw without a host must explain its usage"
+[[ ! -s "$TEST_LOG" ]] || fail "hw must validate arity before invoking tmux"
+
+: > "$TEST_LOG"
+hw hydra extra >/dev/null 2>&1
+rc=$?
+assert_eq "$rc" 2 "hw must reject more than one host"
+[[ ! -s "$TEST_LOG" ]] || fail "hw must reject extra arguments before invoking tmux"
 
 : > "$TEST_LOG"
 hw 'bad host' >/dev/null 2>&1
 rc=$?
 assert_eq "$rc" 2 "hw must reject unsafe host names"
 [[ ! -s "$TEST_LOG" ]] || fail "hw must reject unsafe names before invoking tmux"
+
 : > "$TEST_LOG"
 hw --session >/dev/null 2>&1
 rc=$?
@@ -287,12 +648,12 @@ assert_not_contains "$zprofile" 'exec herdr' \
 tmux_conf=$(<"$repo_root/configs/tmux/tmux.conf")
 assert_contains "$tmux_conf" 'setw -g window-size largest' \
     "tmux must preserve the largest-client workspace on tmux 2.9 and newer"
-assert_contains "$tmux_conf" 'set -g prefix C-b' \
-    "tmux must restore its outer prefix"
-assert_contains "$tmux_conf" 'unbind C-Space' \
-    "tmux must release Herdr's prefix"
-assert_contains "$tmux_conf" 'bind C-b send-prefix' \
-    "tmux must preserve the standard double-prefix passthrough"
+assert_contains "$tmux_conf" 'set -g prefix C-Space' \
+    "tmux must restore its historical prefix"
+assert_contains "$tmux_conf" 'unbind C-b' \
+    "tmux must release Herdr's native prefix"
+assert_contains "$tmux_conf" 'bind C-Space send-prefix' \
+    "tmux must preserve double-prefix passthrough"
 assert_contains "$tmux_conf" 'set -g status-position top' \
     "tmux must place the native status bar at the top"
 assert_contains "$tmux_conf" 'set -g status on' \
@@ -334,8 +695,8 @@ assert_not_contains "$tmux_conf" 'ssh-client-host' \
     fail "Powerkit SSH host status helper still exists"
 
 herdr_config=$(<"$repo_root/configs/herdr/config.toml")
-assert_contains "$herdr_config" 'prefix = "ctrl+space"' \
-    "Herdr must retain its own prefix"
+assert_contains "$herdr_config" 'prefix = "ctrl+b"' \
+    "Herdr must use its native prefix"
 assert_contains "$herdr_config" 'previous_tab = ["prefix+p"]' \
     "Herdr previous-tab navigation must remain prefix-owned"
 assert_contains "$herdr_config" 'next_tab = ["prefix+n"]' \
@@ -346,9 +707,9 @@ assert_not_contains "$herdr_config" 'alt+shift+l' \
     "Herdr must not claim outer next-window navigation"
 
 tmux_cheatsheet=$(<"$repo_root/configs/tmux/scripts/tmux-cheatsheet.sh")
-assert_contains "$tmux_cheatsheet" 'prefix = ${GREEN}C-b' \
-    "tmux cheatsheet must document the restored prefix"
-assert_not_contains "$tmux_cheatsheet" 'C-Space' \
+assert_contains "$tmux_cheatsheet" 'prefix = ${GREEN}C-Space' \
+    "tmux cheatsheet must document the historical prefix"
+assert_not_contains "$tmux_cheatsheet" 'prefix = ${GREEN}C-b' \
     "tmux cheatsheet must not claim Herdr's prefix"
 
 ghostty_config="$repo_root/configs/ghostty/config"
@@ -366,6 +727,8 @@ assert_contains "$readme" 'first fresh Ghostty surface' \
     "README must explain first-surface Herdr startup"
 assert_contains "$readme" '`Cmd+T` opens a plain shell' \
     "README must preserve plain later Ghostty tabs"
+assert_contains "$readme" 'DevBox -> herdr --remote devbox' \
+    "README must document the restored DevBox window"
 assert_contains "$readme" '`herdr` | Create or attach' \
     "README must document local Herdr attach"
 assert_contains "$readme" '`hr hydra`' \

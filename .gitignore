@@ -234,6 +234,7 @@ testing/
 experiments/
 
 # Personal notes and drafts
+docs/
 notes.md
 TODO.md
 PERSONAL.md
@@ -261,3 +262,4 @@ local.*
 # (e.g. `!configs/**/*.json`) must stay ignored. Last match wins,
 # so keep this block at the end of the file.
 configs/atuin/atuin-receipt.json
+configs/zsh/.zsh_history*

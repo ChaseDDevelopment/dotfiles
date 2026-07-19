@@ -64,11 +64,11 @@ chmod +x install.sh
 
 ### Tmux Main + Herdr Command Center
 - **First-surface startup** - A fresh Ghostty process starts or attaches local tmux session `Main`
-- **Named machine windows** - `macbook` runs local Herdr; `hw HOST` opens the host's remote Herdr UI
+- **Named machine windows** - New sessions use the friendly local hostname; `hw hydra` and `hw devbox` use `Mac-Mini` and `DevBox`
 - **Project workspaces** - Herdr manages projects, tabs, panes, agents, and native worktrees inside each machine window
-- **Separate key layers** - `Ctrl+B` controls outer tmux; `Ctrl+Space` controls inner Herdr
+- **Separate key layers** - `Ctrl+Space` controls outer tmux; `Ctrl+B` controls inner Herdr
 - **Native top bar** - Tmux owns the TokyoNight machine/window bar without per-refresh subprocesses
-- **Tmux tooling** - TPM, tmux-sensible, vim-tmux-navigator, tmux-yank, Extrakto, and Floax
+- **Tmux tooling** - TPM, tmux-resurrect, tmux-continuum, tmux-sensible, vim-tmux-navigator, tmux-yank, Extrakto, and Floax
 
 ### Neovim Setup
 - **vim.pack** - Neovim's built-in plugin manager (0.12+)
@@ -180,39 +180,57 @@ cd installer && go build -o dotsetup . && cd .. && ./install.sh
 ### Tmux Main and Herdr
 
 The first fresh Ghostty surface runs `tmux-main`, which starts or attaches the
-local tmux session `Main`. Its initial `macbook` window runs local Herdr and
-returns to a login shell when Herdr exits. Later, `Cmd+T` opens a plain shell.
+local tmux session `Main`. A newly created session names its local Herdr window
+`Macbook`, `Mac-Mini`, or `DevBox` from the machine hostname and returns to a
+login shell when Herdr exits. Later, `Cmd+T` opens a plain shell.
 
 ```text
 Ghostty -> local tmux Main
-  macbook -> herdr
-  hydra   -> herdr --remote hydra
+  Macbook -> herdr
+  Mac-Mini -> herdr --remote hydra
+  DevBox -> herdr --remote devbox
 ```
 
-Tmux windows are machines; Herdr workspaces are projects on each machine. Tmux
-owns the native top bar and its machine/window context. Herdr owns the inner
-workspace, tab, pane, and agent UI.
+Local tmux owns the outer client windows and native top bar. Each machine's
+Herdr server owns its inner workspaces, tabs, panes, agents, sessions, and
+runtime state.
 
 | Command | Action |
 |---------|--------|
 | `tw NAME` | Select or create a named outer tmux shell window at the current directory |
-| `hw HOST` | Select or create a named outer window running `herdr --remote HOST` |
+| `hw HOST` | Focus or safely start that host's remote Herdr client (`hydra` → `Mac-Mini`, `devbox` → `DevBox`) |
 | `herdr` | Create or attach the current machine's local Herdr session |
 | `hr hydra` | Run the direct remote Herdr client from a plain shell |
+
+`hw hydra` and `hw devbox` are idempotent: they focus their friendly named
+windows, leave an already-running remote client untouched, and launch Herdr
+only when a restored pane is safely idle. If the target is absent, `hw` reuses
+a safely idle invoking plain tmux window. It never kills or clobbers a busy pane.
 
 Inside tmux, `tw` and `hw` use the current session. From a local Herdr pane,
 whose server-owned shell does not inherit `$TMUX`, they target local session
 `Main`. `hw` keeps the remote client out of the current Herdr pane, and nested
-Herdr remains disabled. Each machine owns its own persistent Herdr server,
-sessions, and runtime state.
+Herdr remains disabled.
+
+Tmux restart persistence comes from tmux-resurrect and tmux-continuum. The
+default autosave interval is 15 minutes; create the first snapshot, or save
+manually later, with `Ctrl+Space` then `Ctrl+S`. When Ghostty's `tmux-main` starts a
+new tmux server, the machine-local snapshot restores automatically. `tmux-main`
+creates only the local window; the MacBook's remote windows come from its saved
+snapshot.
+
+Sleep and network changes do not transparently reconnect Herdr. The remote
+client may survive a brief interruption; otherwise it exits to a shell, and a
+later `hw hydra` or `hw devbox` focuses or relaunches it. Remote Herdr state
+survives only while its host remains available.
 
 | Key Combination | Owner | Action |
 |-----------------|-------|--------|
-| `Ctrl+B` | Outer tmux | Prefix key |
+| `Ctrl+Space` | Outer tmux | Prefix key |
 | `Alt+Shift+H` / `Alt+Shift+L` | Outer tmux | Previous / next machine window |
 | `Tmux Prefix+C` | Outer tmux | New window |
 | `Tmux Prefix+\|` / `Tmux Prefix+-` | Outer tmux | Horizontal / vertical split |
-| `Ctrl+Space` | Inner Herdr | Prefix key |
+| `Ctrl+B` | Inner Herdr | Prefix key |
 | `Herdr Prefix+Q` or `Herdr Prefix+D` | Inner Herdr | Detach |
 | `Herdr Prefix+P` / `Herdr Prefix+N` | Inner Herdr | Previous / next project tab |
 | `Herdr Prefix+Shift+G` | Inner Herdr | Create a worktree with approved local files |
@@ -221,7 +239,7 @@ sessions, and runtime state.
 
 Herdr retains its compatible native bindings for creating and selecting tabs,
 pane navigation, zoom, copy/help, splits, resize mode, and pane-swap mode. In
-the worktree section below, `Prefix` means Herdr's `Ctrl+Space` prefix.
+the worktree section below, `Prefix` means Herdr's `Ctrl+B` prefix.
 
 #### Worktrees
 

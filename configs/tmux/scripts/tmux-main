@@ -1,7 +1,16 @@
 #!/usr/bin/env zsh
 
+host=$(hostname -s 2>/dev/null)
+case "$host" in
+    Chases-MacBook-Pro) window=Macbook ;;
+    Chases-Mac-mini) window=Mac-Mini ;;
+    devbox) window=DevBox ;;
+    '') window=Local ;;
+    *) window="${(U)${host[1]}}${host[2,-1]}" ;;
+esac
+
 if (( $+commands[tmux] )); then
-    exec tmux new-session -A -s Main -n macbook \
+    exec tmux new-session -A -s Main -n "$window" \
         "/bin/zsh -lc 'command -v herdr >/dev/null 2>&1 && herdr; exec /bin/zsh -l'"
 fi
 

@@ -13,6 +13,8 @@ set -g @plugin 'tmux-plugins/tpm'
 set -g @plugin 'tmux-plugins/tmux-sensible'
 set -g @plugin "fabioluciano/tmux-tokyo-night"
 set -g @plugin 'christoomey/vim-tmux-navigator'
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+set -g @plugin 'tmux-plugins/tmux-continuum'
 `
 
 // TestStaleTmuxPluginsRemovesUnlisted covers the core regression:
@@ -27,12 +29,13 @@ func TestStaleTmuxPluginsRemovesUnlisted(t *testing.T) {
 	}
 	plugins := filepath.Join(tmp, "plugins")
 	for _, name := range []string{
-		"tpm",                 // manager — always kept
-		"tmux-sensible",       // declared — kept
-		"tmux-tokyo-night",    // declared via fabioluciano/tmux-tokyo-night — kept
-		"vim-tmux-navigator",  // declared — kept
-		"tmux-menus",          // REMOVED from config — should be stale
-		"tmux-resurrect",      // also not declared — stale
+		"tpm",                // manager — always kept
+		"tmux-sensible",      // declared — kept
+		"tmux-tokyo-night",   // declared via fabioluciano/tmux-tokyo-night — kept
+		"vim-tmux-navigator", // declared — kept
+		"tmux-resurrect",     // declared — kept
+		"tmux-continuum",     // declared — kept
+		"tmux-menus",         // REMOVED from config — should be stale
 	} {
 		if err := os.MkdirAll(filepath.Join(plugins, name), 0o755); err != nil {
 			t.Fatal(err)
@@ -48,7 +51,7 @@ func TestStaleTmuxPluginsRemovesUnlisted(t *testing.T) {
 		got[i] = filepath.Base(p)
 	}
 	sort.Strings(got)
-	want := []string{"tmux-menus", "tmux-resurrect"}
+	want := []string{"tmux-menus"}
 	if len(got) != len(want) {
 		t.Fatalf("stale = %v, want %v", got, want)
 	}
@@ -114,8 +117,9 @@ func TestMissingTmuxPluginsDetectsUninstalled(t *testing.T) {
 	}
 	plugins := filepath.Join(tmp, "plugins")
 	// Only tmux-sensible is on disk; the other declared plugins
-	// (tmux-tokyo-night, vim-tmux-navigator) are missing. tpm is excluded
-	// from the declared set by design — it's not a managed plugin.
+	// (tmux-tokyo-night, vim-tmux-navigator, tmux-resurrect, and
+	// tmux-continuum) are missing. tpm is excluded from the declared set
+	// by design — it's not a managed plugin.
 	for _, name := range []string{"tpm", "tmux-sensible"} {
 		if err := os.MkdirAll(filepath.Join(plugins, name), 0o755); err != nil {
 			t.Fatal(err)
@@ -127,7 +131,10 @@ func TestMissingTmuxPluginsDetectsUninstalled(t *testing.T) {
 		t.Fatal(err)
 	}
 	sort.Strings(missing)
-	want := []string{"tmux-tokyo-night", "vim-tmux-navigator"}
+	want := []string{
+		"tmux-continuum", "tmux-resurrect", "tmux-tokyo-night",
+		"vim-tmux-navigator",
+	}
 	if len(missing) != len(want) {
 		t.Fatalf("missing = %v, want %v", missing, want)
 	}
@@ -150,6 +157,7 @@ func TestMissingTmuxPluginsAllPresent(t *testing.T) {
 	plugins := filepath.Join(tmp, "plugins")
 	for _, name := range []string{
 		"tpm", "tmux-sensible", "tmux-tokyo-night", "vim-tmux-navigator",
+		"tmux-resurrect", "tmux-continuum",
 	} {
 		if err := os.MkdirAll(filepath.Join(plugins, name), 0o755); err != nil {
 			t.Fatal(err)
@@ -181,7 +189,10 @@ func TestMissingTmuxPluginsBareDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	sort.Strings(missing)
-	want := []string{"tmux-sensible", "tmux-tokyo-night", "vim-tmux-navigator"}
+	want := []string{
+		"tmux-continuum", "tmux-resurrect", "tmux-sensible",
+		"tmux-tokyo-night", "vim-tmux-navigator",
+	}
 	if len(missing) != len(want) {
 		t.Fatalf("missing = %v, want %v", missing, want)
 	}

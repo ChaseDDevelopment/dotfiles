@@ -67,7 +67,7 @@ elif command -v xsel &>/dev/null; then
 elif command -v wl-copy &>/dev/null; then
     FZF_CLIP_CMD="wl-copy"
 else
-    FZF_CLIP_CMD="cat >/dev/null"  # Fallback: discard
+    FZF_CLIP_CMD="cat >/dev/null" # Fallback: discard
 fi
 
 # fzf defaults with TokyoNight Night colors

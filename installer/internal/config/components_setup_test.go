@@ -397,6 +397,40 @@ exit 0
 	}
 }
 
+func TestMaintainTmuxPluginsPreservesResurrectSaves(t *testing.T) {
+	sc, home := newComponentSetup(t)
+	t.Setenv("PATH", t.TempDir())
+	xdgData := filepath.Join(home, "xdg-data")
+	t.Setenv("XDG_DATA_HOME", xdgData)
+
+	saves := []string{
+		filepath.Join(xdgData, "tmux", "resurrect", "last"),
+		filepath.Join(home, ".tmux", "resurrect", "last"),
+	}
+	for _, save := range saves {
+		if err := os.MkdirAll(filepath.Dir(save), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(save, []byte("sentinel"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := MaintainTmuxPlugins(context.Background(), sc); err != nil {
+		t.Fatalf("MaintainTmuxPlugins: %v", err)
+	}
+
+	for _, save := range saves {
+		data, err := os.ReadFile(save)
+		if err != nil {
+			t.Fatalf("resurrect save %s was not preserved: %v", save, err)
+		}
+		if string(data) != "sentinel" {
+			t.Fatalf("resurrect save %s = %q, want sentinel", save, data)
+		}
+	}
+}
+
 // TestMaintainTmuxPluginsSkipsWhenTpmAbsent — defensive check: if the
 // tpm dep regresses and maintain-tmux fires before TPM is cloned, we
 // must NOT invoke install_plugins.sh (it doesn't exist) and must log
@@ -473,7 +507,8 @@ exit 0
 	}
 	pluginsDir := filepath.Join(home, ".tmux", "plugins")
 	for _, name := range []string{
-		"tpm", "tmux-sensible", "tmux", "vim-tmux-navigator",
+		"tpm", "tmux-sensible", "tmux-tokyo-night", "vim-tmux-navigator",
+		"tmux-resurrect", "tmux-continuum",
 	} {
 		if err := os.MkdirAll(filepath.Join(pluginsDir, name), 0o755); err != nil {
 			t.Fatal(err)

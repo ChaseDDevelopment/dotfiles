@@ -9,8 +9,9 @@ delivery = "system"
 [ui]
 show_agent_labels_on_pane_borders = true
 
+agent_panel_sort = "spaces"
 [keys]
-prefix = "ctrl+space"
+prefix = "ctrl+b"
 detach = ["prefix+q", "prefix+d"]
 previous_tab = ["prefix+p"]
 next_tab = ["prefix+n"]

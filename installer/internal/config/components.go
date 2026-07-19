@@ -587,16 +587,14 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 }
 
 // MaintainTmuxPlugins runs on every install, outside the "already
-// configured" symlink guard. It heals three independent kinds of
+// configured" symlink guard. It heals two independent kinds of
 // drift, in order:
 //
 //  1. Installs declared `@plugin` entries that aren't on disk yet.
 //     This is the fresh-install path (TPM has been cloned but no
 //     plugins under it) and the self-heal path (user removed a
 //     plugin, prior install partially failed, etc.).
-//  2. Wipes tmux-resurrect / tmux-continuum save state so removed
-//     plugins don't get silently replayed if they reappear later.
-//  3. Prunes plugin dirs no longer listed in tmux.conf. TPM
+//  2. Prunes plugin dirs no longer listed in tmux.conf. TPM
 //     installs but never cleans, so a removed `@plugin` lingers
 //     on disk with bindings still active in any running tmux
 //     server.
@@ -618,30 +616,7 @@ func MaintainTmuxPlugins(ctx context.Context, sc *SetupContext) error {
 	// — those are normal mid-install states, not failures.
 	installMissingTmuxPlugins(ctx, sc, tmuxConf, tmuxPluginsDir)
 
-	// 2. Wipe tmux-resurrect / tmux-continuum save state. The plugin
-	// dirs themselves are handled by staleTmuxPlugins below; the
-	// JSON snapshots under XDG_DATA_HOME (and legacy ~/.tmux/
-	// resurrect/) persist otherwise and would be silently replayed
-	// if either plugin ever reappeared in tmux.conf.
-	xdgData := os.Getenv("XDG_DATA_HOME")
-	if xdgData == "" {
-		xdgData = filepath.Join(home, ".local", "share")
-	}
-	for _, dir := range []string{
-		filepath.Join(xdgData, "tmux", "resurrect"),
-		filepath.Join(home, ".tmux", "resurrect"),
-	} {
-		if _, err := os.Stat(dir); err != nil {
-			continue
-		}
-		sc.Runner.EmitVerbose("Removing stale tmux-resurrect saves: " + dir)
-		saveDir := dir
-		bestEffort(sc, "remove tmux-resurrect saves", func() error {
-			return os.RemoveAll(saveDir)
-		})
-	}
-
-	// 3. Prune plugin dirs that no longer appear in tmux.conf. TPM
+	// 2. Prune plugin dirs that no longer appear in tmux.conf. TPM
 	// installs but never cleans (its `clean_plugins` script is only
 	// bound to a key), so a plugin removed from `set -g @plugin`
 	// lingers on disk with its bindings still active in any running
