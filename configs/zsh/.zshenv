@@ -5,6 +5,13 @@ export XDG_CACHE_HOME="${HOME}/.cache"
 export XDG_STATE_HOME="${HOME}/.local/state"
 export ZSH_CACHE_DIR="${XDG_CACHE_HOME}/ohmyzsh"
 
+# Use the systemd ssh-agent socket unless this shell already has an agent.
+if [[ -z "${SSH_AUTH_SOCK:-}" &&
+      -n "${XDG_RUNTIME_DIR:-}" &&
+      -S "${XDG_RUNTIME_DIR}/ssh-agent.socket" ]]; then
+    export SSH_AUTH_SOCK="${XDG_RUNTIME_DIR}/ssh-agent.socket"
+fi
+
 # Go: keep module cache out of $HOME/go and drop binaries into
 # ~/.local/bin alongside uv, oh-my-posh, etc. `go install` without
 # these defaults creates ~/go (GOPATH) and ~/go/bin (GOBIN).
