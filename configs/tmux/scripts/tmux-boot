@@ -1,0 +1,25 @@
+#!/usr/bin/env zsh
+# Headless warm-start for the outer tmux server after login.
+#
+# Ghostty's first surface runs tmux-main (new-session -A -s Main). Starting the
+# server here lets continuum auto-restore before that attach, so Main and the
+# saved machine windows are already present.
+#
+# Unlike tmux-continuum's @continuum-boot, this never opens a terminal window
+# (continuum only knows Terminal.app / iTerm / kitty / alacritty — not Ghostty).
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin:/usr/bin:/bin:${PATH}"
+
+if ! (( $+commands[tmux] )); then
+    exit 0
+fi
+
+# Server already has sessions — leave it alone (sleep/wake, re-login, etc.).
+if tmux list-sessions >/dev/null 2>&1; then
+    exit 0
+fi
+
+# Detached Main keeps the server alive past continuum's ~1s delayed restore
+# (sessionless servers exit under exit-empty). With a snapshot, continuum
+# rebuilds windows/panes; without one, Ghostty's tmux-main still attaches.
+exec tmux new-session -d -s Main

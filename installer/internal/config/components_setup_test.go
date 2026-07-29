@@ -324,6 +324,98 @@ exit 0
 	}
 }
 
+// TestEnsureTmuxLoginAgentMacOS writes the LaunchAgent plist with the
+// expanded home path and bootstraps it via launchctl. Linux is a no-op.
+func TestEnsureTmuxLoginAgentMacOS(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// RootDir must contain the launchd template from the repo layout.
+	root := t.TempDir()
+	templateDir := filepath.Join(root, "configs", "tmux", "launchd")
+	if err := os.MkdirAll(templateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	template := `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.orion.tmux-server</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>@HOME@/.config/tmux/scripts/tmux-boot</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>
+`
+	if err := os.WriteFile(
+		filepath.Join(templateDir, tmuxLoginAgentPlistName),
+		[]byte(template), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// Boot script path chmod is best-effort when missing.
+	bootDir := filepath.Join(home, ".config", "tmux", "scripts")
+	if err := os.MkdirAll(bootDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	boot := filepath.Join(bootDir, "tmux-boot")
+	if err := os.WriteFile(boot, []byte("#!/bin/sh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	log, err := executor.NewLogFile(filepath.Join(home, "test.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { log.Close() })
+	sc := &SetupContext{
+		Runner:   executor.NewRunner(log, true), // DryRun: record launchctl
+		RootDir:  root,
+		Backup:   backup.NewManager(false),
+		Platform: &platform.Platform{OS: platform.MacOS, Arch: platform.ARM64},
+		Failures: NewTrackedFailures(),
+	}
+
+	if err := ensureTmuxLoginAgent(context.Background(), sc, home); err != nil {
+		t.Fatalf("ensureTmuxLoginAgent: %v", err)
+	}
+
+	dest := filepath.Join(home, "Library", "LaunchAgents", tmuxLoginAgentPlistName)
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	if strings.Contains(body, "@HOME@") {
+		t.Fatalf("plist still has @HOME@ placeholder:\n%s", body)
+	}
+	wantScript := home + "/.config/tmux/scripts/tmux-boot"
+	if !strings.Contains(body, wantScript) {
+		t.Fatalf("plist missing boot script path %q:\n%s", wantScript, body)
+	}
+	if !strings.Contains(body, tmuxLoginAgentLabel) {
+		t.Fatalf("plist missing label %q:\n%s", tmuxLoginAgentLabel, body)
+	}
+
+	info, err := os.Stat(boot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatalf("tmux-boot mode = %v, want executable", info.Mode())
+	}
+
+	// Linux platform must be a no-op (no error, no overwrite required).
+	sc.Platform = &platform.Platform{OS: platform.Linux, Arch: platform.AMD64}
+	if err := ensureTmuxLoginAgent(context.Background(), sc, home); err != nil {
+		t.Fatalf("linux ensureTmuxLoginAgent: %v", err)
+	}
+}
+
 // TestMaintainTmuxPluginsInstallsMissing verifies the fresh-install
 // healing path: when tmux.conf declares plugins that aren't on disk
 // AND TPM is on disk, MaintainTmuxPlugins must start the tmux server

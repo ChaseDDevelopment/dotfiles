@@ -569,25 +569,76 @@ func clearZshInitCaches(home string, runner *executor.Runner) error {
 	return nil
 }
 
+const tmuxLoginAgentLabel = "com.orion.tmux-server"
+const tmuxLoginAgentPlistName = "com.orion.tmux-server.plist"
+
 func setupTmux(ctx context.Context, sc *SetupContext) error {
 	home := os.Getenv("HOME")
 	tmuxConf := filepath.Join(home, ".config", "tmux", "tmux.conf")
 
 	// Plugin install lives in MaintainTmuxPlugins so it runs on every
 	// invocation (not just when symlinks change) and has a real dep on
-	// the tpm tool task. setupTmux now only handles the post-symlink
-	// config reload for an already-running tmux server.
+	// the tpm tool task. setupTmux handles post-symlink reload plus the
+	// macOS headless login agent (also healed in MaintainTmuxPlugins).
 	if _, err := sc.Runner.RunProbe(ctx, "pgrep", "-x", "tmux"); err == nil {
 		bestEffort(sc, "tmux config reload failed", func() error {
 			return sc.Runner.Run(ctx, "tmux", "source-file", tmuxConf)
 		})
 	}
 
+	bestEffort(sc, "install tmux login LaunchAgent failed", func() error {
+		return ensureTmuxLoginAgent(ctx, sc, home)
+	})
+
+	return nil
+}
+
+// ensureTmuxLoginAgent installs a headless RunAtLoad LaunchAgent that
+// starts the outer tmux server (and continuum restore) at login so
+// Ghostty can attach Main immediately. macOS only — continuum's own
+// @continuum-boot opens Terminal/iTerm/kitty and is intentionally unused.
+func ensureTmuxLoginAgent(ctx context.Context, sc *SetupContext, home string) error {
+	if sc.Platform == nil || sc.Platform.OS != platform.MacOS {
+		return nil
+	}
+
+	templatePath := filepath.Join(
+		sc.RootDir, "configs", "tmux", "launchd", tmuxLoginAgentPlistName,
+	)
+	raw, err := os.ReadFile(templatePath)
+	if err != nil {
+		return fmt.Errorf("read LaunchAgent template: %w", err)
+	}
+	body := strings.ReplaceAll(string(raw), "@HOME@", home)
+
+	agentsDir := filepath.Join(home, "Library", "LaunchAgents")
+	if err := os.MkdirAll(agentsDir, 0o755); err != nil {
+		return fmt.Errorf("create LaunchAgents dir: %w", err)
+	}
+	dest := filepath.Join(agentsDir, tmuxLoginAgentPlistName)
+	if err := os.WriteFile(dest, []byte(body), 0o644); err != nil {
+		return fmt.Errorf("write LaunchAgent: %w", err)
+	}
+
+	// Directory symlink should preserve +x; enforce for copied trees.
+	boot := filepath.Join(home, ".config", "tmux", "scripts", "tmux-boot")
+	if err := os.Chmod(boot, 0o755); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("chmod tmux-boot: %w", err)
+	}
+
+	uid := os.Getuid()
+	domain := fmt.Sprintf("gui/%d", uid)
+	service := domain + "/" + tmuxLoginAgentLabel
+	// bootout fails when the agent was never loaded — ignore.
+	_ = exec.CommandContext(ctx, "launchctl", "bootout", service).Run()
+	if err := sc.Runner.Run(ctx, "launchctl", "bootstrap", domain, dest); err != nil {
+		return fmt.Errorf("launchctl bootstrap: %w", err)
+	}
 	return nil
 }
 
 // MaintainTmuxPlugins runs on every install, outside the "already
-// configured" symlink guard. It heals two independent kinds of
+// configured" symlink guard. It heals three independent kinds of
 // drift, in order:
 //
 //  1. Installs declared `@plugin` entries that aren't on disk yet.
@@ -598,6 +649,8 @@ func setupTmux(ctx context.Context, sc *SetupContext) error {
 //     installs but never cleans, so a removed `@plugin` lingers
 //     on disk with bindings still active in any running tmux
 //     server.
+//  3. Ensures the macOS headless login LaunchAgent is installed
+//     (no-op on Linux).
 //
 // Safe to run repeatedly; no-op when nothing needs healing.
 func MaintainTmuxPlugins(ctx context.Context, sc *SetupContext) error {
@@ -626,21 +679,26 @@ func MaintainTmuxPlugins(ctx context.Context, sc *SetupContext) error {
 		sc.Runner.Log.Write(fmt.Sprintf(
 			"tmux plugin prune skipped: %v", err,
 		))
-		return nil
+	} else if len(stale) > 0 {
+		sc.Runner.Log.Write(fmt.Sprintf(
+			"maintain-tmux: pruning %d stale plugin dir(s)", len(stale),
+		))
+		for _, dir := range stale {
+			sc.Runner.EmitVerbose("Removing stale tmux plugin: " + dir)
+			d := dir
+			bestEffort(sc, "remove stale tmux plugin "+filepath.Base(d), func() error {
+				return os.RemoveAll(d)
+			})
+		}
 	}
-	if len(stale) == 0 {
-		return nil
-	}
-	sc.Runner.Log.Write(fmt.Sprintf(
-		"maintain-tmux: pruning %d stale plugin dir(s)", len(stale),
-	))
-	for _, dir := range stale {
-		sc.Runner.EmitVerbose("Removing stale tmux plugin: " + dir)
-		d := dir
-		bestEffort(sc, "remove stale tmux plugin "+filepath.Base(d), func() error {
-			return os.RemoveAll(d)
-		})
-	}
+
+	// 3. Heal the headless login LaunchAgent even when Tmux setup was
+	// skipped as "already configured" — same always-run contract as
+	// plugin install/prune.
+	bestEffort(sc, "install tmux login LaunchAgent failed", func() error {
+		return ensureTmuxLoginAgent(ctx, sc, home)
+	})
+
 	return nil
 }
 

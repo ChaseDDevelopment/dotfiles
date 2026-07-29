@@ -214,10 +214,15 @@ Herdr remains disabled.
 
 Tmux restart persistence comes from tmux-resurrect and tmux-continuum. The
 default autosave interval is 15 minutes; create the first snapshot, or save
-manually later, with `Ctrl+Space` then `Ctrl+S`. When Ghostty's `tmux-main` starts a
-new tmux server, the machine-local snapshot restores automatically. `tmux-main`
-creates only the local window; the MacBook's remote windows come from its saved
-snapshot.
+manually later, with `Ctrl+Space` then `Ctrl+S`. Restored processes include
+`herdr` and `ssh` (so `ssht` panes come back — `ssht` is a shell function that
+runs the real `ssh` binary). On macOS, a headless LaunchAgent
+(`com.orion.tmux-server`) runs `tmux-boot` at login so the server and continuum
+restore warm before Ghostty attaches. Stock continuum `@continuum-boot` is
+intentionally off: it only opens Terminal/iTerm/kitty/alacritty, not Ghostty.
+When Ghostty's `tmux-main` starts or attaches `Main`, the machine-local snapshot
+has usually already restored; `tmux-main` creates only the local window when
+nothing is saved, and the MacBook's remote windows come from the snapshot.
 
 Sleep and network changes do not transparently reconnect Herdr. The remote
 client may survive a brief interruption; otherwise it exits to a shell, and a

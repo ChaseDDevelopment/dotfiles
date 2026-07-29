@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template installed to ~/Library/LaunchAgents/ by the dotfiles installer.
+  @HOME@ is replaced with the absolute home directory at install time.
+  Do not load this file from the repo path directly without substitution.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.orion.tmux-server</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>@HOME@/.config/tmux/scripts/tmux-boot</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>

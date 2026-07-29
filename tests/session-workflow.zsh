@@ -670,9 +670,27 @@ assert_contains "$tmux_conf" '#[fg=#1a1b26,bg=#9ece6a,bold] #S ' \
     "tmux must show the session in a green native pill"
 assert_contains "$tmux_conf" '#[fg=#1a1b26,bg=#7aa2f7,bold] #I:#W ' \
     "tmux must show the current stable window name in a blue native pill"
-assert_contains "$tmux_conf" \
-    "set -g status-right '#[fg=#bb9af7,bg=#1a1b26]#[fg=#1a1b26,bg=#bb9af7,bold] #{b:pane_current_path} @ #{host_short} '" \
-    "tmux status must show the current directory and host in a mauve native pill"
+assert_contains "$tmux_conf" "set -g status-right ''" \
+    "tmux status-right must stay empty (cwd/host pill removed)"
+assert_not_contains "$tmux_conf" '#{b:pane_current_path} @ #{host_short}' \
+    "tmux must not keep the retired cwd @ host status pill"
+assert_contains "$tmux_conf" "set -g @resurrect-processes 'herdr ssh'" \
+    "tmux-resurrect must restore herdr and ssh (ssht panes)"
+assert_contains "$tmux_conf" "set -g @continuum-restore 'on'" \
+    "tmux-continuum must auto-restore on server start"
+# Continuum GUI login-start option must not be enabled (headless LaunchAgent instead).
+assert_not_contains "$tmux_conf" "set -g @continuum-boot" \
+    "tmux must not enable continuum GUI boot (Ghostty owns the client)"
+tmux_boot="$repo_root/configs/tmux/scripts/tmux-boot"
+[[ -x "$tmux_boot" ]] || fail "tmux-boot must exist and be executable"
+assert_contains "$(<"$tmux_boot")" 'new-session -d -s Main' \
+    "tmux-boot must start a detached Main session for continuum restore"
+agent_plist="$repo_root/configs/tmux/launchd/com.orion.tmux-server.plist"
+[[ -r "$agent_plist" ]] || fail "tmux login LaunchAgent template is missing"
+assert_contains "$(<"$agent_plist")" 'com.orion.tmux-server' \
+    "LaunchAgent template must use the com.orion.tmux-server label"
+assert_contains "$(<"$agent_plist")" '@HOME@/.config/tmux/scripts/tmux-boot' \
+    "LaunchAgent template must invoke tmux-boot under @HOME@"
 assert_contains "$tmux_conf" '|herdr|' \
     "tmux navigator must pass pane movement through Herdr"
 assert_contains "$tmux_conf" 'bind -n M-H previous-window' \
@@ -737,6 +755,12 @@ assert_contains "$readme" '`ssh hydra`, then `herdr`' \
     "README must document generic remote Herdr attach"
 assert_contains "$readme" '`ssht hydra`' \
     "README must retain the tmux fallback"
+assert_contains "$readme" 'herdr` and `ssh`' \
+    "README must document resurrect process restore for herdr and ssh"
+assert_contains "$readme" 'tmux-boot' \
+    "README must document headless login warm-start"
+assert_contains "$readme" '@continuum-boot' \
+    "README must explain why continuum GUI boot is off"
 assert_contains "$readme" '`Prefix+Shift+G`' \
     "README must document Herdr worktree creation"
 assert_contains "$readme" '`.worktree-copy`' \
