@@ -4,7 +4,8 @@ set -u
 
 repo_root=${0:A:h:h}
 tmp_dir=$(mktemp -d)
-trap 'rm -rf -- "$tmp_dir"' EXIT
+test_agent_pid=
+trap '[[ -n "${test_agent_pid:-}" ]] && kill "$test_agent_pid" 2>/dev/null; rm -rf -- "$tmp_dir"' EXIT
 export TEST_LOG="$tmp_dir/commands.log"
 export COMPDEF_LOG="$tmp_dir/compdefs.log"
 : > "$TEST_LOG"
@@ -79,7 +80,30 @@ print -r -- "${FAKE_FZF_SELECTION:-Beta}"' > "$tmp_dir/fzf"
 
 print -r -- '#!/usr/bin/env zsh
 print -r -- "$*" >> "$TEST_LOG"
+if [[ "${FAKE_SSH_UNLOCK_FLOW:-}" == 1 ]]; then
+    count_file="$TEST_LOG.ssh-count"
+    count=0
+    [[ -r "$count_file" ]] && count=$(<"$count_file")
+    (( count++ ))
+    print -r -- "$count" > "$count_file"
+    case "$count" in
+        1)
+            [[ -t 0 ]] && stty raw -echo
+            print -r -- "System successfully unlocked."
+            exit 255
+            ;;
+        2|3) exit 0 ;;
+    esac
+fi
 exit "${FAKE_SSH_STATUS:-0}"' > "$tmp_dir/ssh"
+
+print -r -- '#!/bin/sh
+printf "%s\n" "ssh-add $*" >> "$TEST_LOG"
+exit "${FAKE_SSH_ADD_STATUS:-0}"' > "$tmp_dir/ssh-add"
+
+print -r -- '#!/bin/sh
+printf "%s\n" "${FAKE_LAUNCHCTL_OUTPUT:-}"
+exit "${FAKE_LAUNCHCTL_STATUS:-0}"' > "$tmp_dir/launchctl"
 
 print -r -- '#!/usr/bin/env zsh
 print -r -- "$*" >> "$TEST_LOG"' > "$tmp_dir/herdr"
@@ -104,7 +128,7 @@ print -r -- '#!/usr/bin/env zsh
 print -r -- "ps $*" >> "$TEST_LOG"
 print -r -- "${FAKE_CHILD_COMMAND:-}"' > "$tmp_dir/ps"
 
-chmod +x "$tmp_dir"/{tmux,fzf,ssh,herdr,hostname,pgrep,ps}
+chmod +x "$tmp_dir"/{tmux,fzf,ssh,ssh-add,launchctl,herdr,hostname,pgrep,ps}
 export PATH="$tmp_dir:$PATH"
 rehash
 
@@ -230,7 +254,9 @@ reset_hw_state() {
     export FAKE_TMUX_WINDOWS=scratch
     export FAKE_TMUX_TARGET_PANES='%2|4200|zsh|0|0|1|0|Mac-Mini'
     export FAKE_TMUX_CURRENT_PANES='%1|4100|zsh|0|0|1|0|scratch'
-    unset FAKE_CHILD_PARENT FAKE_CHILD_PIDS FAKE_CHILD_COMMAND FAKE_PGREP_STATUS HERDR_ENV
+    unset FAKE_CHILD_PARENT FAKE_CHILD_PIDS FAKE_CHILD_COMMAND FAKE_PGREP_STATUS
+    unset FAKE_SSH_STATUS FAKE_SSH_UNLOCK_FLOW HERDR_ENV
+    : > "$TEST_LOG.ssh-count"
 }
 
 reset_hw_state
@@ -256,6 +282,8 @@ assert_not_contains "$log" 'new-window' \
     "hw must not duplicate a matching remote client"
 assert_not_contains "$log" '--remote hydra' \
     "hw must not launch a second matching remote client"
+assert_not_contains "$log" '-t hydra' \
+    "hw must not preflight an already-running Hydra client"
 
 typeset -a near_miss_names near_miss_commands
 near_miss_names=(wrong-host wrong-binary extra-arguments)
@@ -317,8 +345,12 @@ reset_hw_state
 : > "$TEST_LOG"
 hw hydra >/dev/null || fail "hw idle other-pane launch failed"
 log=$(<"$TEST_LOG")
+assert_contains "$log" '-t hydra' \
+    "hw must preflight Hydra before launching into an idle target"
 assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
     "hw must select the idle restored target"
+assert_order "$log" '-t hydra' 'select-window -t =Main:=Mac-Mini' \
+    "hw must finish the Hydra preflight before selecting the target"
 assert_contains "$log" 'send-keys -t %2 C-c' \
     "hw must clear the idle restored shell before launching"
 assert_contains "$log" 'send-keys -t %2 -l herdr --remote hydra' \
@@ -333,12 +365,57 @@ assert_order "$log" 'send-keys -t %2 -l herdr --remote hydra' \
     "hw must send the remote command before Enter"
 
 reset_hw_state
+export FAKE_SSH_UNLOCK_FLOW=1
+: > "$TEST_LOG"
+unlock_tty_state=
+[[ -t 0 ]] && unlock_tty_state=$(stty -g)
+hw hydra >/dev/null || fail "hw FileVault unlock handoff failed"
+if [[ -n "$unlock_tty_state" ]]; then
+    restored_tty=$(stty -a)
+    assert_contains " $restored_tty " ' icanon ' \
+        "hw must restore canonical terminal input after FileVault unlock"
+    assert_contains " $restored_tty " ' echo ' \
+        "hw must restore terminal echo after FileVault unlock"
+fi
+log=$(<"$TEST_LOG")
+ssh_calls=$(/usr/bin/grep -c '^-q' "$TEST_LOG")
+assert_eq "$ssh_calls" 3 \
+    "hw must unlock, wait for normal SSH, and rerun the Hydra preflight"
+assert_contains "$log" '-q -o BatchMode=yes -o ConnectTimeout=2 hydra true' \
+    "hw must wait for key-based SSH after FileVault unlock"
+assert_order "$log" '-q -o BatchMode=yes -o ConnectTimeout=2 hydra true' \
+    'select-window -t =Main:=Mac-Mini' \
+    "hw must finish the post-unlock preflight before selecting the target"
+
+reset_hw_state
+export FAKE_SSH_STATUS=19
+: > "$TEST_LOG"
+hw hydra >/dev/null 2>&1
+rc=$?
+assert_eq "$rc" 19 "hw must preserve a failed Hydra preflight status"
+log=$(<"$TEST_LOG")
+assert_contains "$log" '-t hydra' \
+    "hw must attempt the Hydra preflight before aborting"
+assert_not_contains "$log" 'select-window' \
+    "hw must not switch windows after a failed Hydra preflight"
+assert_not_contains "$log" 'send-keys' \
+    "hw must not send keys after a failed Hydra preflight"
+assert_not_contains "$log" 'rename-window' \
+    "hw must not rename a window after a failed Hydra preflight"
+assert_not_contains "$log" 'new-window' \
+    "hw must not create a window after a failed Hydra preflight"
+
+reset_hw_state
 export FAKE_TMUX_TARGET_PANES='%1|4100|zsh|0|0|1|0|Mac-Mini'
 : > "$TEST_LOG"
 hw hydra >/dev/null || fail "hw current target direct launch failed"
 log=$(<"$TEST_LOG")
+assert_contains "$log" '-t hydra' \
+    "hw must preflight Hydra before a direct launch"
 assert_contains "$log" 'select-window -t =Main:=Mac-Mini' \
     "hw must select the current target before launching"
+assert_order "$log" '-t hydra' 'select-window -t =Main:=Mac-Mini' \
+    "hw must finish the Hydra preflight before selecting the current target"
 assert_contains "$log" '--remote hydra' \
     "hw must invoke Herdr directly in the current target pane"
 assert_not_contains "$log" 'send-keys' \
@@ -407,8 +484,12 @@ hw hydra >/dev/null || fail "hw safe invoking-window reuse failed"
 log=$(<"$TEST_LOG")
 assert_contains "$log" 'list-panes -t %1' \
     "hw must inspect the explicit invoking pane before reuse"
+assert_contains "$log" '-t hydra' \
+    "hw must preflight Hydra before reusing the invoking window"
 assert_contains "$log" 'rename-window -t %1 Mac-Mini' \
     "hw must rename a safe invoking window to Mac-Mini"
+assert_order "$log" '-t hydra' 'rename-window -t %1 Mac-Mini' \
+    "hw must finish the Hydra preflight before renaming the invoking window"
 assert_contains "$log" '--remote hydra' \
     "hw must invoke Herdr directly after safe reuse"
 assert_not_contains "$log" 'new-window' \
@@ -433,8 +514,12 @@ hw hydra >/dev/null || fail "hw protected macbook path failed"
 log=$(<"$TEST_LOG")
 assert_not_contains "$log" 'rename-window' \
     "hw must not reuse the protected macbook window"
+assert_contains "$log" '-t hydra' \
+    "hw must preflight Hydra before creating a new target window"
 assert_contains "$log" 'new-window -t =Main: -n Mac-Mini' \
     "hw must create Mac-Mini when the invoking window is protected"
+assert_order "$log" '-t hydra' 'new-window -t =Main: -n Mac-Mini' \
+    "hw must finish the Hydra preflight before creating a target window"
 assert_contains "$log" \
     "/bin/zsh -lc 'herdr --remote hydra; exec /bin/zsh -l'" \
     "hw must retain a login-shell fallback in new windows"
@@ -463,6 +548,8 @@ assert_contains "$log" 'new-window -t =Main: -n atlas' \
 assert_contains "$log" \
     "/bin/zsh -lc 'herdr --remote atlas; exec /bin/zsh -l'" \
     "hw must launch the requested non-hydra host"
+assert_not_contains "$log" '-t atlas' \
+    "hw must not run the Hydra preflight for another host"
 assert_not_contains "$log" 'Mac-Mini' \
     "hw must map only hydra to Mac-Mini"
 
@@ -635,6 +722,50 @@ TERM= ssht hydra >/dev/null
 rc=$?
 assert_eq "$rc" 23 "ssht must preserve the SSH exit status"
 
+zshenv_home="$tmp_dir/zshenv-home"
+mkdir -p "$zshenv_home/.ssh"
+agent_env=$(/usr/bin/ssh-agent -a "$zshenv_home/.ssh/agent.sock" -s) ||
+    fail "could not create the test SSH-agent socket"
+test_agent_pid=$(print -r -- "$agent_env" |
+    awk -F '[=;]' '/SSH_AGENT_PID=/ { print $2; exit }')
+[[ -n "$test_agent_pid" && -S "$zshenv_home/.ssh/agent.sock" ]] ||
+    fail "test SSH-agent did not create its socket"
+ln -s "$zshenv_home/.ssh/agent.sock" "$tmp_dir/gui-agent.sock"
+export TEST_ZSHENV="$repo_root/home/dot_config/zsh/dot_zshenv"
+
+run_zshenv_agent_recovery() {
+    HOME="$zshenv_home" \
+        PATH="$tmp_dir:/usr/bin:/bin" \
+        FAKE_SSH_ADD_STATUS="$1" \
+        TEST_INITIAL_AUTH_SOCK="${2:-}" \
+        FAKE_LAUNCHCTL_OUTPUT="SSH_AUTH_SOCK => $tmp_dir/gui-agent.sock" \
+        /bin/zsh -dfc '
+            unset XDG_RUNTIME_DIR
+            if [[ -n "$TEST_INITIAL_AUTH_SOCK" ]]; then
+                export SSH_AUTH_SOCK="$TEST_INITIAL_AUTH_SOCK"
+            else
+                unset SSH_AUTH_SOCK
+            fi
+            source "$TEST_ZSHENV"
+            print -r -- "${SSH_AUTH_SOCK:-}"
+        '
+}
+
+for agent_status in 0 1; do
+    recovered_socket=$(run_zshenv_agent_recovery "$agent_status" "$tmp_dir/gui-agent.sock")
+    assert_eq "$recovered_socket" "$zshenv_home/.ssh/agent.sock" \
+        ".zshenv must prefer a reachable stable agent with status $agent_status"
+done
+
+recovered_socket=$(run_zshenv_agent_recovery 2 "$tmp_dir/gui-agent.sock")
+assert_eq "$recovered_socket" "$tmp_dir/gui-agent.sock" \
+    ".zshenv must preserve an inherited agent when the stable agent is unreachable"
+if [[ "$OSTYPE" == darwin* ]]; then
+    recovered_socket=$(run_zshenv_agent_recovery 2)
+    assert_eq "$recovered_socket" "$tmp_dir/gui-agent.sock" \
+        ".zshenv must retain the macOS GUI-agent fallback"
+fi
+
 zprofile=$(<"$repo_root/home/dot_config/zsh/dot_zprofile")
 assert_not_contains "$zprofile" 'DOTFILES_TMUX_AUTOSTART' \
     "zprofile must not retain the auto-attach override"
@@ -751,6 +882,12 @@ assert_contains "$readme" '`herdr` | Create or attach' \
     "README must document local Herdr attach"
 assert_contains "$readme" '`hr hydra`' \
     "README must document remote Herdr attach"
+assert_contains "$readme" 'one passphrase prompt per reboot' \
+    "README must document Hydra's headless SSH-agent behavior"
+assert_contains "$readme" 'FileVault password' \
+    "README must document Hydra's pre-boot unlock handoff"
+assert_contains "$readme" '`~/.ssh/agent.sock`' \
+    "README must document Hydra's stable SSH-agent socket"
 assert_contains "$readme" '`ssh hydra`, then `herdr`' \
     "README must document generic remote Herdr attach"
 assert_contains "$readme" '`ssht hydra`' \

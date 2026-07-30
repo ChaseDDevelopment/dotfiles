@@ -75,6 +75,68 @@ function tw() {
     tmux new-window -t "=$session:" -n "$1" -c "$PWD"
 }
 
+function _hw_prepare_hydra_agent() {
+    [[ "$1" == hydra ]] || return 0
+    local remote_script='
+agent_socket="$HOME/.ssh/agent.sock"
+SSH_AUTH_SOCK="$agent_socket" ssh-add -l >/dev/null 2>&1
+agent_status=$?
+if [ "$agent_status" -gt 1 ]; then
+    if [ -S "$agent_socket" ]; then
+        unlink "$agent_socket" || exit $?
+    elif [ -e "$agent_socket" ] || [ -L "$agent_socket" ]; then
+        echo "hw: $agent_socket exists and is not a socket" >&2
+        exit 1
+    fi
+    ssh-agent -a "$agent_socket" >/dev/null || exit $?
+fi
+SSH_AUTH_SOCK="$agent_socket" ssh-add -T "$HOME/.ssh/chase.pub" >/dev/null 2>&1 ||
+    SSH_AUTH_SOCK="$agent_socket" ssh-add "$HOME/.ssh/chase"
+'
+
+    local ssh_log tty_state ssh_status
+    local -i attempt boot_attempt ready
+    ssh_log=$(mktemp "${TMPDIR:-/tmp}/hw-hydra.XXXXXX") || return 1
+    [[ -t 0 ]] && tty_state=$(stty -g 2>/dev/null)
+
+    for attempt in 1 2; do
+        : > "$ssh_log"
+        command ssh -q -t "$1" "$remote_script" 2>&1 | command tee "$ssh_log"
+        ssh_status=${pipestatus[1]}
+        if [[ -n "$tty_state" ]]; then
+            command stty "$tty_state" 2>/dev/null
+            print -n -- $'\e[0m\e[?25h' > /dev/tty
+        fi
+
+        if grep -Fq 'System successfully unlocked.' "$ssh_log"; then
+            if (( attempt != 1 )); then
+                command rm -f -- "$ssh_log"
+                echo "hw: Hydra remained FileVault-locked after retry"
+                return 1
+            fi
+            echo "hw: FileVault unlocked; waiting for Hydra to finish booting..."
+            ready=0
+            for boot_attempt in {1..30}; do
+                if command ssh -q -o BatchMode=yes -o ConnectTimeout=2 \
+                    "$1" true </dev/null >/dev/null 2>&1; then
+                    ready=1
+                    break
+                fi
+                sleep 2
+            done
+            if (( ! ready )); then
+                command rm -f -- "$ssh_log"
+                echo "hw: Hydra did not return within 60 seconds"
+                return 124
+            fi
+            continue
+        fi
+
+        command rm -f -- "$ssh_log"
+        return "$ssh_status"
+    done
+}
+
 function hw() {
     if (( $# != 1 )) || [[ ! "${1:-}" =~ "^[A-Za-z0-9][A-Za-z0-9._-]*$" ]]; then
         echo "Usage: hw <host>"
@@ -147,11 +209,12 @@ function hw() {
             return 1
         fi
 
-        tmux select-window -t "=$session:=$window" || return $?
         if ! (( $+commands[herdr] )); then
             echo "hw: herdr is not installed"
             return 127
         fi
+        _hw_prepare_hydra_agent "$host" || return $?
+        tmux select-window -t "=$session:=$window" || return $?
         if [[ -n "${TMUX_PANE:-}" && "$target_pane" == "$TMUX_PANE" ]]; then
             command herdr --remote "$host"
             return $?
@@ -178,6 +241,7 @@ function hw() {
         echo "hw: herdr is not installed"
         return 127
     fi
+    _hw_prepare_hydra_agent "$host" || return $?
 
     if [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" && "${HERDR_ENV:-}" != 1 ]] && \
         panes=$(tmux list-panes -t "$TMUX_PANE" -F "$pane_format" 2>/dev/null); then

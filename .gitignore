@@ -45,3 +45,6 @@ home/dot_config/zsh/local.zsh
 **/*credentials*
 **/*secrets*
 **/*history.jsonl*
+
+# Local design docs and plans; not part of the public source
+docs/

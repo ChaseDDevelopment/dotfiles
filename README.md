@@ -137,6 +137,12 @@ DevBox -> herdr --remote devbox
 | `hr hydra` | Attach directly to Hydra's Herdr session |
 | `ssht hydra` | Attach to Hydra's fallback tmux session |
 
+Before a Hydra launch, `hw hydra` prepares the native Chase key in the stable
+`~/.ssh/agent.sock`, allowing one passphrase prompt per reboot and silent later
+launches without a GUI login. After a reboot, macOS may first request the local
+account's FileVault password; `hw` restores the terminal, waits for normal SSH,
+and continues automatically. Canceling either prompt leaves tmux unchanged.
+
 From a generic SSH client, use `ssh hydra`, then `herdr`. Tmux-resurrect
 restores `herdr` and `ssh` processes. On macOS, `tmux-boot` starts the server
 headlessly at login; `@continuum-boot` stays disabled because it launches GUI
