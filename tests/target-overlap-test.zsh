@@ -1,0 +1,84 @@
+#!/usr/bin/env zsh
+
+set -eu
+setopt pipe_fail
+
+repo_root=${0:A:h:h}
+ai_repo=${AI_CHEZMOI_REPO:-"$repo_root/../ai-chezmoi"}
+machine_targets="$repo_root/tests/machine-targets.txt"
+ai_targets="$ai_repo/tests/ai-targets.txt"
+
+if [[ ! -d "$ai_repo" ]] &&
+    [[ "${CI:-}" == true || "${AI_CHEZMOI_SKIP:-}" == 1 ]]; then
+    print -- "SKIP: private ai-chezmoi source is unavailable at $ai_repo"
+    exit 0
+fi
+
+for required_path in "$machine_targets" "$ai_targets"; do
+    [[ -f "$required_path" ]] || {
+        print -u2 -- "FAIL: missing target manifest $required_path"
+        exit 1
+    }
+done
+
+duplicates=$(
+    comm -12 \
+        <(sed '/^[[:space:]]*#/d;/^[[:space:]]*$/d' "$machine_targets" | sort -u) \
+        <(sed '/^[[:space:]]*#/d;/^[[:space:]]*$/d' "$ai_targets" | sort -u)
+)
+[[ -z "$duplicates" ]] || {
+    print -u2 -- "FAIL: machine and AI chezmoi overlap:"
+    print -u2 -- "$duplicates"
+    exit 1
+}
+
+grep -qx '~/.pi/agent/aliases.bash' "$machine_targets" || {
+    print -u2 -- "FAIL: public repo must own the Pi shell alias"
+    exit 1
+}
+grep -qx '~/.config/chezmoi-ai/chezmoi.toml' "$machine_targets" || {
+    print -u2 -- "FAIL: public repo must own the independent AI chezmoi config"
+    exit 1
+}
+if grep -qx '~/.pi/agent/aliases.bash' "$ai_targets"; then
+    print -u2 -- "FAIL: AI repo must not own the public Pi shell alias"
+    exit 1
+fi
+
+[[ -d "$repo_root/home/private_dot_pi" &&
+    -d "$ai_repo/home/private_dot_pi" ]] || {
+    print -u2 -- "FAIL: both sources must keep the shared ~/.pi parent private"
+    exit 1
+}
+
+chezmoi_bin=${CHEZMOI_BIN:-}
+if [[ -z "$chezmoi_bin" ]] && (( $+commands[chezmoi] )); then
+    chezmoi_bin=${commands[chezmoi]}
+fi
+
+if [[ -n "$chezmoi_bin" ]]; then
+    tmp_dir=$(mktemp -d)
+    trap 'rm -rf -- "$tmp_dir"' EXIT
+    touch "$tmp_dir/empty.toml"
+
+    "$chezmoi_bin" --config "$tmp_dir/empty.toml" \
+        --source "$repo_root" \
+        --override-data '{"profile":"workstation"}' managed \
+        --include=files,symlinks,scripts |
+        sort > "$tmp_dir/machine-managed.txt"
+    "$chezmoi_bin" --config "$tmp_dir/empty.toml" \
+        --source "$ai_repo" managed \
+        --include=files,symlinks,scripts |
+        sort > "$tmp_dir/ai-managed.txt"
+
+    duplicates=$(
+        comm -12 "$tmp_dir/machine-managed.txt" "$tmp_dir/ai-managed.txt"
+    )
+    [[ -z "$duplicates" ]] || {
+        print -u2 -- "FAIL: rendered machine and AI targets overlap:"
+        print -u2 -- "$duplicates"
+        exit 1
+    }
+fi
+
+print -- "PASS: target ownership does not overlap"

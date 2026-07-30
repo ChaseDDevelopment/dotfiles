@@ -1,0 +1,72 @@
+{{- if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian")) -}}
+{{- if or (eq .chezmoi.arch "amd64") (eq .chezmoi.arch "arm64") -}}
+#!/bin/sh
+
+set -eu
+
+PATH="$HOME/.local/bin:$PATH"
+
+if command -v nvim >/dev/null 2>&1; then
+    nvim_version=$(nvim --version 2>/dev/null | sed -n '1s/^NVIM v//p')
+    if [ -n "$nvim_version" ] &&
+        [ "$(printf '%s\n%s\n' '0.12.0' "$nvim_version" | sort -V | head -n 1)" = '0.12.0' ]; then
+        exit 0
+    fi
+fi
+
+case '{{ .chezmoi.arch }}' in
+    amd64)
+        asset=nvim-linux-x86_64.tar.gz
+        root=nvim-linux-x86_64
+        checksum=012bf3fcac5ade43914df3f174668bf64d05e049a4f032a388c027b1ebd78628
+        ;;
+    arm64)
+        asset=nvim-linux-arm64.tar.gz
+        root=nvim-linux-arm64
+        checksum=ceb7e88c6b681f0515d135dcdfad54f5eb4373b25ce6172197cd9a69c758063f
+        ;;
+esac
+
+install_dir="$HOME/.local/opt/nvim-v0.12.4"
+link_path="$HOME/.local/bin/nvim"
+
+if [ -e "$install_dir" ] || [ -L "$install_dir" ]; then
+    [ -x "$install_dir/bin/nvim" ] || {
+        printf '%s\n' "Neovim fallback install exists but is incomplete: $install_dir" >&2
+        exit 1
+    }
+elif [ -e "$link_path" ] && [ ! -L "$link_path" ]; then
+    printf '%s\n' "Neovim fallback refuses to overwrite non-symlink: $link_path" >&2
+    exit 1
+else
+    tmp_dir=$(mktemp -d)
+    trap 'rm -rf -- "$tmp_dir"' 0
+    archive="$tmp_dir/$asset"
+    url="https://github.com/neovim/neovim/releases/download/v0.12.4/$asset"
+
+    curl --fail --location --output "$archive" "$url"
+    printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
+    tar -xzf "$archive" -C "$tmp_dir"
+    [ -x "$tmp_dir/$root/bin/nvim" ] || {
+        printf '%s\n' "Neovim archive is missing $root/bin/nvim" >&2
+        exit 1
+    }
+    mkdir -p "$(dirname "$install_dir")"
+    mv "$tmp_dir/$root" "$install_dir"
+fi
+
+if [ -e "$link_path" ] && [ ! -L "$link_path" ]; then
+    printf '%s\n' "Neovim fallback refuses to overwrite non-symlink: $link_path" >&2
+    exit 1
+fi
+mkdir -p "$(dirname "$link_path")"
+ln -sfn "$install_dir/bin/nvim" "$link_path"
+{{ else -}}
+#!/bin/sh
+
+set -eu
+
+printf '%s\n' 'Unsupported Neovim fallback architecture: {{ .chezmoi.arch }}' >&2
+exit 1
+{{ end -}}
+{{- end }}

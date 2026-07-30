@@ -1,0 +1,230 @@
+#!/bin/sh
+# dot-update: explicit full-system update, run by the user on demand.
+# Chezmoi setup hooks intentionally never upgrade; this command does.
+# tools: brew pacman apt rustup uv bun atuin-update oh-my-posh tpm antidote ya nvim
+#
+# Every step is command-guarded (visible skip when a tool is absent) and
+# failures never abort the run: they are collected and summarized at the
+# end, and the script exits non-zero if any step failed.
+
+set -u
+
+PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+failed=''
+
+skip() {
+    printf 'skip: %s\n' "$*"
+}
+
+run_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        command -v sudo >/dev/null 2>&1 || {
+            printf '%s\n' 'dot-update: sudo is required when not running as root' >&2
+            return 1
+        }
+        sudo "$@"
+    fi
+}
+
+run_step() {
+    printf '\n==> %s\n' "$1"
+    if "step_$1"; then
+        :
+    else
+        printf '%s\n' "dot-update: step failed: $1" >&2
+        failed="$failed $1"
+    fi
+}
+
+step_packages() {
+    case "$(uname -s)" in
+        Darwin)
+            command -v brew >/dev/null 2>&1 || {
+                skip 'brew not found'
+                return 0
+            }
+            brew update || return 1
+            brew upgrade || return 1
+            # ponytail: the chezmoi package hook feeds brew bundle from an
+            # inline heredoc, so no Brewfile normally exists on disk; honor
+            # one only if the user manages it.
+            brewfile=''
+            for candidate in \
+                "${HOMEBREW_BUNDLE_FILE:-}" \
+                "$HOME/.Brewfile" \
+                "${XDG_CONFIG_HOME:-$HOME/.config}/homebrew/Brewfile"; do
+                if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+                    brewfile=$candidate
+                    break
+                fi
+            done
+            if [ -n "$brewfile" ]; then
+                brew bundle --file "$brewfile" || return 1
+            else
+                skip 'no managed Brewfile'
+            fi
+            ;;
+        Linux)
+            if command -v pacman >/dev/null 2>&1; then
+                run_root pacman -Syu || return 1
+            elif command -v apt-get >/dev/null 2>&1; then
+                if ! dpkg_audit=$(run_root dpkg --audit 2>&1); then
+                    printf '%s\n' "$dpkg_audit" >&2
+                    printf '%s\n' 'Upgrade blocked: manually run sudo dpkg --configure -a, then retry.' >&2
+                    return 1
+                fi
+                if [ -n "$dpkg_audit" ]; then
+                    printf '%s\n' "$dpkg_audit" >&2
+                    printf '%s\n' 'Upgrade blocked: manually run sudo dpkg --configure -a, then retry.' >&2
+                    return 1
+                fi
+                run_root apt-get update || return 1
+                run_root apt-get full-upgrade -y -o DPkg::Lock::Timeout=60 || return 1
+            else
+                skip 'no supported package manager found'
+            fi
+            ;;
+        *)
+            skip "unsupported platform: $(uname -s)"
+            ;;
+    esac
+}
+
+step_rustup() {
+    command -v rustup >/dev/null 2>&1 || {
+        skip 'rustup not found'
+        return 0
+    }
+    rustup update
+}
+
+step_uv_tools() {
+    command -v uv >/dev/null 2>&1 || {
+        skip 'uv not found'
+        return 0
+    }
+    if [ "$(uname -s)" = Linux ] && [ -d /opt/uv-tools ]; then
+        # Standalone install (astral script, APT hosts): uv owns its own
+        # upgrade; brew/pacman installs are covered by the package step.
+        if [ "$(command -v uv)" = /usr/local/bin/uv ]; then
+            run_root uv self update
+        fi
+        # System-wide uv tools (/opt + /usr/local/bin) are root-owned.
+        run_root env \
+            UV_TOOL_DIR=/opt/uv-tools \
+            UV_TOOL_BIN_DIR=/usr/local/bin \
+            uv tool upgrade --all
+    else
+        uv tool upgrade --all
+    fi
+}
+
+step_bun() {
+    command -v bun >/dev/null 2>&1 || {
+        skip 'bun not found'
+        return 0
+    }
+    bun upgrade
+}
+
+step_atuin() {
+    # The atuin install script ships a cargo-dist self-updater; when atuin
+    # came from a native package manager, that updater does not exist and
+    # the package step already covers it.
+    command -v atuin-update >/dev/null 2>&1 || {
+        skip 'atuin-update not found (package-managed atuin)'
+        return 0
+    }
+    atuin-update
+}
+
+step_oh_my_posh() {
+    command -v oh-my-posh >/dev/null 2>&1 || {
+        skip 'oh-my-posh not found'
+        return 0
+    }
+    case "$(command -v oh-my-posh)" in
+        "$HOME"/*)
+            oh-my-posh upgrade
+            ;;
+        *)
+            skip 'package-managed oh-my-posh (covered by the package step)'
+            ;;
+    esac
+}
+
+step_tmux_plugins() {
+    tpm_update="$HOME/.tmux/plugins/tpm/bin/update_plugins"
+    [ -x "$tpm_update" ] || {
+        skip 'tpm not installed'
+        return 0
+    }
+    "$tpm_update" all
+}
+
+step_zsh_plugins() {
+    zdotdir="${ZDOTDIR:-$HOME/.config/zsh}"
+    antidote_script=''
+    for candidate in \
+        /opt/homebrew/opt/antidote/share/antidote/antidote.zsh \
+        /usr/local/opt/antidote/share/antidote/antidote.zsh \
+        /home/linuxbrew/.linuxbrew/opt/antidote/share/antidote/antidote.zsh \
+        "$zdotdir/.antidote/antidote.zsh"; do
+        if [ -f "$candidate" ]; then
+            antidote_script=$candidate
+            break
+        fi
+    done
+    [ -n "$antidote_script" ] || {
+        skip 'antidote not installed'
+        return 0
+    }
+    ANTIDOTE_SCRIPT="$antidote_script" zsh -c '
+        source "$ANTIDOTE_SCRIPT"
+        antidote update
+    '
+}
+
+step_yazi_packages() {
+    command -v ya >/dev/null 2>&1 || {
+        skip 'ya not found'
+        return 0
+    }
+    ya pkg upgrade
+}
+
+step_neovim() {
+    command -v nvim >/dev/null 2>&1 || {
+        skip 'nvim not found'
+        return 0
+    }
+    [ -f "$HOME/.config/nvim/init.lua" ] || {
+        skip 'managed Neovim config not found'
+        return 0
+    }
+    nvim --headless -u "$HOME/.config/nvim/init.lua" \
+        -c "lua require('core.pack').bootstrap()" \
+        -c qa
+}
+
+run_step packages
+run_step rustup
+run_step uv_tools
+run_step bun
+run_step atuin
+run_step oh_my_posh
+run_step tmux_plugins
+run_step zsh_plugins
+run_step yazi_packages
+run_step neovim
+
+printf '\n%s\n' "Config drift is separate: review with 'chezmoi diff' (and 'chezmoi-ai diff'), then apply."
+
+if [ -n "$failed" ]; then
+    printf '%s\n' "dot-update finished with failed steps:$failed" >&2
+    exit 1
+fi
+printf '%s\n' 'dot-update finished: all steps succeeded or were skipped.'

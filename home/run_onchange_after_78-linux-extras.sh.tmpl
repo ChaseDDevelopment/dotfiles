@@ -1,0 +1,21 @@
+{{- if eq .chezmoi.os "linux" -}}
+#!/bin/sh
+# tools: oh-my-posh
+# bun is not owned here: official Arch extra ships it, and APT hosts get it
+# from the apt extras script.
+
+set -eu
+
+PATH="$HOME/.local/bin:$PATH"
+
+if command -v oh-my-posh >/dev/null 2>&1; then
+    printf '%s\n' 'Linux extras: oh-my-posh already installed; skipping.'
+else
+    mkdir -p "$HOME/.local/bin"
+    installer=$(mktemp)
+    trap 'rm -f -- "$installer"' 0
+    curl --fail --location --silent --show-error \
+        --output "$installer" https://ohmyposh.dev/install.sh
+    bash "$installer" -d "$HOME/.local/bin"
+fi
+{{- end }}

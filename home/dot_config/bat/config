@@ -1,0 +1,11 @@
+# =============================================================================
+# Bat Configuration
+# =============================================================================
+# Theme ships in ~/.config/bat/themes/ and is compiled into the cache after
+# chezmoi applies it. Delta reads from the same bat cache, so both honor this.
+# =============================================================================
+
+--theme="tokyonight_night"
+--style="numbers,changes,header"
+--italic-text="always"
+--tabs="4"

@@ -1,0 +1,14 @@
+sourceDir = "{{ .chezmoi.homeDir }}/Documents/GitHub/dotfiles"
+
+{{- $profileDefault := "dev" }}
+{{- if eq .chezmoi.os "darwin" }}
+{{- $profileDefault = "workstation" }}
+{{- else if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "debian") }}
+{{- $profileDefault = "server" }}
+{{- end }}
+[data]
+profile = {{ promptChoiceOnce . "profile" "Machine profile" (list "workstation" "dev" "server") $profileDefault | quote }}
+
+[git]
+autoCommit = false
+autoPush = false

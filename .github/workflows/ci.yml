@@ -2,28 +2,26 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
-  check:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: installer/go.mod
+      - name: Install zsh and shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh shellcheck
 
-      - name: Vet
-        working-directory: installer
-        run: go vet ./...
+      - name: Install chezmoi
+        run: |
+          sh -c "$(curl -fsLS get.chezmoi.io)" -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Test
-        working-directory: installer
-        run: go test -race ./...
+      - name: Shellcheck bootstrap
+        run: shellcheck bootstrap.sh
 
-      - name: Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          working-directory: installer
+      - name: Run contract tests
+        run: for test_file in tests/*.zsh; do zsh "$test_file" || exit 1; done

@@ -1,0 +1,31 @@
+#!/bin/sh
+# tmux config hash: {{ include "dot_config/tmux/tmux.conf" | sha256sum }}
+
+set -eu
+
+tpm_dir="$HOME/.tmux/plugins/tpm"
+if [ ! -d "$tpm_dir/.git" ]; then
+    git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
+fi
+
+"$tpm_dir/bin/install_plugins"
+"$tpm_dir/bin/update_plugins" all
+
+if tmux list-sessions >/dev/null 2>&1; then
+    tmux source-file "$HOME/.config/tmux/tmux.conf"
+fi
+
+{{ if eq .chezmoi.os "darwin" -}}
+# tmux boot hash: {{ include "dot_config/tmux/scripts/executable_tmux-boot" | sha256sum }}
+# launch agent hash: {{ include "Library/LaunchAgents/com.orion.tmux-server.plist.tmpl" | sha256sum }}
+service="gui/$(id -u)/com.orion.tmux-server"
+plist="$HOME/Library/LaunchAgents/com.orion.tmux-server.plist"
+if launchctl print "$service" >/dev/null 2>&1; then
+    launchctl bootout "$service"
+fi
+if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
+    launchctl bootstrap "gui/$(id -u)" "$plist"
+else
+    printf '%s\n' 'tmux launch agent: no active GUI session; skipping launchd bootstrap'
+fi
+{{ end -}}

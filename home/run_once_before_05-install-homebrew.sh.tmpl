@@ -1,0 +1,16 @@
+{{ if eq .chezmoi.os "darwin" -}}
+#!/bin/sh
+
+set -eu
+
+PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+if ! command -v brew >/dev/null 2>&1; then
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+fi
+
+command -v brew >/dev/null 2>&1 || {
+    printf '%s\n' 'Homebrew installation did not produce a usable brew command' >&2
+    exit 1
+}
+{{ end -}}

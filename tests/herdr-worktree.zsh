@@ -5,7 +5,7 @@ setopt no_unset pipe_fail
 zmodload zsh/stat
 
 repo_root=${0:A:h:h}
-helper="$repo_root/configs/herdr/scripts/herdr-worktree-create"
+helper="$repo_root/home/dot_local/bin/executable_herdr-worktree-create"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 

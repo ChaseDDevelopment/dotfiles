@@ -1,0 +1,59 @@
+[core]
+{{ if not (and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian"))) }}    pager = delta
+{{ end }}    excludesFile = ~/.config/git/ignore
+
+[push]
+    default = current
+    autoSetupRemote = true
+
+[fetch]
+    prune = true
+
+[pull]
+    rebase = true
+    autostash = true
+
+[rebase]
+    autoStash = true
+    updateRefs = true
+
+[commit]
+    verbose = true
+
+[rerere]
+    enabled = true
+
+[diff]
+    algorithm = histogram
+    colorMoved = default
+    colorMovedWS = allow-indentation-change
+
+{{ if not (and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian"))) }}[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+    navigate = true
+    dark = true
+    line-numbers = true
+    hyperlinks = true
+    syntax-theme = tokyonight_night
+
+{{ end }}[alias]
+    unstage = restore --staged
+    amend = commit --amend --no-edit
+    graph = log --graph --all --decorate --oneline
+    wip = commit -am "WIP"
+    unwip = reset HEAD~1 --mixed
+    undo = reset --soft HEAD~1
+    recent = branch --sort=-committerdate --format='%(committerdate:relative)%09%(refname:short)'
+    today = log --since=midnight --oneline
+    lg = log --graph --pretty=format:'%C(auto)%h%d %s %C(dim)%an %ar'
+
+[branch]
+    sort = -committerdate
+
+[merge]
+    conflictstyle = zdiff3
+[user]
+	email = Chase@ChaseDDevelopment.tech
+	name = ChaseDDevelopment

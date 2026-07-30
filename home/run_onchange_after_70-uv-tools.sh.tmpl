@@ -1,0 +1,83 @@
+{{- if eq .chezmoi.os "darwin" -}}
+#!/bin/sh
+# tools: systemd-language-server nginx-language-server basedpyright ruff sqlfluff
+
+set -eu
+
+PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+command -v uv >/dev/null 2>&1 || {
+    printf '%s\n' 'uv tools: uv is missing; run the native package install first (brew installs uv)' >&2
+    exit 1
+}
+
+install_tool() {
+    if command -v "$2" >/dev/null 2>&1; then
+        printf '%s\n' "uv tools: $2 already installed; skipping"
+        return 0
+    fi
+    uv tool install "$1"
+}
+
+install_tool systemd-language-server systemd-language-server
+install_tool nginx-language-server nginx-language-server
+install_tool basedpyright basedpyright-langserver
+install_tool ruff ruff
+install_tool sqlfluff sqlfluff
+{{- else if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "arch") (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian")) -}}
+#!/bin/sh
+# tools: systemd-language-server nginx-language-server basedpyright ruff sqlfluff
+
+set -eu
+
+PATH="/usr/local/bin:$PATH"
+
+if [ "$(id -u)" -eq 0 ]; then
+    run_root() {
+        "$@"
+    }
+else
+    command -v sudo >/dev/null 2>&1 || {
+        printf '%s\n' 'uv tools: sudo is required when not running as root' >&2
+        exit 1
+    }
+    run_root() {
+        sudo "$@"
+    }
+fi
+
+{{ if eq .chezmoi.osRelease.id "arch" -}}
+command -v uv >/dev/null 2>&1 || {
+    printf '%s\n' 'uv tools: uv is missing; run the native package install first (pacman installs uv)' >&2
+    exit 1
+}
+{{ else -}}
+if ! command -v uv >/dev/null 2>&1; then
+    tmp_script=$(mktemp)
+    trap 'rm -f -- "$tmp_script"' 0
+    curl --fail --location --silent --show-error \
+        --output "$tmp_script" https://astral.sh/uv/install.sh
+    run_root env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 \
+        sh "$tmp_script"
+fi
+{{ end -}}
+
+install_tool() {
+    if command -v "$2" >/dev/null 2>&1; then
+        printf '%s\n' "uv tools: $2 already installed; skipping"
+        return 0
+    fi
+    run_root env UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
+        uv tool install "$1"
+}
+
+install_tool systemd-language-server systemd-language-server
+install_tool nginx-language-server nginx-language-server
+{{ if ne .profile "server" -}}
+install_tool basedpyright basedpyright-langserver
+install_tool ruff ruff
+install_tool sqlfluff sqlfluff
+{{ else -}}
+printf '%s\n' 'uv tools: server profile; skipping basedpyright, ruff, sqlfluff'
+{{ end -}}
+{{- end }}

@@ -1,0 +1,86 @@
+{{- if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian")) -}}
+{{- if or (eq .chezmoi.arch "amd64") (eq .chezmoi.arch "arm64") -}}
+#!/bin/sh
+# tools: node npm npx
+
+set -eu
+
+if command -v node >/dev/null 2>&1; then
+    printf '%s\n' 'Node.js install: node already present, skipping.'
+    exit 0
+fi
+
+if [ "$(id -u)" -eq 0 ]; then
+    run_root() {
+        "$@"
+    }
+else
+    command -v sudo >/dev/null 2>&1 || {
+        printf '%s\n' 'Node.js install: sudo is required when not running as root' >&2
+        exit 1
+    }
+    run_root() {
+        sudo "$@"
+    }
+fi
+
+case '{{ .chezmoi.arch }}' in
+    amd64) node_arch=linux-x64 ;;
+    arm64) node_arch=linux-arm64 ;;
+esac
+
+node_version=$(curl --fail --silent --show-error --location https://nodejs.org/dist/index.json |
+    tr '}' '\n' |
+    sed -n 's/.*"version":"\(v[0-9.]*\)".*"lts":"[^"]*".*/\1/p' |
+    head -n 1)
+[ -n "$node_version" ] || {
+    printf '%s\n' 'Node.js install: could not determine the latest LTS version' >&2
+    exit 1
+}
+
+tarball="node-$node_version-$node_arch.tar.gz"
+dist_url="https://nodejs.org/dist/$node_version"
+tmp_dir=$(mktemp -d)
+trap 'rm -rf -- "$tmp_dir"' 0
+
+curl --fail --location --output "$tmp_dir/$tarball" "$dist_url/$tarball"
+curl --fail --location --output "$tmp_dir/SHASUMS256.txt" "$dist_url/SHASUMS256.txt"
+checksum_line=$(grep " $tarball\$" "$tmp_dir/SHASUMS256.txt") || {
+    printf '%s\n' "Node.js install: no checksum for $tarball in SHASUMS256.txt" >&2
+    exit 1
+}
+(cd "$tmp_dir" && printf '%s\n' "$checksum_line" | sha256sum -c -)
+
+tar -xzf "$tmp_dir/$tarball" -C "$tmp_dir"
+[ -x "$tmp_dir/node-$node_version-$node_arch/bin/node" ] || {
+    printf '%s\n' "Node.js archive is missing node-$node_version-$node_arch/bin/node" >&2
+    exit 1
+}
+
+install_dir="/opt/node-$node_version"
+if [ -e "$install_dir" ] || [ -L "$install_dir" ]; then
+    [ -x "$install_dir/bin/node" ] || {
+        printf '%s\n' "Node.js install exists but is incomplete: $install_dir" >&2
+        exit 1
+    }
+else
+    run_root mkdir -p /opt
+    run_root mv "$tmp_dir/node-$node_version-$node_arch" "$install_dir"
+fi
+
+for tool in node npm npx; do
+    link_path="/usr/local/bin/$tool"
+    if [ -e "$link_path" ] && [ ! -L "$link_path" ]; then
+        printf '%s\n' "Node.js install refuses to overwrite non-symlink: $link_path" >&2
+        exit 1
+    fi
+    run_root ln -sfn "$install_dir/bin/$tool" "$link_path"
+done
+{{ else -}}
+#!/bin/sh
+
+set -eu
+
+printf '%s\n' 'Node.js install: unsupported architecture {{ .chezmoi.arch }}, skipping.'
+{{ end -}}
+{{- end }}

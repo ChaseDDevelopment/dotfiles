@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -eu
+
+config_file="${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi-ai/chezmoi.toml"
+source_dir="$HOME/Documents/GitHub/ai-chezmoi"
+
+exec chezmoi --config "$config_file" --source "$source_dir" "$@"

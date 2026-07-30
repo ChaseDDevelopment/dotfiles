@@ -1,542 +1,164 @@
-# Shell Environment Setup - "One Stop Shop"
+# Dotfiles
 
-> Cross-platform shell environment with TokyoNight theme and modern CLI tools
+Public, cross-platform machine configuration managed by
+[chezmoi](https://www.chezmoi.io/).
 
-![Zsh](https://img.shields.io/badge/Zsh-Shell-89b4fa?style=for-the-badge&logo=gnu-bash)
-![Tmux](https://img.shields.io/badge/Tmux-Terminal-a6e3a1?style=for-the-badge)
-![Neovim](https://img.shields.io/badge/Neovim-vim.pack-cba6f7?style=for-the-badge&logo=neovim)
-![Oh-My-Posh](https://img.shields.io/badge/Oh--My--Posh-Prompt-fab387?style=for-the-badge)
-![Yazi](https://img.shields.io/badge/Yazi-File_Manager-f5c2e7?style=for-the-badge)
-![Ghostty](https://img.shields.io/badge/Ghostty-Terminal-94e2d5?style=for-the-badge)
-![Herdr](https://img.shields.io/badge/Herdr-Command_Center-7aa2f7?style=for-the-badge)
-![TokyoNight](https://img.shields.io/badge/Theme-TokyoNight-1a1b26?style=for-the-badge)
+This repository contains machine configuration, package intent, and post-apply
+setup hooks only. Credentials, private keys, authentication state, histories,
+sessions, and caches do not belong here.
 
-## Philosophy
+## Layout
 
-- **Learn by configuring** - Every config is hand-written, not generated
-- **TokyoNight everywhere** - Consistent theming across all tools
-- **Modern replacements** - eza > ls, bat > cat, ripgrep > grep, fd > find, zoxide > cd
-- **Cross-platform** - macOS (Intel + Apple Silicon) and Linux (Ubuntu, Arch, RHEL, Fedora)
-- **Interactive TUI installer** - Go + Bubble Tea with dry-run, backup/restore, component selection
+- `.chezmoiroot` selects `home/` as the chezmoi source root.
+- `home/` contains machine configuration and chezmoi scripts.
+- `home/.chezmoidata/packages.yaml` lists native packages for macOS, Arch,
+  Ubuntu, Debian, and Proxmox.
+- `bootstrap.sh` installs chezmoi when necessary and initializes this existing
+  source without applying it.
+- `tests/` contains the repository contract checks.
 
-## Features
+AI tool configuration is managed separately in the private `ai-chezmoi`
+repository. Its configuration and state are independent; the current disjoint
+target contract is enforced by `tests/target-overlap-test.zsh`.
 
-This setup provides a complete, modern shell environment with:
+## Profiles and packages
 
-- **Zsh Shell** - Feature-rich shell with Antidote plugin manager (16 plugins)
-- **Tmux** - Local `Main` command center with named machine windows and TokyoNight theme
-- **Herdr** - Per-machine project workspaces for local and remote coding-agent work
-- **Neovim** - Modern editor with vim.pack built-in package manager (33 plugins, 14 LSP servers)
-- **Oh-My-Posh** - Fast, customizable prompt with Git integration
-- **Yazi** - Terminal file manager with image preview and TokyoNight theme (8 plugins)
-- **Modern CLI Tools** - bat, ripgrep, fd, eza, fzf, zoxide, delta, lazygit, and more
-- **Development Tools** - nvm + Node.js, uv (Python), Bun, Rust, .NET SDK
-- **Shell Enhancements** - Atuin for shell history, fzf-tab for completions, direnv for per-project env
-- **TokyoNight** - Beautiful, consistent theming across all tools
+Chezmoi asks once for a machine profile: macOS defaults to `workstation`, Arch
+and Ubuntu to `dev`, and Debian/Proxmox to `server`. Override the profile when
+needed with chezmoi data. On APT hosts, `server` installs the base list and
+omits Ghostty and Yazi configuration; `dev` and `workstation` install the base
+and dev lists. macOS and Arch retain their full native package lists even when
+the profile is overridden.
 
-## Quick Installation
+Native package managers are Homebrew Bundle (macOS),
+`pacman -S --needed --noconfirm` (Arch), and APT (Ubuntu/Debian/Proxmox). Arch
+may upgrade outdated listed packages; Homebrew Bundle and APT do not. Before
+APT runs, it audits `dpkg`; any pending configuration stops with manual
+`sudo dpkg --configure -a` guidance. It never auto-repairs, upgrades, removes,
+retries, or changes Proxmox repositories. Root runs it directly; non-root
+requires `sudo`.
 
-### One-Liner Installation
+Ubuntu and Debian provide `bat`/`fd` compatibility shims and disable Git Delta,
+which is not in their native package list. If Neovim is missing or below 0.12,
+a fallback downloads only checksum-verified upstream Neovim v0.12.4 for amd64
+or arm64. Yazi's optional package hook simply skips when Yazi is absent; it
+does not recreate an upstream installer.
 
-```bash
-git clone https://github.com/chaseddevelopment/dotfiles ~/dotfiles && ~/dotfiles/install.sh
+## Bootstrap
+
+The source configuration expects this checkout at
+`~/Documents/GitHub/dotfiles`.
+
+```sh
+git clone https://github.com/ChaseDDevelopment/dotfiles.git \
+  ~/Documents/GitHub/dotfiles
+cd ~/Documents/GitHub/dotfiles
+./bootstrap.sh
 ```
 
-### Manual Installation
+Bootstrap unconditionally requires `curl`; network access is needed only when
+it must install chezmoi. It initializes the source but never applies it. Review
+both views before changing the home directory:
 
-```bash
-git clone https://github.com/chaseddevelopment/dotfiles ~/dotfiles
-cd ~/dotfiles
-chmod +x install.sh
-./install.sh
+```sh
+chezmoi diff
+chezmoi apply --dry-run --verbose
 ```
 
-## What Gets Installed
+Apply only after reviewing the output:
 
-### Zsh Shell Configuration
-- **Antidote Plugin Manager** - Fast, lightweight plugin management
-- **zsh-autosuggestions** - Fish-like autosuggestions
-- **zsh-syntax-highlighting** - Command syntax highlighting
-- **fzf-tab** - Tab completions with fzf
-- **zoxide Integration** - Smart directory navigation
-- **Custom Aliases** - Modern tool replacements (eza, bat, rg, fd)
-- **Modular Configuration** - Organized in `~/.config/zsh/`
-
-### Tmux Main + Herdr Command Center
-- **First-surface startup** - A fresh Ghostty process starts or attaches local tmux session `Main`
-- **Named machine windows** - New sessions use the friendly local hostname; `hw hydra` and `hw devbox` use `Mac-Mini` and `DevBox`
-- **Project workspaces** - Herdr manages projects, tabs, panes, agents, and native worktrees inside each machine window
-- **Separate key layers** - `Ctrl+Space` controls outer tmux; `Ctrl+B` controls inner Herdr
-- **Native top bar** - Tmux owns the TokyoNight machine/window bar without per-refresh subprocesses
-- **Tmux tooling** - TPM, tmux-resurrect, tmux-continuum, tmux-sensible, vim-tmux-navigator, tmux-yank, Extrakto, and Floax
-
-### Neovim Setup
-- **vim.pack** - Neovim's built-in plugin manager (0.12+)
-- **30+ plugins** - TokyoNight, Snacks (picker/dashboard), blink.cmp, treesitter, LSP, Mason, and more
-- **Latest Version Installation**:
-  - **macOS**: Uses `brew install --HEAD neovim` for latest features
-  - **Arch Linux**: Installs `neovim-git` from AUR for version 0.12+
-  - **Ubuntu/Debian**: Installs from GitHub releases for latest version
-  - **Other platforms**: Uses system package manager with upgrade recommendations
-- **LSP Integration** - Language servers for Python, TypeScript, Rust, Lua, C#, Bash, Docker, and more
-- **Tree-sitter** - Syntax highlighting and code navigation for 30+ languages
-
-### Oh-My-Posh Prompt
-- **TokyoNight Theme** - Beautiful, informative prompt (zen-omp layout)
-- **Git Integration** - Branch, status, and commit information
-- **Language Detection** - Automatic programming language indicators
-- **Performance Optimized** - Fast prompt rendering
-
-### Yazi File Manager
-- **Terminal file manager** with image preview support
-- **TokyoNight theme** - Consistent look
-- **Plugins** - lazygit integration, git status, smart-enter, jump-to-char
-- **Tmux passthrough** - Image previews work inside tmux
-
-### Modern CLI Tools
-
-| Modern Tool | Replaces | What It Does |
-|-------------|----------|--------------|
-| `eza` | `ls` | File listing with icons, colors, git status |
-| `bat` | `cat` | Syntax highlighting, line numbers, git diff |
-| `ripgrep` (`rg`) | `grep` | Lightning-fast recursive search |
-| `fd` | `find` | User-friendly file finder |
-| `zoxide` | `cd` | Smart directory navigation (learns your habits) |
-| `fzf` | - | Fuzzy finder for files, history, everything |
-| `delta` | `diff` | Syntax-highlighted git diffs with side-by-side view |
-| `lazygit` | - | TUI git client for staging, branching, conflicts |
-| `xh` | `curl` | Modern HTTP client with JSON highlighting |
-| `tailspin` (`tspin`) | `tail` | Pretty log viewer with auto-highlighting |
-| `jq` / `yq` | - | JSON and YAML processing on the command line |
-
-### Development Tools
-- **nvm** - Node.js version manager (with LTS installed)
-- **uv** - Fast Python package installer and environment manager
-- **Bun** - Fast JavaScript runtime
-- **Rust** - Systems programming language and cargo package manager
-- **ruff** - Fast Python linter and formatter
-- **.NET SDK** - For F#/C# LSP support
-- **tree-sitter CLI** - Parser generator for syntax highlighting
-
-### Ghostty Terminal (Desktop Only)
-- **TokyoNight Theme** - Consistent with all other tools
-- **JetBrainsMono Nerd Font** - Ligatures and icons
-- **Semi-transparent Background** - With wallpaper support
-- **SSH Integration** - Warp-like prompt navigation
-- **Main Startup** - Only the first surface starts or attaches tmux `Main`; later tabs remain plain shells
-
-### Shell Enhancements
-- **Atuin** - Magical shell history with sync and search
-- **direnv** - Auto-load environment variables per project directory
-- **Git Config** - Delta pager, TokyoNight-themed diffs
-
-## System Requirements
-
-### Supported Operating Systems
-- **macOS** (Intel and Apple Silicon)
-- **Ubuntu/Debian** (18.04+)
-- **RHEL/CentOS/Fedora** (7+)
-- **Arch Linux**
-- **Other Linux distributions** (with manual package installation)
-
-### Prerequisites
-- **Git** (version 2.0+)
-- **curl** or **wget**
-- **Internet connection** for downloading the installer and packages
-
-### Optional but Recommended
-- **A Nerd Font** for proper icon display ([Download here](https://www.nerdfonts.com/))
-- **Terminal with true color support** (most modern terminals)
-
-## How It Works
-
-`./install.sh` is a bootstrap script that:
-1. Downloads the `dotsetup` binary from GitHub Releases (auto-detects OS and architecture)
-2. Checks for updates on subsequent runs
-3. Launches the interactive TUI installer
-
-All options (dry-run, component selection, backup/restore, update) are available
-in the TUI — no CLI flags needed.
-
-### Build from Source
-
-If you prefer to build the installer yourself (requires Go 1.22+):
-```bash
-cd installer && go build -o dotsetup . && cd .. && ./install.sh
+```sh
+chezmoi apply
 ```
 
-## Key Bindings
+Package installation uses Homebrew Bundle on macOS,
+`pacman -S --needed --noconfirm` on Arch, and APT on Ubuntu, Debian, and
+Proxmox. Package and post-apply setup hooks are `run_onchange` scripts: they
+run when their rendered script/input changes, not for package drift or every
+apply. Bootstrap never applies changes.
 
-### Zsh Shell
-| Key Combination | Action |
-|-----------------|--------|
-| `Ctrl+T` | File search with FZF |
-| `Ctrl+R` | History search with Atuin |
-| `Alt+C` | Directory search with FZF |
-| `Tab` | Autocompletion with fzf-tab |
-| `->` | Accept autosuggestion |
-| `Ctrl+X Ctrl+E` | Edit command in $EDITOR |
+## Daily use
 
-### Tmux Main and Herdr
+Edit the source under `home/`, then review the rendered change:
 
-The first fresh Ghostty surface runs `tmux-main`, which starts or attaches the
-local tmux session `Main`. A newly created session names its local Herdr window
-`Macbook`, `Mac-Mini`, or `DevBox` from the machine hostname and returns to a
-login shell when Herdr exits. Later, `Cmd+T` opens a plain shell.
-
-```text
-Ghostty -> local tmux Main
-  Macbook -> herdr
-  Mac-Mini -> herdr --remote hydra
-  DevBox -> herdr --remote devbox
+```sh
+chezmoi diff
+chezmoi apply --dry-run --verbose
 ```
 
-Local tmux owns the outer client windows and native top bar. Each machine's
-Herdr server owns its inner workspaces, tabs, panes, agents, sessions, and
-runtime state.
+For the private AI source:
 
-| Command | Action |
-|---------|--------|
-| `tw NAME` | Select or create a named outer tmux shell window at the current directory |
-| `hw HOST` | Focus or safely start that host's remote Herdr client (`hydra` → `Mac-Mini`, `devbox` → `DevBox`) |
-| `herdr` | Create or attach the current machine's local Herdr session |
-| `hr hydra` | Run the direct remote Herdr client from a plain shell |
-
-`hw hydra` and `hw devbox` are idempotent: they focus their friendly named
-windows, leave an already-running remote client untouched, and launch Herdr
-only when a restored pane is safely idle. If the target is absent, `hw` reuses
-a safely idle invoking plain tmux window. It never kills or clobbers a busy pane.
-
-Inside tmux, `tw` and `hw` use the current session. From a local Herdr pane,
-whose server-owned shell does not inherit `$TMUX`, they target local session
-`Main`. `hw` keeps the remote client out of the current Herdr pane, and nested
-Herdr remains disabled.
-
-Tmux restart persistence comes from tmux-resurrect and tmux-continuum. The
-default autosave interval is 15 minutes; create the first snapshot, or save
-manually later, with `Ctrl+Space` then `Ctrl+S`. Restored processes include
-`herdr` and `ssh` (so `ssht` panes come back — `ssht` is a shell function that
-runs the real `ssh` binary). On macOS, a headless LaunchAgent
-(`com.orion.tmux-server`) runs `tmux-boot` at login so the server and continuum
-restore warm before Ghostty attaches. Stock continuum `@continuum-boot` is
-intentionally off: it only opens Terminal/iTerm/kitty/alacritty, not Ghostty.
-When Ghostty's `tmux-main` starts or attaches `Main`, the machine-local snapshot
-has usually already restored; `tmux-main` creates only the local window when
-nothing is saved, and the MacBook's remote windows come from the snapshot.
-
-Sleep and network changes do not transparently reconnect Herdr. The remote
-client may survive a brief interruption; otherwise it exits to a shell, and a
-later `hw hydra` or `hw devbox` focuses or relaunches it. Remote Herdr state
-survives only while its host remains available.
-
-| Key Combination | Owner | Action |
-|-----------------|-------|--------|
-| `Ctrl+Space` | Outer tmux | Prefix key |
-| `Alt+Shift+H` / `Alt+Shift+L` | Outer tmux | Previous / next machine window |
-| `Tmux Prefix+C` | Outer tmux | New window |
-| `Tmux Prefix+\|` / `Tmux Prefix+-` | Outer tmux | Horizontal / vertical split |
-| `Ctrl+B` | Inner Herdr | Prefix key |
-| `Herdr Prefix+Q` or `Herdr Prefix+D` | Inner Herdr | Detach |
-| `Herdr Prefix+P` / `Herdr Prefix+N` | Inner Herdr | Previous / next project tab |
-| `Herdr Prefix+Shift+G` | Inner Herdr | Create a worktree with approved local files |
-| `Herdr Prefix+Shift+O` | Inner Herdr | Open an existing worktree |
-| `Herdr Prefix+Alt+D` | Inner Herdr | Start Herdr's confirmed native worktree-removal flow |
-
-Herdr retains its compatible native bindings for creating and selecting tabs,
-pane navigation, zoom, copy/help, splits, resize mode, and pane-swap mode. In
-the worktree section below, `Prefix` means Herdr's `Ctrl+B` prefix.
-
-#### Worktrees
-
-From a Git workspace, `Prefix+Shift+G` fetches `origin` when present, prompts
-for a branch and base ref, and creates a grouped checkout under
-`~/.herdr/worktrees`. It copies these one time from the requesting worktree:
-
-- every untracked, non-ignored file;
-- root `.env`, `.env.*`, and `.envrc` files; and
-- root-anchored Git glob pathspecs listed in an optional tracked
-  `.worktree-copy` manifest.
-
-Put one repository-relative path or Git glob pathspec on each `.worktree-copy`
-line; blank lines and `#` comments are ignored. Entries are anchored at the
-repository root, ordinary `*` does not cross `/`, and an explicit ignored
-directory entry recurses. Matching never traverses symlink directories; a
-matching symlink object is preserved without following its target. The helper
-also rejects paths outside the repository, never overwrites checkout files, and
-does not copy ignored dependency/build trees unless they are explicitly
-allowlisted. Regular files preserve their source modes, while the target root
-and copy-created parent directories remove group/other access so the copied
-worktree stays private. This is bootstrap copying, not synchronization, and
-modified tracked files are not copied from the source checkout.
-
-Removal is manual through Herdr's native action and safe by default. Dirty or
-untracked worktrees are not silently discarded; if safe removal refuses one,
-Herdr can offer force only behind a second explicit confirmation. Dotfiles
-never schedules or triggers automatic or unconfirmed force. Closing a
-workspace does not delete its checkout, branches are retained until you
-explicitly delete them, and there is no timed cleanup or automatic branch
-deletion.
-
-### Additional Tmux and Remote Paths
-
-Tmux `Main` is the normal local outer layer, while these commands remain for
-additional sessions and deliberately non-Herdr remote access. When a smaller
-recovery client attaches, tmux 2.9+ keeps the largest attached client's window
-size; older tmux versions skip that unsupported setting.
-
-| Command | Action |
-|---------|--------|
-| `t` | Create or attach a session named after the Git worktree/current directory |
-| `t NAME` | Create or attach an explicitly named local session |
-| `ts` | Select an existing local session |
-| `ssh HOST` | Open a plain remote shell without Herdr or remote tmux |
-| `ssht hydra` | Attach or create Hydra's remote tmux session `Main` without Herdr |
-| `ssht -s NAME hydra` | Attach or create a named remote tmux session without Herdr |
-
-From a phone or generic SSH client, use `ssh hydra`, then `herdr` to reach the
-same host-owned Herdr session.
-
-### Neovim
-| Key Combination | Action |
-|-----------------|--------|
-| `<Space>` | Leader key |
-| `<Leader>e` | File explorer (Snacks) |
-| `<Leader>ff` | Find files |
-| `<Leader>fg` | Live grep |
-| `<Leader>fb` | Buffers |
-| `<Leader>fr` | Recent files |
-| `<Leader>o` | Code outline (Aerial) |
-| `<Leader>ha` | Harpoon add file |
-| `<Leader>hh` | Harpoon menu |
-| `<Leader>gd` | Diff view |
-| `<Leader>ac` | Toggle Claude Code |
-| `<Leader>xx` | Diagnostics (Trouble) |
-| `:lua vim.pack.update()` | Update all plugins |
-
-### Yazi
-| Key Combination | Action |
-|-----------------|--------|
-| `g i` | Open lazygit |
-| `Enter` | Smart enter (open file or dir) |
-| `f` | Jump to char |
-
-## Customization
-
-### Adding Zsh Aliases
-Edit `~/.config/zsh/aliases/general.zsh`:
-```zsh
-alias myalias="my command"
+```sh
+chezmoi-ai diff
+chezmoi-ai apply --dry-run --verbose
 ```
-
-### Adding Zsh Functions
-Create a file in `~/.config/zsh/functions/`:
-```zsh
-my_function() {
-    # Your function code here
-}
-```
-
-### Adding Per-Project Environment Variables (direnv)
-Create a `.envrc` file in any project directory:
-```bash
-# direnv will auto-load this when you cd into the directory
-export MY_VAR="value"
-layout python    # auto-activate Python venv
-```
-Then run `direnv allow` to trust the file.
-
-### Installing Additional Tmux Plugins
-Edit `~/.config/tmux/tmux.conf` and add:
-```bash
-set -g @plugin 'plugin-name'
-```
-Then press `Prefix + I` to install.
-
-### Using Modern CLI Tools
-The setup replaces traditional commands with modern alternatives:
-```bash
-# These commands now use modern tools automatically:
-ls      # -> eza (with icons and colors)
-cat     # -> bat (with syntax highlighting)
-find    # -> fd (faster and user-friendly)
-grep    # -> ripgrep (much faster)
-cd      # -> zoxide (learns your habits)
-
-# Original commands are still available as:
-command ls    # Use original ls
-command cat   # Use original cat
-```
-
-### Privileged Editing
-Use `snvim` to edit files that require root access. It uses `sudoedit` which runs
-Neovim as your user (with full config and plugins) and writes back as root:
-```bash
-snvim /etc/hosts
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Zsh Shell Not Set as Default
-```bash
-# Check available shells
-cat /etc/shells
-
-# Add Zsh to shells if missing
-echo $(which zsh) | sudo tee -a /etc/shells
-
-# Set as default shell
-chsh -s $(which zsh)
-```
-
-#### Tmux Plugins Not Working
-```bash
-# Manually install TPM
-git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-
-# Install plugins
-~/.tmux/plugins/tpm/scripts/install_plugins.sh
-```
-
-#### Neovim Plugins Not Installing
-```bash
-# Clear Neovim cache
-rm -rf ~/.local/share/nvim
-rm -rf ~/.local/state/nvim
-rm -rf ~/.cache/nvim
-
-# Restart Neovim - plugins will auto-install
-nvim
-```
-
-#### Oh-My-Posh Not Showing
-```bash
-# Check if Oh-My-Posh is in PATH
-which oh-my-posh
-
-# Verify it's in .zshrc (should be automatic)
-grep oh-my-posh ~/.config/zsh/.zshrc
-```
-
-#### Icons Not Displaying
-1. Install a Nerd Font from [nerdfonts.com](https://www.nerdfonts.com/)
-2. Set your terminal to use the Nerd Font
-3. Restart your terminal
-
-### Log Files
-- Backup location: `~/.dotfiles-backup-[timestamp]`
-
-### Getting Help
-1. Use the dry-run option in the TUI to preview changes
-2. Create an issue in this repository with:
-   - Your operating system and version
-   - Terminal emulator being used
-   - Full error message
 
 ## Updating
 
-### Update Everything
-```bash
-cd ~/dotfiles
-git pull
-./install.sh
+Setup hooks never upgrade packages. Run `dot-update` (installed to
+`~/.local/bin`) for an explicit full system update: native packages, tool
+updaters (rustup, uv tools, bun, atuin, oh-my-posh), and tmux/zsh/yazi/Neovim
+plugins. Absent tools are skipped visibly; failed steps are summarized and
+make the command exit non-zero. Finish with `chezmoi diff` for config drift.
+
+## Secret boundary
+
+Before committing, inspect the complete staged diff and verify that it contains
+no credentials or machine-local runtime data:
+
+```sh
+git diff --cached
 ```
 
-Run the installer and select the update option from the TUI menu.
+The public source intentionally excludes SSH/GPG keys, cloud and container
+credentials, GitHub CLI authentication, AI authentication, histories, sessions,
+and environment-secret files.
 
-### Update Zsh Plugins
-Plugins are managed by Antidote and update automatically, or run:
-```bash
-antidote update
+## Tmux and Herdr
+
+Homebrew installs Herdr on macOS. On Linux hosts, including DevBox, Ubuntu,
+Debian, and Proxmox, install it separately using the
+[official Herdr instructions](https://herdr.dev/docs/install/) before using
+the workflow below. Chezmoi syncs Herdr configuration and workflows; it does
+not install its Linux binary.
+
+The first fresh Ghostty surface starts or attaches local tmux session `Main`;
+`Cmd+T` opens a plain shell. Machine windows run Herdr locally or remotely:
+
+```text
+Macbook -> herdr
+Mac-Mini -> herdr --remote hydra
+DevBox -> herdr --remote devbox
 ```
 
-### Update Tmux Plugins
-```bash
-# In tmux session: Prefix + U
+| Command | Action |
+| --- | --- |
+| `herdr` | Create or attach the current machine's Herdr session |
+| `hr hydra` | Attach directly to Hydra's Herdr session |
+| `ssht hydra` | Attach to Hydra's fallback tmux session |
+
+From a generic SSH client, use `ssh hydra`, then `herdr`. Tmux-resurrect
+restores `herdr` and `ssh` processes. On macOS, `tmux-boot` starts the server
+headlessly at login; `@continuum-boot` stays disabled because it launches GUI
+terminals rather than Ghostty.
+
+Inside Herdr, `Prefix+Shift+G` creates a native worktree. An optional tracked
+`.worktree-copy` manifest lists ignored files or directories that should be
+copied into a new worktree. Dirty worktrees are never silently discarded, and
+branches are retained until explicitly deleted.
+
+## Validation
+
+Run the shell contract tests from the repository root. The suite requires the
+sibling private `../ai-chezmoi`; override that location with
+`AI_CHEZMOI_REPO=/path/to/ai-chezmoi`.
+
+```sh
+for test_file in tests/*.zsh; do
+  zsh "$test_file" || exit 1
+done
 ```
 
-### Update Neovim Plugins
-```vim
-:lua vim.pack.update()
-```
-
-## File Structure
-
-```
-dotfiles/
-├── README.md                    # This file
-├── install.sh                   # Bootstrap script (downloads + runs dotsetup)
-├── installer/                   # Go TUI installer (Bubble Tea + Lipgloss)
-│   ├── main.go                 # Entry point
-│   ├── go.mod / go.sum         # Go dependencies
-│   └── internal/               # TUI, registry, config, executor, etc.
-├── configs/
-│   ├── zsh/
-│   │   ├── .zshenv             # Environment variables
-│   │   ├── .zshrc              # Main Zsh configuration
-│   │   ├── aliases/            # Alias definitions (general, git)
-│   │   ├── functions/          # Custom functions (ansible, apt, ssh, utils)
-│   │   ├── plugins/            # Antidote plugin manifest
-│   │   └── tools/              # Tool-specific configs (nvm, bun, tmux-auto, yazi)
-│   ├── nvim/
-│   │   ├── init.lua            # Neovim entry point (vim.pack)
-│   │   ├── lsp/                # LSP server configurations
-│   │   └── lua/                # Plugin and core configuration
-│   ├── tmux/
-│   │   ├── tmux.conf           # Tmux configuration
-│   │   └── scripts/            # Cheatsheet + clipboard capture helpers
-│   ├── oh-my-posh/
-│   │   └── config.omp.yaml     # Oh-My-Posh configuration
-│   ├── atuin/
-│   │   └── config.toml         # Atuin configuration
-│   ├── ghostty/
-│   │   └── config              # Ghostty terminal configuration
-│   ├── herdr/
-│   │   ├── config.toml         # Herdr UI, keys, remote, and worktree configuration
-│   │   └── scripts/            # Worktree bootstrap helper
-│   ├── git/
-│   │   └── config              # Git config (delta pager, merge settings)
-│   ├── lazygit/
-│   │   └── config.yml          # Lazygit TokyoNight theme
-│   └── yazi/
-│       ├── yazi.toml           # Yazi configuration
-│       ├── keymap.toml         # Yazi keybindings
-│       ├── theme.toml          # Yazi theme
-│       ├── init.lua            # Yazi init (plugin loading)
-│       ├── package.toml        # Yazi plugin manifest
-│       ├── plugins/            # Yazi plugins (lazygit, git, etc.)
-│       └── flavors/            # TokyoNight flavor
-```
-
-## Contributing
-
-1. Fork this repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and test them
-4. Commit your changes: `git commit -am 'Add feature'`
-5. Push to the branch: `git push origin feature-name`
-6. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Zsh](https://www.zsh.org/) - Powerful shell
-- [Antidote](https://github.com/mattmc3/antidote) - Fast Zsh plugin manager
-- [Tmux](https://github.com/tmux/tmux) - Terminal multiplexer
-- [Herdr](https://herdr.dev/) - Persistent terminal command center for coding agents
-- [Neovim](https://neovim.io/) - Hyperextensible Vim-based text editor
-- [Oh-My-Posh](https://ohmyposh.dev/) - Cross-shell prompt
-- [Yazi](https://yazi-rs.github.io/) - Terminal file manager
-- [TokyoNight](https://github.com/folke/tokyonight.nvim) - Beautiful color scheme inspired by Tokyo's night skyline
-- [Atuin](https://github.com/atuinsh/atuin) - Magical shell history
-- [delta](https://github.com/dandavison/delta) - Syntax-highlighting pager for git
-- [lazygit](https://github.com/jesseduffield/lazygit) - TUI git client
-- [TPM](https://github.com/tmux-plugins/tpm) - Tmux plugin manager
-
----
-
-**Made with care for developers who love beautiful, functional terminals**
+`tests/target-overlap-test.zsh` enforces the disjoint target contract and runs
+an additional rendered-target check when `chezmoi` is available. Full
+validation requires `chezmoi` for the render tests.

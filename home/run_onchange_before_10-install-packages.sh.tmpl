@@ -1,0 +1,52 @@
+#!/bin/sh
+
+set -eu
+
+{{ if eq .chezmoi.os "darwin" -}}
+PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+command -v brew >/dev/null 2>&1 || {
+    printf '%s\n' 'Package install: brew is required' >&2
+    exit 1
+}
+HOMEBREW_BUNDLE_NO_UPGRADE=1 brew bundle --file=- <<'EOF'
+{{ range .packages.brew -}}
+brew "{{ . }}"
+{{ end -}}
+{{ range .packages.cask -}}
+cask "{{ . }}"
+{{ end -}}
+EOF
+{{ else if eq .chezmoi.osRelease.id "arch" -}}
+sudo pacman -S --needed --noconfirm{{ range .packages.pacman }} {{ . }}{{ end }}
+{{ else if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian")) -}}
+if [ "$(id -u)" -eq 0 ]; then
+    run_root() {
+        "$@"
+    }
+else
+    command -v sudo >/dev/null 2>&1 || {
+        printf '%s\n' 'Package install: sudo is required when not running as root' >&2
+        exit 1
+    }
+    run_root() {
+        sudo "$@"
+    }
+fi
+
+if ! dpkg_audit=$(run_root dpkg --audit 2>&1); then
+    printf '%s\n' "$dpkg_audit" >&2
+    printf '%s\n' 'Package install blocked: manually run sudo dpkg --configure -a, then retry.' >&2
+    exit 1
+fi
+if [ -n "$dpkg_audit" ]; then
+    printf '%s\n' "$dpkg_audit" >&2
+    printf '%s\n' 'Package install blocked: manually run sudo dpkg --configure -a, then retry.' >&2
+    exit 1
+fi
+
+run_root apt-get update
+run_root apt-get install -y --no-install-recommends --no-upgrade --no-remove -o DPkg::Lock::Timeout=60{{ range .packages.apt.base }} {{ . }}{{ end }}{{ if ne .profile "server" }}{{ range .packages.apt.dev }} {{ . }}{{ end }}{{ end }}
+{{ else -}}
+printf '%s\n' 'Native package installation is not defined for this platform.' >&2
+exit 1
+{{ end -}}

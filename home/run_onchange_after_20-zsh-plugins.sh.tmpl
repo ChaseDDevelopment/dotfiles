@@ -1,0 +1,29 @@
+#!/bin/sh
+# plugin manifest hash: {{ include "dot_config/zsh/plugins/dot_zsh_plugins.txt" | sha256sum }}
+
+set -eu
+
+zdotdir="${ZDOTDIR:-$HOME/.config/zsh}"
+antidote_script=
+
+for candidate in \
+    /opt/homebrew/opt/antidote/share/antidote/antidote.zsh \
+    /usr/local/opt/antidote/share/antidote/antidote.zsh \
+    /home/linuxbrew/.linuxbrew/opt/antidote/share/antidote/antidote.zsh \
+    "$zdotdir/.antidote/antidote.zsh"; do
+    if [ -f "$candidate" ]; then
+        antidote_script=$candidate
+        break
+    fi
+done
+
+if [ -z "$antidote_script" ]; then
+    git clone --depth 1 https://github.com/mattmc3/antidote.git "$zdotdir/.antidote"
+    antidote_script="$zdotdir/.antidote/antidote.zsh"
+fi
+
+ANTIDOTE_SCRIPT="$antidote_script" ZDOTDIR="$zdotdir" zsh -c '
+    source "$ANTIDOTE_SCRIPT"
+    antidote bundle < "$ZDOTDIR/plugins/.zsh_plugins.txt" \
+        > "$ZDOTDIR/plugins/.zsh_plugins.zsh"
+'

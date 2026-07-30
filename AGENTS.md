@@ -2,30 +2,47 @@
 
 ## Architecture
 
-- `configs/` — Dotfile configs (zsh, tmux, nvim, oh-my-posh, atuin, ghostty, yazi, git, lazygit)
-- `installer/` — Go TUI installer (Bubble Tea + Lipgloss, TokyoNight Night theme)
-- `install.sh` — Bootstrap script (downloads Go binary from GitHub Releases, runs it)
+- `home/` is the public chezmoi source for machine configuration.
+- `.chezmoiroot` selects `home/`.
+- `bootstrap.sh` requires `curl`, initializes this source, and never applies.
+- `tests/` contains shell contract tests.
+- AI tool configuration belongs in the separate private `ai-chezmoi` source.
+- Profiles default to `workstation` on macOS, `dev` on Arch/Ubuntu, and
+  `server` on Debian/Proxmox; callers may override them with chezmoi data.
+  Server base-only behavior is APT-only; macOS/Arch retain full lists.
+- Native package managers are Homebrew Bundle, `pacman --needed`, and APT.
 
-## Build & Run
+## Workflow
 
-### Run
-- `./install.sh` — downloads Go binary (if needed) and launches TUI
-- `cd installer && go build -o dotsetup .` — build from source
+- Preview with `chezmoi diff` and `chezmoi apply --dry-run --verbose`.
+- Apply only after reviewing the rendered change.
+- Run tests with
+  `for test_file in tests/*.zsh; do zsh "$test_file" || exit 1; done`.
+- Render tests require `chezmoi` and sibling `../ai-chezmoi`; set
+  `AI_CHEZMOI_REPO=/path/to/ai-chezmoi` to override.
 
-### Dev
-- `go vet ./...` — static analysis (run from `installer/`)
-- `go test ./...` — run tests (run from `installer/`)
+## Adding a tool
 
-## Go TUI: Lipgloss Styling Gotchas
+1. Add its configuration under the matching chezmoi path in `home/`.
+2. Add native package intent to `home/.chezmoidata/packages.yaml` when needed.
+3. Add a post-apply script only when chezmoi cannot manage the result directly.
+4. Update the target manifest and the smallest relevant contract test.
 
-- Lipgloss `\x1b[0m` (SGR 0) resets ALL attributes. Container `Background()` does NOT propagate through child styled text — every inline style needs its own `Background()` to prevent transparency leaks
-- `lipgloss.Place()` + `WithWhitespaceBackground` only fills whitespace AROUND the content block, not WITHIN it (e.g., JoinVertical centering padding). Use `Style.Render()` with `Background()` + `Width()` + `Height()` to fill inner whitespace too
-- When using `JoinVertical`, all elements must match the widest element's rendered width. Panel total width = `contentWidth + panelStyle.GetHorizontalBorderSize()`. Use `panelOuterWidth()` helper
-- TokyoNight Night layering: `catBase` (#1a1b26) for full-screen bg, `catSurface0` (#292e42) for panel interiors (the `cat*` identifier prefix is legacy — palette is TokyoNight)
-- Test transparency fixes in a terminal with wallpaper/transparency enabled
+## Package safety
 
-## Adding a New Tool
+- Package and setup hooks run only when rendered script/input changes, not on
+  package drift or every apply; bootstrap never applies.
+- APT audits `dpkg` first and stops for manual repair; it never upgrades,
+  removes, auto-repairs, retries, or changes Proxmox repositories. Root runs
+  directly; non-root uses `sudo`.
+- Arch uses `pacman -S --needed --noconfirm`, which may upgrade outdated listed
+  packages; Homebrew Bundle and APT do not upgrade them.
+- Homebrew installs Herdr on macOS. Linux hosts must install it separately
+  using <https://herdr.dev/docs/install/>; chezmoi only syncs its configuration.
+- The only upstream Neovim binary fallback is checksum-pinned v0.12.4 on APT
+  amd64/arm64 hosts when Neovim is missing or below 0.12.
 
-1. Add config files under `configs/<toolname>/`
-2. Register in `installer/internal/registry/` (see existing `*_tools.go` files)
-3. Add component setup in `installer/internal/config/components.go`
+## Safety
+
+This is a public repository. Never add credentials, private keys,
+authentication state, histories, sessions, caches, or secret environment files.

@@ -1,0 +1,14 @@
+#!/bin/sh
+# bat config hash: {{ include "dot_config/bat/config" | sha256sum }}
+# bat theme hash: {{ include "dot_config/bat/themes/tokyonight_night.tmTheme" | sha256sum }}
+
+set -eu
+
+if command -v bat >/dev/null 2>&1; then
+    bat cache --build
+elif command -v batcat >/dev/null 2>&1; then
+    batcat cache --build
+else
+    printf '%s\n' 'bat or batcat is required to build the bat cache' >&2
+    exit 1
+fi

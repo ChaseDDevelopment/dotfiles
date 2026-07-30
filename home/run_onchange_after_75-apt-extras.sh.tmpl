@@ -1,0 +1,195 @@
+{{- if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian")) -}}
+#!/bin/sh
+# tools: gh atuin lazygit eza git-delta jless just xh yq dust tailspin bun dotnet
+
+set -eu
+
+PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.dotnet:$PATH"
+
+bin_dir="$HOME/.local/bin"
+mkdir -p "$bin_dir"
+
+scratch=$(mktemp -d)
+trap 'rm -rf -- "$scratch"' 0
+
+# gh comes from GitHub's official APT repository so apt owns future updates.
+# Proxmox VE/PBS hosts never get third-party APT sources.
+if [ -d /etc/pve ] || [ -d /etc/proxmox-backup ]; then
+    printf '%s\n' 'apt extras: Proxmox host; skipping gh APT source'
+elif command -v gh >/dev/null 2>&1; then
+    printf '%s\n' 'apt extras: gh already installed; skipping'
+else
+    if [ "$(id -u)" -eq 0 ]; then
+        run_root() {
+            "$@"
+        }
+    else
+        command -v sudo >/dev/null 2>&1 || {
+            printf '%s\n' 'apt extras: sudo is required when not running as root' >&2
+            exit 1
+        }
+        run_root() {
+            sudo "$@"
+        }
+    fi
+
+    if ! dpkg_audit=$(run_root dpkg --audit 2>&1); then
+        printf '%s\n' "$dpkg_audit" >&2
+        printf '%s\n' 'gh install blocked: manually run sudo dpkg --configure -a, then retry.' >&2
+        exit 1
+    fi
+    if [ -n "$dpkg_audit" ]; then
+        printf '%s\n' "$dpkg_audit" >&2
+        printf '%s\n' 'gh install blocked: manually run sudo dpkg --configure -a, then retry.' >&2
+        exit 1
+    fi
+
+    keyring="$scratch/githubcli-archive-keyring.gpg"
+    curl --fail --location --silent --show-error \
+        --output "$keyring" https://cli.github.com/packages/githubcli-archive-keyring.gpg
+    run_root mkdir -p -m 755 /etc/apt/keyrings
+    run_root cp "$keyring" /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    run_root chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    run_root mkdir -p -m 755 /etc/apt/sources.list.d
+    printf 'deb [arch=%s signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n' \
+        "$(dpkg --print-architecture)" |
+        run_root tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+    run_root apt-get update
+    run_root apt-get install -y --no-install-recommends --no-upgrade --no-remove -o DPkg::Lock::Timeout=60 gh
+fi
+
+latest_tag() {
+    tag=$(curl --fail --location --silent --show-error \
+        "https://api.github.com/repos/$1/releases/latest" |
+        sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' |
+        head -n 1)
+    if [ -z "$tag" ]; then
+        printf '%s\n' "apt extras: could not resolve the latest release of $1 (GitHub API rate limit?)" >&2
+        return 1
+    fi
+    printf '%s\n' "$tag"
+}
+
+# install_release NAME OWNER/REPO ASSET_PATTERN MEMBER_PATTERN
+# Patterns may reference {tag} (the release tag) and {ver} (the tag without a
+# leading v). MEMBER_PATTERN is the binary's path inside the archive; an empty
+# pattern means the asset itself is the binary.
+install_release() {
+    name=$1
+    repo=$2
+    asset_pattern=$3
+    member_pattern=$4
+
+    if command -v "$name" >/dev/null 2>&1; then
+        printf '%s\n' "apt extras: $name already installed; skipping"
+        return 0
+    fi
+
+    tag=$(latest_tag "$repo")
+    ver=${tag#v}
+    asset=$(printf '%s\n' "$asset_pattern" | sed "s/{tag}/$tag/g;s/{ver}/$ver/g")
+    member=$(printf '%s\n' "$member_pattern" | sed "s/{tag}/$tag/g;s/{ver}/$ver/g")
+
+    work="$scratch/$name"
+    mkdir -p "$work"
+    curl --fail --location --silent --show-error --output "$work/$asset" \
+        "https://github.com/$repo/releases/download/$tag/$asset"
+
+    case $asset in
+        *.tar.gz)
+            tar -xzf "$work/$asset" -C "$work"
+            binary="$work/$member"
+            ;;
+        *.zip)
+            unzip -q "$work/$asset" -d "$work"
+            binary="$work/$member"
+            ;;
+        *)
+            binary="$work/$asset"
+            ;;
+    esac
+
+    [ -f "$binary" ] || {
+        printf '%s\n' "apt extras: $repo asset $asset does not contain $member" >&2
+        exit 1
+    }
+    install -m 755 "$binary" "$bin_dir/$name"
+    printf '%s\n' "apt extras: installed $name $tag"
+}
+
+{{ if or (eq .chezmoi.arch "amd64") (eq .chezmoi.arch "arm64") -}}
+case '{{ .chezmoi.arch }}' in
+    amd64)
+        rust_arch=x86_64
+        lazygit_arch=x86_64
+        ;;
+    arm64)
+        rust_arch=aarch64
+        lazygit_arch=arm64
+        ;;
+esac
+
+install_release lazygit jesseduffield/lazygit \
+    "lazygit_{ver}_linux_${lazygit_arch}.tar.gz" lazygit
+install_release eza eza-community/eza \
+    "eza_${rust_arch}-unknown-linux-gnu.tar.gz" eza
+install_release delta dandavison/delta \
+    "delta-{tag}-${rust_arch}-unknown-linux-gnu.tar.gz" \
+    "delta-{tag}-${rust_arch}-unknown-linux-gnu/delta"
+install_release just casey/just \
+    "just-{tag}-${rust_arch}-unknown-linux-musl.tar.gz" just
+install_release xh ducaale/xh \
+    "xh-{tag}-${rust_arch}-unknown-linux-musl.tar.gz" \
+    "xh-{tag}-${rust_arch}-unknown-linux-musl/xh"
+install_release yq mikefarah/yq 'yq_linux_{{ .chezmoi.arch }}' ''
+install_release dust bootandy/dust \
+    "dust-{tag}-${rust_arch}-unknown-linux-gnu.tar.gz" \
+    "dust-{tag}-${rust_arch}-unknown-linux-gnu/dust"
+install_release tspin bensadeh/tailspin \
+    "tailspin-${rust_arch}-unknown-linux-musl.tar.gz" tspin
+{{ if eq .chezmoi.arch "amd64" -}}
+install_release jless PaulJuliusMartinez/jless \
+    'jless-{tag}-x86_64-unknown-linux-gnu.zip' jless
+{{ else -}}
+printf '%s\n' 'apt extras: jless publishes no linux arm64 release asset; skipping'
+{{ end -}}
+{{ else -}}
+printf '%s\n' 'apt extras: unsupported architecture {{ .chezmoi.arch }}; skipping lazygit, eza, delta, just, xh, yq, dust, tspin, jless'
+{{ end -}}
+
+if command -v atuin >/dev/null 2>&1; then
+    printf '%s\n' 'apt extras: atuin already installed; skipping'
+else
+    installer="$scratch/atuin-installer.sh"
+    curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+        --output "$installer" \
+        https://github.com/atuinsh/atuin/releases/latest/download/atuin-installer.sh
+    # Unmanaged install drops only the binary into ~/.local/bin and keeps the
+    # installer away from the chezmoi-managed shell configuration.
+    ATUIN_UNMANAGED_INSTALL="$bin_dir" sh "$installer"
+fi
+
+{{ if ne .profile "server" -}}
+if command -v bun >/dev/null 2>&1; then
+    printf '%s\n' 'apt extras: bun already installed; skipping'
+else
+    installer="$scratch/bun-install.sh"
+    curl --fail --location --silent --show-error \
+        --output "$installer" https://bun.sh/install
+    # SHELL=sh keeps the installer from appending PATH exports to shell rc
+    # files; .zshenv already puts ~/.bun/bin on PATH.
+    SHELL=sh bash "$installer"
+fi
+
+if command -v dotnet >/dev/null 2>&1; then
+    printf '%s\n' 'apt extras: dotnet already installed; skipping'
+else
+    installer="$scratch/dotnet-install.sh"
+    curl --fail --location --silent --show-error \
+        --output "$installer" https://dot.net/v1/dotnet-install.sh
+    bash "$installer" --channel LTS --install-dir "$HOME/.dotnet"
+fi
+{{ else -}}
+printf '%s\n' 'apt extras: server profile; skipping bun, dotnet'
+{{ end -}}
+{{- end }}

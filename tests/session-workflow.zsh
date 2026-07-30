@@ -110,16 +110,16 @@ rehash
 
 compdef() { print -r -- "$*" >> "$COMPDEF_LOG"; }
 
-[[ -r "$repo_root/configs/zsh/functions/tmux.zsh" ]] || \
+[[ -r "$repo_root/home/dot_config/zsh/functions/tmux.zsh" ]] || \
     fail "tmux session helpers are missing"
-[[ -r "$repo_root/configs/zsh/functions/herdr.zsh" ]] || \
+[[ -r "$repo_root/home/dot_config/zsh/functions/herdr.zsh" ]] || \
     fail "Herdr remote helper is missing"
-tmux_main="$repo_root/configs/tmux/scripts/tmux-main"
+tmux_main="$repo_root/home/dot_config/tmux/scripts/executable_tmux-main"
 [[ -x "$tmux_main" ]] || fail "tmux Main bootstrap is missing or not executable"
 
-source "$repo_root/configs/zsh/functions/tmux.zsh"
-source "$repo_root/configs/zsh/functions/ssh.zsh"
-source "$repo_root/configs/zsh/functions/herdr.zsh"
+source "$repo_root/home/dot_config/zsh/functions/tmux.zsh"
+source "$repo_root/home/dot_config/zsh/functions/ssh.zsh"
+source "$repo_root/home/dot_config/zsh/functions/herdr.zsh"
 cd "$repo_root" || fail "cannot enter repository"
 
 : > "$TEST_LOG"
@@ -635,17 +635,17 @@ TERM= ssht hydra >/dev/null
 rc=$?
 assert_eq "$rc" 23 "ssht must preserve the SSH exit status"
 
-zprofile=$(<"$repo_root/configs/zsh/.zprofile")
+zprofile=$(<"$repo_root/home/dot_config/zsh/dot_zprofile")
 assert_not_contains "$zprofile" 'DOTFILES_TMUX_AUTOSTART' \
     "zprofile must not retain the auto-attach override"
 assert_not_contains "$zprofile" 'tmux has-session -t Main' \
     "zprofile must not auto-attach tmux"
 assert_not_contains "$zprofile" 'exec herdr' \
     "zprofile must not auto-attach Herdr"
-[[ ! -e "$repo_root/configs/zsh/local.zprofile.example" ]] || \
+[[ ! -e "$repo_root/home/dot_config/zsh/local.zprofile.example" ]] || \
     fail "obsolete local.zprofile example still exists"
 
-tmux_conf=$(<"$repo_root/configs/tmux/tmux.conf")
+tmux_conf=$(<"$repo_root/home/dot_config/tmux/tmux.conf")
 assert_contains "$tmux_conf" 'setw -g window-size largest' \
     "tmux must preserve the largest-client workspace on tmux 2.9 and newer"
 assert_contains "$tmux_conf" 'set -g prefix C-Space' \
@@ -681,16 +681,16 @@ assert_contains "$tmux_conf" "set -g @continuum-restore 'on'" \
 # Continuum GUI login-start option must not be enabled (headless LaunchAgent instead).
 assert_not_contains "$tmux_conf" "set -g @continuum-boot" \
     "tmux must not enable continuum GUI boot (Ghostty owns the client)"
-tmux_boot="$repo_root/configs/tmux/scripts/tmux-boot"
+tmux_boot="$repo_root/home/dot_config/tmux/scripts/executable_tmux-boot"
 [[ -x "$tmux_boot" ]] || fail "tmux-boot must exist and be executable"
 assert_contains "$(<"$tmux_boot")" 'new-session -d -s Main' \
     "tmux-boot must start a detached Main session for continuum restore"
-agent_plist="$repo_root/configs/tmux/launchd/com.orion.tmux-server.plist"
+agent_plist="$repo_root/home/Library/LaunchAgents/com.orion.tmux-server.plist.tmpl"
 [[ -r "$agent_plist" ]] || fail "tmux login LaunchAgent template is missing"
 assert_contains "$(<"$agent_plist")" 'com.orion.tmux-server' \
     "LaunchAgent template must use the com.orion.tmux-server label"
-assert_contains "$(<"$agent_plist")" '@HOME@/.config/tmux/scripts/tmux-boot' \
-    "LaunchAgent template must invoke tmux-boot under @HOME@"
+assert_contains "$(<"$agent_plist")" '{{ .chezmoi.homeDir }}/.config/tmux/scripts/tmux-boot' \
+    "LaunchAgent template must invoke tmux-boot under the rendered home"
 assert_contains "$tmux_conf" '|herdr|' \
     "tmux navigator must pass pane movement through Herdr"
 assert_contains "$tmux_conf" 'bind -n M-H previous-window' \
@@ -707,12 +707,12 @@ assert_not_contains "$tmux_conf" 'prepend-ssh-host' \
     "tmux must not invoke the Powerkit-specific status helper"
 assert_not_contains "$tmux_conf" 'ssh-client-host' \
     "tmux must not invoke the retired SSH status subprocess"
-[[ ! -e "$repo_root/configs/tmux/scripts/prepend-ssh-host.sh" ]] || \
+[[ ! -e "$repo_root/home/dot_config/tmux/scripts/executable_prepend-ssh-host.sh" ]] || \
     fail "Powerkit status prepend helper still exists"
-[[ ! -e "$repo_root/configs/tmux/scripts/ssh-client-host.sh" ]] || \
+[[ ! -e "$repo_root/home/dot_config/tmux/scripts/executable_ssh-client-host.sh" ]] || \
     fail "Powerkit SSH host status helper still exists"
 
-herdr_config=$(<"$repo_root/configs/herdr/config.toml")
+herdr_config=$(<"$repo_root/home/dot_config/herdr/config.toml")
 assert_contains "$herdr_config" 'prefix = "ctrl+b"' \
     "Herdr must use its native prefix"
 assert_contains "$herdr_config" 'previous_tab = ["prefix+p"]' \
@@ -724,13 +724,13 @@ assert_not_contains "$herdr_config" 'alt+shift+h' \
 assert_not_contains "$herdr_config" 'alt+shift+l' \
     "Herdr must not claim outer next-window navigation"
 
-tmux_cheatsheet=$(<"$repo_root/configs/tmux/scripts/tmux-cheatsheet.sh")
+tmux_cheatsheet=$(<"$repo_root/home/dot_config/tmux/scripts/executable_tmux-cheatsheet.sh")
 assert_contains "$tmux_cheatsheet" 'prefix = ${GREEN}C-Space' \
     "tmux cheatsheet must document the historical prefix"
 assert_not_contains "$tmux_cheatsheet" 'prefix = ${GREEN}C-b' \
     "tmux cheatsheet must not claim Herdr's prefix"
 
-ghostty_config="$repo_root/configs/ghostty/config"
+ghostty_config="$repo_root/home/dot_config/ghostty/config"
 ghostty=$(<"$ghostty_config")
 assert_contains "$ghostty" 'adjust-cell-height = 1' \
     "Ghostty must add one pixel of vertical cell padding"

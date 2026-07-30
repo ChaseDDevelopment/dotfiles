@@ -1,0 +1,12 @@
+#!/bin/sh
+# Neovim init hash: {{ include "dot_config/nvim/init.lua" | sha256sum }}
+# Neovim plugin lock hash: {{ include "dot_config/nvim/nvim-pack-lock.json" | sha256sum }}
+# Neovim pack bootstrap hash: {{ include "dot_config/nvim/lua/core/pack.lua" | sha256sum }}
+
+set -eu
+
+PATH="$HOME/.local/bin:$PATH"
+
+nvim --headless -u "$HOME/.config/nvim/init.lua" \
+    -c "lua require('core.pack').bootstrap()" \
+    -c qa
