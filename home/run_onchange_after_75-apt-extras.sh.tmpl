@@ -1,6 +1,6 @@
 {{- if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian")) -}}
 #!/bin/sh
-# tools: gh atuin lazygit eza git-delta jless just xh yq dust tailspin bun dotnet
+# tools: gh atuin lazygit eza git-delta jless just xh yq dust tailspin spf bun dotnet
 
 set -eu
 
@@ -147,6 +147,9 @@ install_release dust bootandy/dust \
     "dust-{tag}-${rust_arch}-unknown-linux-gnu/dust"
 install_release tspin bensadeh/tailspin \
     "tailspin-${rust_arch}-unknown-linux-musl.tar.gz" tspin
+install_release spf yorukot/superfile \
+    'superfile-linux-{tag}-{{ .chezmoi.arch }}.tar.gz' \
+    'dist/superfile-linux-{tag}-{{ .chezmoi.arch }}/spf' 
 {{ if eq .chezmoi.arch "amd64" -}}
 install_release jless PaulJuliusMartinez/jless \
     'jless-{tag}-x86_64-unknown-linux-gnu.zip' jless
@@ -154,7 +157,7 @@ install_release jless PaulJuliusMartinez/jless \
 printf '%s\n' 'apt extras: jless publishes no linux arm64 release asset; skipping'
 {{ end -}}
 {{ else -}}
-printf '%s\n' 'apt extras: unsupported architecture {{ .chezmoi.arch }}; skipping lazygit, eza, delta, just, xh, yq, dust, tspin, jless'
+printf '%s\n' 'apt extras: unsupported architecture {{ .chezmoi.arch }}; skipping lazygit, eza, delta, just, xh, yq, dust, tspin, spf, jless'
 {{ end -}}
 
 if command -v atuin >/dev/null 2>&1; then
@@ -181,6 +184,10 @@ else
     SHELL=sh bash "$installer"
 fi
 
+{{ else -}}
+printf '%s\n' 'apt extras: server profile; skipping bun'
+{{ end -}}
+
 if command -v dotnet >/dev/null 2>&1; then
     printf '%s\n' 'apt extras: dotnet already installed; skipping'
 else
@@ -189,7 +196,4 @@ else
         --output "$installer" https://dot.net/v1/dotnet-install.sh
     bash "$installer" --channel LTS --install-dir "$HOME/.dotnet"
 fi
-{{ else -}}
-printf '%s\n' 'apt extras: server profile; skipping bun, dotnet'
-{{ end -}}
 {{- end }}

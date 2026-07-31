@@ -73,11 +73,7 @@ install_tool() {
 
 install_tool systemd-language-server systemd-language-server
 install_tool nginx-language-server nginx-language-server
-{{ if ne .profile "server" -}}
 install_tool basedpyright basedpyright-langserver
 install_tool ruff ruff
 install_tool sqlfluff sqlfluff
-{{ else -}}
-printf '%s\n' 'uv tools: server profile; skipping basedpyright, ruff, sqlfluff'
-{{ end -}}
 {{- end }}
