@@ -21,7 +21,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Shellcheck bootstrap
-        run: shellcheck bootstrap.sh
+        run: shellcheck bootstrap.sh cleanup-old-installer.sh
 
       - name: Run contract tests
         run: for test_file in tests/*.zsh; do zsh "$test_file" || exit 1; done
