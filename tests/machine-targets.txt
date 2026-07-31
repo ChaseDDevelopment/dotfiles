@@ -12,6 +12,7 @@
 ~/.config/lazygit/config.yml
 ~/.config/nvim
 ~/.config/oh-my-posh/config.omp.yaml
+~/.config/superfile
 ~/.config/tmux
 ~/.config/zsh
 ~/.local/bin/bat
@@ -21,6 +22,7 @@
 ~/.local/bin/herdr-worktree-create
 ~/.local/bin/nvim
 ~/.local/bin/tmux-session
+~/.local/share/superfile
 ~/.pi/agent/aliases.bash
 ~/.tmux.conf
 ~/.zshenv
