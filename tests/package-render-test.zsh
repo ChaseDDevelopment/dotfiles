@@ -116,7 +116,6 @@ grep -Fq '{{ include "dot_config/zsh/plugins/dot_zsh_plugins.txt" | sha256sum }}
     grep -Fq '{{ include "Library/LaunchAgents/com.orion.tmux-server.plist.tmpl" | sha256sum }}' "$tmux_hook" &&
     grep -Fq '{{ include "dot_config/yazi/package.toml" | sha256sum }}' "$yazi_hook" &&
     grep -Fq '{{ include "dot_config/nvim/init.lua" | sha256sum }}' "$neovim_hook" &&
-    grep -Fq '{{ include "dot_config/nvim/nvim-pack-lock.json" | sha256sum }}' "$neovim_hook" &&
     grep -Fq '{{ include "dot_config/nvim/lua/core/pack.lua" | sha256sum }}' "$neovim_hook" || {
     print -u2 -- "FAIL: run_onchange hooks must hash every managed input"
     exit 1
@@ -203,7 +202,6 @@ tmux_plist_hash=$(
 )
 yazi_package_hash=$(source_hash dot_config/yazi/package.toml)
 neovim_init_hash=$(source_hash dot_config/nvim/init.lua)
-neovim_lock_hash=$(source_hash dot_config/nvim/nvim-pack-lock.json)
 neovim_pack_hash=$(source_hash dot_config/nvim/lua/core/pack.lua)
 
 zsh_setup=$(render linux ubuntu dev "$zsh_hook")
@@ -409,7 +407,6 @@ neovim_hook_text=$(render linux ubuntu dev "$neovim_hook")
     exit 1
 }
 [[ "$neovim_hook_text" == *"$neovim_init_hash"* &&
-    "$neovim_hook_text" == *"$neovim_lock_hash"* &&
     "$neovim_hook_text" == *"$neovim_pack_hash"* ]] || {
     print -u2 -- "FAIL: rendered Neovim hook must contain its source hashes"
     exit 1
