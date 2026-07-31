@@ -1,4 +1,4 @@
-sourceDir = "{{ .chezmoi.homeDir }}/Documents/GitHub/dotfiles"
+sourceDir = {{ .chezmoi.workingTree | quote }}
 
 {{- $profileDefault := "dev" }}
 {{- if eq .chezmoi.os "darwin" }}

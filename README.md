@@ -46,8 +46,8 @@ does not recreate an upstream installer.
 
 ## Bootstrap
 
-The source configuration expects this checkout at
-`~/Documents/GitHub/dotfiles`.
+The checkout can live anywhere; bootstrap records its location as the
+chezmoi source directory. `~/Documents/GitHub/dotfiles` is the usual spot.
 
 ```sh
 git clone https://github.com/ChaseDDevelopment/dotfiles.git \
