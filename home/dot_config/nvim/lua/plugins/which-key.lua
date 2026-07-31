@@ -4,7 +4,6 @@ require("which-key").setup({
 
 require("which-key").add({
 	-- Leader groups
-	{ "<leader>a", group = "claude", icon = { icon = "󰚩", color = "purple" } },
 	{ "<leader>b", group = "buffer", icon = { icon = "󰈔", color = "azure" } },
 	{ "<leader>c", group = "code", icon = { icon = "󰅩", color = "purple" } },
 	{ "<leader>f", group = "find", icon = { icon = "󰍉", color = "cyan" } },
@@ -98,15 +97,6 @@ require("which-key").add({
 	{ "]q", icon = { icon = "󰝮", color = "azure" }, desc = "Next quickfix" },
 	{ "[q", icon = { icon = "󰝮", color = "azure" }, desc = "Prev quickfix" },
 
-	-- Claude Code
-	{ "<leader>ac", icon = { icon = "󰚩", color = "purple" }, desc = "Toggle Claude" },
-	{ "<leader>af", icon = { icon = "󰆤", color = "purple" }, desc = "Focus Claude" },
-	{ "<leader>ar", icon = { icon = "󰑓", color = "purple" }, desc = "Resume Claude" },
-	{ "<leader>aC", icon = { icon = "󰞇", color = "purple" }, desc = "Continue Claude" },
-	{ "<leader>as", icon = { icon = "󰒊", color = "purple" }, desc = "Send to Claude" },
-	{ "<leader>ab", icon = { icon = "󰈔", color = "purple" }, desc = "Add buffer to Claude" },
-	{ "<leader>aa", icon = { icon = "󰄬", color = "green" }, desc = "Accept diff" },
-	{ "<leader>ad", icon = { icon = "󰅖", color = "red" }, desc = "Deny diff" },
 
 	-- Toggle actions
 	{ "<leader>uw", icon = { icon = "󰖶", color = "yellow" }, desc = "Toggle word wrap" },
