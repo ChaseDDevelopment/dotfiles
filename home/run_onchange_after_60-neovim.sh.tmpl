@@ -6,6 +6,12 @@ set -eu
 
 PATH="$HOME/.local/bin:$PATH"
 
+{{ if eq .chezmoi.os "darwin" -}}
+# rust-lang/rust#157750: rustc's stripped dylibs get a mis-aligned LINKEDIT
+# string pool that macOS 27 dyld rejects, breaking blink.cmp's fuzzy matcher.
+# Keep debuginfo in the cargo build until a fixed rustc ships.
+export CARGO_PROFILE_RELEASE_STRIP=false
+{{ end -}}
 nvim --headless -u "$HOME/.config/nvim/init.lua" \
     -c "lua require('core.pack').bootstrap()" \
     -c qa

@@ -198,6 +198,10 @@ step_neovim() {
         skip 'managed Neovim config not found'
         return 0
     }
+    if [ "$(uname -s)" = Darwin ]; then
+        # rust-lang/rust#157750: macOS 27 dyld rejects rustc-stripped dylibs.
+        export CARGO_PROFILE_RELEASE_STRIP=false
+    fi
     nvim --headless -u "$HOME/.config/nvim/init.lua" \
         -c "lua require('core.pack').bootstrap()" \
         -c qa
