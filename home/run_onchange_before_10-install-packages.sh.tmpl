@@ -8,7 +8,15 @@ command -v brew >/dev/null 2>&1 || {
     printf '%s\n' 'Package install: brew is required' >&2
     exit 1
 }
-HOMEBREW_BUNDLE_NO_UPGRADE=1 brew bundle --file=- <<'EOF'
+HOMEBREW_BUNDLE_NO_UPGRADE=1 \
+HOMEBREW_NO_AUTO_UPDATE=1 \
+HOMEBREW_NO_INSTALL_CLEANUP=1 \
+HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
+HOMEBREW_NO_ENV_HINTS=1 \
+brew bundle --file=- <<'EOF'
+{{ range .packages.taps -}}
+tap "{{ . }}", trusted: true
+{{ end -}}
 {{ range .packages.brew -}}
 brew "{{ . }}"
 {{ end -}}

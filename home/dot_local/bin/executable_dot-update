@@ -46,6 +46,10 @@ step_packages() {
                 skip 'brew not found'
                 return 0
             }
+            # Auto-update and post-run cleanup stay enabled here: updating is
+            # this script's job. Hints and dependents checks are pure noise.
+            export HOMEBREW_NO_ENV_HINTS=1
+            export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
             brew update || return 1
             brew upgrade || return 1
             # ponytail: the chezmoi package hook feeds brew bundle from an

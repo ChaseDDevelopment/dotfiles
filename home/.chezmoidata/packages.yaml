@@ -1,4 +1,9 @@
 packages:
+  # Third-party taps; Homebrew >= 6 refuses to load their formulae/casks
+  # unless trusted, declared inline in the Brewfile.
+  taps:
+    - jandedobbeleer/oh-my-posh
+    - nikitabobko/tap
   brew:
     - antidote
     - atuin
