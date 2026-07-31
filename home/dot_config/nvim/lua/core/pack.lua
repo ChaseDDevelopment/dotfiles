@@ -46,6 +46,17 @@ function M.build_treesitter()
 		record_failure("nvim-treesitter load", ts)
 		return
 	end
+	-- Parsers installed by older nvim-treesitter versions have no
+	-- parser-info/<lang>.revision entry, and current update() hard-asserts
+	-- on it. Drop orphaned parser binaries so install() rebuilds them.
+	local site = vim.fn.stdpath("data") .. "/site"
+	for _, parser in ipairs(vim.fn.glob(site .. "/parser/*", false, true)) do
+		local lang = vim.fn.fnamemodify(parser, ":t:r")
+		local revision = site .. "/parser-info/" .. lang .. ".revision"
+		if vim.fn.filereadable(revision) == 0 then
+			vim.fn.delete(parser)
+		end
+	end
 	local ok_i, err_i = pcall(function() ts.install(M.TS_LANGS):wait(180000) end)
 	if not ok_i then record_failure("treesitter install", err_i) end
 	local ok_u, err_u = pcall(function() ts.update():wait(180000) end)

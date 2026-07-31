@@ -56,6 +56,7 @@ packages:
     - ghostty
     - nikitabobko/tap/aerospace
   pacman:
+    - 7zip
     - atuin
     - base-devel
     - bat
@@ -88,7 +89,6 @@ packages:
     - resvg
     - ripgrep
     - rustup
-    - sevenzip
     - superfile
     - tailspin
     - tmux
