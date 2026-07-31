@@ -7,7 +7,7 @@ command -v curl >/dev/null 2>&1 || {
     exit 1
 }
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 if command -v chezmoi >/dev/null 2>&1; then
     chezmoi_bin=$(command -v chezmoi)
