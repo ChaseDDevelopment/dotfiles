@@ -9,6 +9,7 @@ require("which-key").add({
 	{ "<leader>f", group = "find", icon = { icon = "󰍉", color = "cyan" } },
 	{ "<leader>g", group = "git", icon = { icon = "󰊢", color = "orange" } },
 	{ "<leader>h", group = "harpoon", icon = { icon = "󰀱", color = "green" } },
+	{ "<leader>s", group = "search", icon = { icon = "󰍉", color = "cyan" } },
 	{ "<leader>q", group = "quit/session", icon = { icon = "󰈆", color = "red" } },
 	{ "<leader>u", group = "toggle", icon = { icon = "󰔡", color = "yellow" } },
 	{ "<leader>w", group = "window", icon = { icon = "󰖲", color = "azure" } },

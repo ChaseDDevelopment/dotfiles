@@ -22,7 +22,6 @@ vim.pack.add({
 	"https://github.com/saghen/blink.cmp",
 	"https://github.com/nvim-mini/mini.statusline",
 	"https://github.com/nvim-mini/mini.animate",
-	"https://github.com/stevearc/aerial.nvim",
 	"https://github.com/nvim-lua/plenary.nvim",
 	{ src = "https://github.com/ThePrimeagen/harpoon", version = "harpoon2" },
 	"https://github.com/MunifTanjim/nui.nvim",
@@ -49,6 +48,13 @@ vim.pack.add({
 	"https://github.com/christoomey/vim-tmux-navigator",
 	"https://github.com/m4xshen/hardtime.nvim",
 	"https://github.com/fei6409/log-highlight.nvim",
+	"https://github.com/nvim-mini/mini.files",
+	"https://github.com/gbprod/yanky.nvim",
+	"https://github.com/MagicDuck/grug-far.nvim",
+	"https://github.com/smjonas/inc-rename.nvim",
+	"https://github.com/b0o/SchemaStore.nvim",
+	"https://github.com/xvzc/chezmoi.nvim",
+	"https://github.com/alker0/chezmoi.vim",
 }, { confirm = false })
 require("plugins/tokyonight")
 require("plugins/treesitter")
@@ -61,7 +67,6 @@ require("plugins/blink")
 require("plugins/noice")
 require("plugins/statusline")
 require("plugins/animate")
-require("plugins/aerial")
 require("plugins/harpoon")
 require("plugins/gitsigns")
 require("plugins/surround")
@@ -77,6 +82,11 @@ require("plugins/render-markdown")
 require("plugins/log")
 require("plugins/lint")
 require("plugins/diffview")
+require("plugins/minifiles")
+require("plugins/yanky")
+require("plugins/grug-far")
+require("plugins/inc-rename")
+require("plugins/chezmoi")
 require("plugins/persistence")
 require("plugins/toggleterm")
 require("plugins/illuminate")

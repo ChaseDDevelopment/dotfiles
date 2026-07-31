@@ -59,8 +59,10 @@
   -- Plugin management
   vim.keymap.set('n', '<leader>pu', function() vim.pack.update() end, { desc = 'Update plugins' })
 
-  -- Aerial (code outline)
-  vim.keymap.set('n', '<leader>o', '<cmd>AerialToggle!<CR>', { desc = 'Code outline' })
+  -- Symbols outline panel (Trouble v3 symbols mode)
+  vim.keymap.set('n', '<leader>o',
+    '<cmd>Trouble symbols toggle focus=false win.position=right<CR>',
+    { desc = 'Symbols outline' })
 
   -- Harpoon (quick file nav -- lazy require to avoid startup error)
   vim.keymap.set('n', '<leader>ha', function() require('harpoon'):list():add() end, { desc = 'Add file' })

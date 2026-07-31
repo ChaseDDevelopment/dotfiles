@@ -79,6 +79,13 @@ vim.filetype.add({
 -- paths, so a unit edited anywhere else gets no filetype (hence no
 -- highlighting). Map the unit extensions authoritatively — they're all
 -- systemd-specific; the shipped syntax/systemd.vim then highlights them.
+-- .env variants (.env.local, .env.production, ...) are shell fragments.
+vim.filetype.add({
+	pattern = {
+		['%.env%.[%w_.-]+'] = 'sh',
+	},
+})
+
 vim.filetype.add({
 	extension = {
 		service = 'systemd',
