@@ -88,7 +88,6 @@ safe_paths=(
     home/dot_config/atuin/config.toml
     home/dot_config/git/config.tmpl
     home/dot_config/private_chezmoi-ai/private_chezmoi.toml.tmpl
-    home/dot_config/yazi/package.toml
     home/private_dot_pi/agent/aliases.bash
     home/dot_config/zsh/local.zsh.example
 )

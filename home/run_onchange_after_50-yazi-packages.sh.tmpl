@@ -1,9 +1,0 @@
-{{ if ne .profile "server" -}}
-#!/bin/sh
-# yazi package hash: {{ include "dot_config/yazi/package.toml" | sha256sum }}
-
-set -eu
-
-command -v ya >/dev/null 2>&1 || exit 0
-ya pkg install --discard
-{{- end }}

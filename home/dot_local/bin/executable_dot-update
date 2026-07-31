@@ -1,7 +1,7 @@
 #!/bin/sh
 # dot-update: explicit full-system update, run by the user on demand.
 # Chezmoi setup hooks intentionally never upgrade; this command does.
-# tools: brew pacman apt rustup uv bun atuin-update oh-my-posh tpm antidote ya nvim
+# tools: brew pacman apt rustup uv bun atuin-update oh-my-posh tpm antidote nvim
 #
 # Every step is command-guarded (visible skip when a tool is absent) and
 # failures never abort the run: they are collected and summarized at the
@@ -189,14 +189,6 @@ step_zsh_plugins() {
     '
 }
 
-step_yazi_packages() {
-    command -v ya >/dev/null 2>&1 || {
-        skip 'ya not found'
-        return 0
-    }
-    ya pkg upgrade
-}
-
 step_neovim() {
     command -v nvim >/dev/null 2>&1 || {
         skip 'nvim not found'
@@ -219,7 +211,6 @@ run_step atuin
 run_step oh_my_posh
 run_step tmux_plugins
 run_step zsh_plugins
-run_step yazi_packages
 run_step neovim
 
 printf '\n%s\n' "Config drift is separate: review with 'chezmoi diff' (and 'chezmoi-ai diff'), then apply."

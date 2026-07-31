@@ -13,7 +13,6 @@
 ~/.config/nvim
 ~/.config/oh-my-posh/config.omp.yaml
 ~/.config/tmux
-~/.config/yazi
 ~/.config/zsh
 ~/.local/bin/bat
 ~/.local/bin/chezmoi-ai

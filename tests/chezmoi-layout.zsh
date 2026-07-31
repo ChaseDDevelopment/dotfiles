@@ -54,7 +54,6 @@ required_paths=(
     home/run_onchange_after_20-zsh-plugins.sh.tmpl
     home/run_onchange_after_30-bat-cache.sh.tmpl
     home/run_onchange_after_40-tmux.sh.tmpl
-    home/run_onchange_after_50-yazi-packages.sh.tmpl
     home/run_onchange_after_60-neovim.sh.tmpl
 )
 

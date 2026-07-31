@@ -8,7 +8,6 @@ installer="$repo_root/home/run_onchange_before_10-install-packages.sh.tmpl"
 homebrew="$repo_root/home/run_once_before_05-install-homebrew.sh.tmpl"
 config="$repo_root/home/.chezmoi.toml.tmpl"
 ignore="$repo_root/home/.chezmoiignore.tmpl"
-yazi_hook="$repo_root/home/run_onchange_after_50-yazi-packages.sh.tmpl"
 bat_cache_hook="$repo_root/home/run_onchange_after_30-bat-cache.sh.tmpl"
 zsh_hook="$repo_root/home/run_onchange_after_20-zsh-plugins.sh.tmpl"
 tmux_hook="$repo_root/home/run_onchange_after_40-tmux.sh.tmpl"
@@ -20,7 +19,7 @@ fd_shim="$repo_root/home/dot_local/bin/symlink_fd.tmpl"
 
 for required_path in \
     "$data" "$installer" "$homebrew" "$config" "$ignore" \
-    "$zsh_hook" "$bat_cache_hook" "$tmux_hook" "$yazi_hook" \
+    "$zsh_hook" "$bat_cache_hook" "$tmux_hook" \
     "$neovim_fallback" "$neovim_hook" "$git_config" "$bat_shim" "$fd_shim"; do
     [[ -f "$required_path" ]] || {
         print -u2 -- "FAIL: missing ${required_path#$repo_root/}"
@@ -114,7 +113,6 @@ grep -Fq '{{ include "dot_config/zsh/plugins/dot_zsh_plugins.txt" | sha256sum }}
     grep -Fq '{{ include "dot_config/tmux/tmux.conf" | sha256sum }}' "$tmux_hook" &&
     grep -Fq '{{ include "dot_config/tmux/scripts/executable_tmux-boot" | sha256sum }}' "$tmux_hook" &&
     grep -Fq '{{ include "Library/LaunchAgents/com.orion.tmux-server.plist.tmpl" | sha256sum }}' "$tmux_hook" &&
-    grep -Fq '{{ include "dot_config/yazi/package.toml" | sha256sum }}' "$yazi_hook" &&
     grep -Fq '{{ include "dot_config/nvim/init.lua" | sha256sum }}' "$neovim_hook" &&
     grep -Fq '{{ include "dot_config/nvim/lua/core/pack.lua" | sha256sum }}' "$neovim_hook" || {
     print -u2 -- "FAIL: run_onchange hooks must hash every managed input"
@@ -200,7 +198,6 @@ tmux_boot_hash=$(source_hash dot_config/tmux/scripts/executable_tmux-boot)
 tmux_plist_hash=$(
     source_hash Library/LaunchAgents/com.orion.tmux-server.plist.tmpl
 )
-yazi_package_hash=$(source_hash dot_config/yazi/package.toml)
 neovim_init_hash=$(source_hash dot_config/nvim/init.lua)
 neovim_pack_hash=$(source_hash dot_config/nvim/lua/core/pack.lua)
 
@@ -300,19 +297,6 @@ for audit_mode in output fail; do
         exit 1
     }
 done
-
-server_yazi=$(render linux debian server "$yazi_hook")
-dev_yazi=$(render linux ubuntu dev "$yazi_hook")
-[[ -z "$server_yazi" && "$dev_yazi" == '#!/bin/sh'* &&
-    "$dev_yazi" == *'command -v ya >/dev/null 2>&1 || exit 0'* &&
-    "$dev_yazi" == *"$yazi_package_hash"* ]] || {
-    print -u2 -- "FAIL: Yazi hook must skip servers and capability-gate ya"
-    exit 1
-}
-print -r -- "$dev_yazi" | sh -n || {
-    print -u2 -- "FAIL: rendered Yazi hook must be POSIX shell syntax"
-    exit 1
-}
 
 amd64_neovim=$(render_neovim_fallback linux debian amd64)
 arm64_neovim=$(render_neovim_fallback linux ubuntu arm64)
@@ -425,7 +409,6 @@ fedora_render=$(render linux fedora server "$installer")
 
 ignore_render=$(render linux debian server "$ignore")
 [[ "$ignore_render" == *".config/ghostty/"* &&
-    "$ignore_render" == *".config/yazi/"* &&
     "$ignore_render" != *".local/bin/bat"* &&
     "$ignore_render" != *".local/bin/fd"* ]] || {
     print -u2 -- "FAIL: server profile must exclude workstation-only config"

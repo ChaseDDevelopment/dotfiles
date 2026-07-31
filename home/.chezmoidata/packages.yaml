@@ -38,6 +38,7 @@ packages:
     - rustup
     - sevenzip
     - skillshare
+    - superfile
     - tailspin
     - tmux
     - tree-sitter
@@ -46,7 +47,6 @@ packages:
     - uv
     - wget
     - xh
-    - yazi
     - yq
     - zoxide
     - zsh
@@ -89,6 +89,7 @@ packages:
     - ripgrep
     - rustup
     - sevenzip
+    - superfile
     - tailspin
     - tmux
     - tree-sitter
@@ -100,7 +101,6 @@ packages:
     - wl-clipboard
     - xclip
     - xh
-    - yazi
     - zoxide
     - zsh
   apt:

@@ -5,7 +5,6 @@ Library
 {{ end }}
 {{ if eq .profile "server" }}
 .config/ghostty/
-.config/yazi/
 {{ end }}
 {{ if not (and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian"))) }}
 .local/bin/bat
