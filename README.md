@@ -86,7 +86,8 @@ chezmoi diff
 chezmoi apply --dry-run --verbose
 ```
 
-For the private AI source:
+For the private AI source: clone the `ai-dotfiles` repository anywhere,
+run its `bootstrap.sh` once to record that location, then:
 
 ```sh
 chezmoi-ai diff

@@ -3,7 +3,6 @@
 ~/.config/atuin/config.toml
 ~/.config/bat/config
 ~/.config/bat/themes/tokyonight_night.tmTheme
-~/.config/chezmoi-ai/chezmoi.toml
 ~/.config/ghostty/config
 ~/.config/ghostty/mikael-gustafsson-wallpaper-mikael-gustafsson.jpg
 ~/.config/git/config

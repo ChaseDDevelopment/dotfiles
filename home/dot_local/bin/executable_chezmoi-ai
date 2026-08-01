@@ -3,6 +3,12 @@
 set -eu
 
 config_file="${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi-ai/chezmoi.toml"
-source_dir="$HOME/Documents/GitHub/ai-chezmoi"
 
-exec chezmoi --config "$config_file" --source "$source_dir" "$@"
+if [ ! -f "$config_file" ]; then
+    printf '%s\n' \
+        "chezmoi-ai: $config_file not found." \
+        'Clone the ai-dotfiles repository anywhere and run its bootstrap.sh once.' >&2
+    exit 1
+fi
+
+exec chezmoi --config "$config_file" "$@"

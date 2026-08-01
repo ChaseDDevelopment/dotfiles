@@ -45,7 +45,6 @@ required_paths=(
     home/dot_local/bin/symlink_fd.tmpl
     home/dot_local/bin/executable_chezmoi-ai
     home/dot_local/bin/executable_dot-update
-    home/dot_config/private_chezmoi-ai/private_chezmoi.toml.tmpl
     home/dot_config/git/config.tmpl
     home/private_dot_pi/agent/aliases.bash
     home/run_once_before_05-install-homebrew.sh.tmpl
@@ -60,10 +59,6 @@ required_paths=(
 for required_path in "${required_paths[@]}"; do
     require_file "$required_path"
 done
-
-grep -q 'persistentState' \
-    "$repo_root/home/dot_config/private_chezmoi-ai/private_chezmoi.toml.tmpl" || \
-    fail "AI chezmoi config must use independent persistent state"
 
 expected_executables=$(
     print -rl -- \
