@@ -11,8 +11,12 @@ fi
 # TPM resolves its path by querying the default tmux server; a server
 # auto-started before this config existed lacks TMUX_PLUGIN_MANAGER_PATH
 # and TPM aborts. Set it explicitly so installs never depend on server state.
-tmux start-server
-tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/"
+# (A fresh server gets the variable from the config it loads; only an
+# already-running stale server needs patching. `start-server` alone exits
+# immediately with no sessions, so never rely on it persisting.)
+if tmux ls >/dev/null 2>&1; then
+    tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/"
+fi
 
 "$tpm_dir/bin/install_plugins"
 "$tpm_dir/bin/update_plugins" all
