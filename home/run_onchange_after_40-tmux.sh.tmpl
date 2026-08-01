@@ -8,6 +8,12 @@ if [ ! -d "$tpm_dir/.git" ]; then
     git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
 fi
 
+# TPM resolves its path by querying the default tmux server; a server
+# auto-started before this config existed lacks TMUX_PLUGIN_MANAGER_PATH
+# and TPM aborts. Set it explicitly so installs never depend on server state.
+tmux start-server
+tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/"
+
 "$tpm_dir/bin/install_plugins"
 "$tpm_dir/bin/update_plugins" all
 

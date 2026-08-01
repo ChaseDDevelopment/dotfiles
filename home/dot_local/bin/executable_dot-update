@@ -163,6 +163,10 @@ step_tmux_plugins() {
         skip 'tpm not installed'
         return 0
     }
+    # Same server-state guard as the tmux hook: TPM queries the default
+    # tmux server for its path variable.
+    tmux start-server
+    tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/"
     "$tpm_update" all
 }
 
