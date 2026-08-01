@@ -164,9 +164,11 @@ step_tmux_plugins() {
         return 0
     }
     # Same server-state guard as the tmux hook: TPM queries the default
-    # tmux server for its path variable.
-    tmux start-server
-    tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/"
+    # tmux server for its path variable; patch it only on a running server
+    # (a fresh one gets it from the config it loads).
+    if tmux ls >/dev/null 2>&1; then
+        tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/"
+    fi
     "$tpm_update" all
 }
 
