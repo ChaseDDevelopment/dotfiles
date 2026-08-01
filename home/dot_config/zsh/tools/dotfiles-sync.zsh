@@ -35,6 +35,7 @@ _dotfiles_sync() {
     fi
     {
         touch "$stamp"
+        print -- "dotfiles-sync: checking for updates..."
         _dotfiles_sync_one "dotfiles" "chezmoi"
         if [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi-ai/chezmoi.toml" ]] &&
             (( $+commands[chezmoi-ai] )); then
