@@ -57,9 +57,13 @@ function M.build_treesitter()
 			vim.fn.delete(parser)
 		end
 	end
-	local ok_i, err_i = pcall(function() ts.install(M.TS_LANGS):wait(180000) end)
+	-- Cap concurrent parser compiles by RAM: big grammars (gitcommit) need
+	-- ~2GB of cc1 each, and the default is effectively unlimited — parallel
+	-- builds OOM-kill the compiler on small hosts.
+	local max_jobs = math.max(1, math.floor(vim.uv.get_total_memory() / (2 * 1024 * 1024 * 1024)))
+	local ok_i, err_i = pcall(function() ts.install(M.TS_LANGS, { max_jobs = max_jobs }):wait(600000) end)
 	if not ok_i then record_failure("treesitter install", err_i) end
-	local ok_u, err_u = pcall(function() ts.update():wait(180000) end)
+	local ok_u, err_u = pcall(function() ts.update(nil, { max_jobs = max_jobs }):wait(600000) end)
 	if not ok_u then record_failure("treesitter update", err_u) end
 end
 

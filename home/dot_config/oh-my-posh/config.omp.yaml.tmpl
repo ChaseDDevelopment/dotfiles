@@ -23,7 +23,7 @@ blocks:
       # accent color is a stable hash of that label, so every box keeps its
       # own color without curating one. Root is always loud.
 [[- if ne .chezmoi.hostname "Chases-MacBook-Pro" ]]
-[[- $aliases := dict "Chases-Mac-mini" "hydra" "solar-flare" "dock" "pelican-node-1" "pelican" "technitium-1" "dns1" "technitium-2" "dns2" ]]
+[[- $aliases := dict "Chases-Mac-mini" "hydra" "solar-flare" "dock" "pelican-node-1" "pelican" "technitium-1" "dns1" "technitium-2" "dns2" "technitium-tri" "dns3" ]]
 [[- $label := get $aliases .chezmoi.hostname | default .chezmoi.hostname ]]
 [[- $accent := index (list "blue" "cyan" "magenta" "green" "yellow" "red") (mod (atoi (regexFind "[0-9]" (sha1sum $label))) 6) ]]
       - type: session

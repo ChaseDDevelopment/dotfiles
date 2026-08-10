@@ -52,7 +52,10 @@ command -v uv >/dev/null 2>&1 || {
     exit 1
 }
 {{ else -}}
-if ! command -v uv >/dev/null 2>&1; then
+# Check in root's PATH context: uv tool installs run through run_root, and a
+# user-local ~/.local/bin/uv (old installer remnant) is invisible to sudo's
+# secure_path — a user-context check here would skip the install and then 127.
+if ! run_root sh -c 'command -v uv >/dev/null 2>&1'; then
     tmp_script=$(mktemp)
     trap 'rm -f -- "$tmp_script"' 0
     curl --fail --location --silent --show-error \
