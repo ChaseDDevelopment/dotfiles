@@ -115,6 +115,10 @@ packages:
       - fzf
       - git
       - jq
+      # lxml (systemd-language-server dep) has no wheel for uv's newest
+      # managed Python and builds from source.
+      - libxml2-dev
+      - libxslt1-dev
       - nala
       - ripgrep
       - tmux

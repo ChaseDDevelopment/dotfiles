@@ -226,7 +226,7 @@ done
 
 server_render=$(render linux debian server "$installer")
 dev_render=$(render linux ubuntu dev "$installer")
-server_packages='bat btop build-essential ca-certificates curl direnv fd-find fzf git jq nala ripgrep tmux unzip wget zoxide zsh'
+server_packages='bat btop build-essential ca-certificates curl direnv fd-find fzf git jq libxml2-dev libxslt1-dev nala ripgrep tmux unzip wget zoxide zsh'
 dev_packages='cargo ffmpeg golang-go hyperfine imagemagick libtree-sitter-dev p7zip-full poppler-utils python3 python3-venv rustc wl-clipboard xclip'
 for rendered_script in "$server_render" "$dev_render"; do
     print -r -- "$rendered_script" | sh -n || {
