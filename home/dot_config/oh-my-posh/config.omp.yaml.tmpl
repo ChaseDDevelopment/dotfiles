@@ -1,3 +1,4 @@
+# chezmoi:template:left-delimiter="[[" right-delimiter="]]"
 $schema: https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json
 version: 2
 final_space: true
@@ -17,11 +18,17 @@ blocks:
     alignment: left
     newline: true
     segments:
+      # user@host renders only on remote hosts; this workstation stays bare.
+      # The host accent color is a stable hash of the hostname, so every box
+      # keeps its own color without a curated map. Root is always loud.
+[[- if ne .chezmoi.hostname "Chases-MacBook-Pro" ]]
+[[- $accent := index (list "blue" "cyan" "magenta" "green" "yellow" "red") (mod (atoi (regexFind "[0-9]" (sha1sum .chezmoi.hostname))) 6) ]]
       - type: session
         style: plain
         background: transparent
-        foreground: "p:magenta"
-        template: "{{ .UserName }}<p:grey>@</><p:cyan>{{ .HostName }}</> "
+        foreground: "p:grey"
+        template: "{{ if .Root }}<p:red><b>root</b></>{{ else }}{{ .UserName }}{{ end }}@<p:[[ $accent ]]>[[ .chezmoi.hostname ]]</> "
+[[- end ]]
       - type: path
         style: plain
         background: transparent
