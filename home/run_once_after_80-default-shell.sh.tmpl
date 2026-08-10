@@ -1,0 +1,27 @@
+{{ if ne .chezmoi.os "darwin" -}}
+#!/bin/sh
+# The zsh configuration only engages when zsh is the login shell; fresh Linux
+# hosts land in bash (the old installer used to chsh). macOS defaults to zsh.
+
+set -eu
+
+user=$(id -un)
+current=$(getent passwd "$user" | cut -d: -f7)
+case $current in
+    */zsh) exit 0 ;;
+esac
+
+zsh_path=$(command -v zsh 2>/dev/null) || {
+    printf '%s\n' 'default shell: zsh not installed; skipping' >&2
+    exit 0
+}
+
+if [ "$(id -u)" -eq 0 ]; then
+    chsh -s "$zsh_path"
+elif command -v sudo >/dev/null 2>&1; then
+    sudo chsh -s "$zsh_path" "$user"
+else
+    chsh -s "$zsh_path"
+fi
+printf '%s\n' "default shell: changed to $zsh_path (takes effect next login)"
+{{ end -}}
