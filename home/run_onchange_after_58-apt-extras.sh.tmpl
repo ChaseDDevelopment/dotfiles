@@ -122,13 +122,20 @@ case '{{ .chezmoi.arch }}' in
     amd64)
         rust_arch=x86_64
         lazygit_arch=x86_64
+        ts_arch=x64
         ;;
     arm64)
         rust_arch=aarch64
         lazygit_arch=arm64
+        ts_arch=arm64
         ;;
 esac
 
+# Debian/Ubuntu package tree-sitter-cli 0.22, too old for nvim-treesitter
+# main. This hook is numbered before 60-neovim so the CLI exists when the
+# bootstrap compiles parsers.
+install_release tree-sitter tree-sitter/tree-sitter \
+    "tree-sitter-cli-linux-${ts_arch}.zip" tree-sitter
 install_release lazygit jesseduffield/lazygit \
     "lazygit_{ver}_linux_${lazygit_arch}.tar.gz" lazygit
 install_release eza eza-community/eza \

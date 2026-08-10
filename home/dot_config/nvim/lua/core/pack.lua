@@ -71,6 +71,13 @@ end
 -- (which uses blink.lib to fetch a prebuilt binary or compile), falling back
 -- to a direct `cargo build --release`.
 function M.build_blink()
+	-- Both blink.cmp's build() and our fallback need cargo. Without it,
+	-- blink's Lua fuzzy implementation takes over at runtime — a visible
+	-- degrade on toolchain-less servers, not a bootstrap failure.
+	if vim.fn.executable("cargo") == 0 then
+		print("blink.cmp: cargo not found; skipping fuzzy build (Lua fallback at runtime)")
+		return
+	end
 	pcall(vim.cmd.packadd, "blink.lib")
 	pcall(vim.cmd.packadd, "blink.cmp")
 	local ok, cmp = pcall(require, "blink.cmp")
