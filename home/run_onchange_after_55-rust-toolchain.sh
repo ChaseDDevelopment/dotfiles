@@ -24,8 +24,18 @@ if command -v rustup >/dev/null 2>&1; then
     fi
     minor=$(rustc_minor)
     if [ -n "$minor" ] && [ "$minor" -lt "$BLINK_RUST_FLOOR" ]; then
-        printf '%s\n' "rust toolchain: stable 1.$minor < 1.$BLINK_RUST_FLOOR; running rustup update stable"
-        rustup update stable
+        default_toolchain=$(rustup default 2>/dev/null | cut -d' ' -f1)
+        case $default_toolchain in
+            stable-*)
+                printf '%s\n' "rust toolchain: stable 1.$minor < 1.$BLINK_RUST_FLOOR; running rustup update stable"
+                rustup update stable
+                ;;
+            *)
+                # A versioned default (CI runners pin these) is deliberate;
+                # never override it. blink.cmp uses its Lua fallback there.
+                printf '%s\n' "rust toolchain: default $default_toolchain is 1.$minor < 1.$BLINK_RUST_FLOOR but pinned; leaving it (blink.cmp uses Lua fallback)"
+                ;;
+        esac
     fi
 elif command -v cargo >/dev/null 2>&1; then
     printf '%s\n' 'rust toolchain: distro cargo present; skipping'
