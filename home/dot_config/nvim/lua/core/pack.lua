@@ -78,6 +78,14 @@ function M.build_blink()
 		print("blink.cmp: cargo not found; skipping fuzzy build (Lua fallback at runtime)")
 		return
 	end
+	-- frizbee (the fuzzy matcher) uses let-chains, stable since rust 1.88;
+	-- older toolchains fail mid-compile.
+	local rustc_ver = (vim.fn.systemlist("rustc --version")[1] or ""):match("%d+%.%d+")
+	local minor = tonumber((rustc_ver or ""):match("%.(%d+)") or 0)
+	if not rustc_ver or minor < 88 then
+		print(("blink.cmp: rustc %s too old (need 1.88+); skipping fuzzy build (Lua fallback). Run dot-update to refresh rust."):format(rustc_ver or "?"))
+		return
+	end
 	pcall(vim.cmd.packadd, "blink.lib")
 	pcall(vim.cmd.packadd, "blink.cmp")
 	local ok, cmp = pcall(require, "blink.cmp")

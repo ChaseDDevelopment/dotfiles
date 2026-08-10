@@ -1,0 +1,41 @@
+{{ if and (eq .chezmoi.os "linux") (eq .chezmoi.osRelease.id "arch") -}}
+#!/bin/sh
+# Arch's default sshd_config has no AcceptEnv, so the client-sent
+# LC_SSH_ALIAS (the prompt's host label) never arrives. Debian, Ubuntu,
+# Proxmox, and macOS accept LC_* out of the box.
+
+set -eu
+
+conf=/etc/ssh/sshd_config.d/50-accept-env.conf
+[ -f "$conf" ] && exit 0
+
+command -v sshd >/dev/null 2>&1 || {
+    printf '%s\n' 'sshd-env: sshd not installed; skipping'
+    exit 0
+}
+if ! grep -q '^Include /etc/ssh/sshd_config.d' /etc/ssh/sshd_config 2>/dev/null; then
+    printf '%s\n' 'sshd-env: sshd_config lacks the sshd_config.d Include; add "AcceptEnv LANG LC_*" manually' >&2
+    exit 0
+fi
+
+if [ "$(id -u)" -eq 0 ]; then
+    run_root() {
+        "$@"
+    }
+else
+    command -v sudo >/dev/null 2>&1 || {
+        printf '%s\n' 'sshd-env: sudo is required when not running as root' >&2
+        exit 1
+    }
+    run_root() {
+        sudo "$@"
+    }
+fi
+
+printf 'AcceptEnv LANG LC_*\n' | run_root tee "$conf" >/dev/null
+if run_root systemctl reload sshd 2>/dev/null; then
+    printf '%s\n' 'sshd-env: enabled AcceptEnv LC_* (sshd reloaded)'
+else
+    printf '%s\n' 'sshd-env: wrote AcceptEnv drop-in; reload sshd manually to activate' >&2
+fi
+{{ end -}}

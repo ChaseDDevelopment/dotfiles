@@ -18,20 +18,16 @@ blocks:
     alignment: left
     newline: true
     segments:
-      # user@host renders only on remote hosts; this workstation stays bare.
-      # Hosts whose hostname differs from their ssh alias are relabeled; the
-      # accent color is a stable hash of that label, so every box keeps its
-      # own color without curating one. Root is always loud.
-[[- if ne .chezmoi.hostname "Chases-MacBook-Pro" ]]
-[[- $aliases := dict "Chases-Mac-mini" "hydra" "solar-flare" "dock" "pelican-node-1" "pelican" "technitium-1" "dns1" "technitium-2" "dns2" "technitium-tri" "dns3" ]]
-[[- $label := get $aliases .chezmoi.hostname | default .chezmoi.hostname ]]
-[[- $accent := index (list "blue" "cyan" "magenta" "green" "yellow" "red") (mod (atoi (regexFind "[0-9]" (sha1sum $label))) 6) ]]
+      # user@host appears only when the shell knows its ssh alias: the
+      # client's ssh config sends LC_SSH_ALIAS and tools/ssh-alias.zsh
+      # persists it, so this public source names no host. The accent color
+      # is a baked hash of this machine's own fqdn. Root is always loud.
+[[- $accent := index (list "blue" "cyan" "magenta" "green" "yellow" "red") (mod (atoi (regexFind "[0-9]" (sha1sum .chezmoi.fqdnHostname))) 6) ]]
       - type: session
         style: plain
         background: transparent
         foreground: "p:grey"
-        template: "{{ if .Root }}<p:red><b>root</b></>{{ else }}{{ .UserName }}{{ end }}@<p:[[ $accent ]]>[[ $label ]]</> "
-[[- end ]]
+        template: "{{ if .Env.LC_SSH_ALIAS }}{{ if .Root }}<p:red><b>root</b></>{{ else }}{{ .UserName }}{{ end }}@<p:[[ $accent ]]>{{ .Env.LC_SSH_ALIAS }}</> {{ end }}"
       - type: path
         style: plain
         background: transparent

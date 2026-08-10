@@ -4,7 +4,7 @@
 
 set -eu
 
-PATH="$HOME/.local/bin:$PATH"
+PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 {{ if eq .chezmoi.os "darwin" -}}
 # rust-lang/rust#157750: rustc's stripped dylibs get a mis-aligned LINKEDIT

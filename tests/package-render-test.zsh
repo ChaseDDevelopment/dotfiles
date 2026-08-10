@@ -386,7 +386,7 @@ fi
 }
 
 neovim_hook_text=$(render linux ubuntu dev "$neovim_hook")
-[[ "$neovim_hook_text" == *'PATH="$HOME/.local/bin:$PATH"'* ]] || {
+[[ "$neovim_hook_text" == *'PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"'* ]] || {
     print -u2 -- "FAIL: Neovim hook must prefer the local fallback binary"
     exit 1
 }
