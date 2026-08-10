@@ -12,6 +12,15 @@ PATH="$HOME/.local/bin:$PATH"
 # Keep debuginfo in the cargo build until a fixed rustc ships.
 export CARGO_PROFILE_RELEASE_STRIP=false
 {{ end -}}
+{{ if eq .chezmoi.os "linux" -}}
+# Big generated tree-sitter parsers (gitcommit) OOM-kill cc1 at the default
+# -O2 on small hosts; -O1 compiles them in a fraction of the memory. The
+# tree-sitter CLI builds through the Rust cc crate, which honors CFLAGS.
+mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+if [ "${mem_kb:-0}" -lt 6291456 ]; then
+    export CFLAGS="-O1 -g0"
+fi
+{{ end -}}
 nvim --headless -u "$HOME/.config/nvim/init.lua" \
     -c "lua require('core.pack').bootstrap()" \
     -c qa
