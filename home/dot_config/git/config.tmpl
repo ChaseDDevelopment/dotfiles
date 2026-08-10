@@ -57,3 +57,12 @@
 [user]
 	email = Chase@ChaseDDevelopment.tech
 	name = ChaseDDevelopment
+
+# gh resolves from PATH (brew/pacman/apt install it in different places).
+# The empty helper line resets inherited helpers so gh is authoritative.
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !gh auth git-credential
