@@ -16,10 +16,14 @@ install_tool() {
         printf '%s\n' "uv tools: $2 already installed; skipping"
         return 0
     fi
-    uv tool install "$1"
+    _pkg=$1
+    shift 2
+    uv tool install "$@" "$_pkg"
 }
 
-install_tool systemd-language-server systemd-language-server
+# systemd-language-server pins lxml<6, which cannot build on Python 3.14;
+# 3.13 gets a prebuilt wheel. Drop the pin when upstream allows lxml 6.
+install_tool systemd-language-server systemd-language-server --python 3.13
 install_tool nginx-language-server nginx-language-server
 install_tool basedpyright basedpyright-langserver
 install_tool ruff ruff
@@ -72,11 +76,15 @@ install_tool() {
         printf '%s\n' "uv tools: $2 already installed; skipping"
         return 0
     fi
+    _pkg=$1
+    shift 2
     run_root env UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
-        uv tool install "$1"
+        uv tool install "$@" "$_pkg"
 }
 
-install_tool systemd-language-server systemd-language-server
+# systemd-language-server pins lxml<6, which cannot build on Python 3.14;
+# 3.13 gets a prebuilt wheel. Drop the pin when upstream allows lxml 6.
+install_tool systemd-language-server systemd-language-server --python 3.13
 install_tool nginx-language-server nginx-language-server
 install_tool basedpyright basedpyright-langserver
 install_tool ruff ruff
