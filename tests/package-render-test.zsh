@@ -74,8 +74,8 @@ config_text=$(<"$config")
     print -u2 -- "FAIL: Brew bundle must not upgrade existing packages"
     exit 1
 }
-[[ "$installer_text" == *"pacman -S --needed --noconfirm"* ]] || {
-    print -u2 -- "FAIL: Arch package path must use pacman --needed"
+[[ "$installer_text" == *"pacman -Syu --needed --noconfirm"* ]] || {
+    print -u2 -- "FAIL: Arch package path must use pacman -Syu --needed"
     exit 1
 }
 [[ "$installer_text" == *'osRelease.id "ubuntu"'* &&

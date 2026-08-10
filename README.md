@@ -31,8 +31,10 @@ and dev lists. macOS and Arch retain their full native package lists even when
 the profile is overridden.
 
 Native package managers are Homebrew Bundle (macOS),
-`pacman -S --needed --noconfirm` (Arch), and APT (Ubuntu/Debian/Proxmox). Arch
-may upgrade outdated listed packages; Homebrew Bundle and APT do not. Before
+`pacman -Syu --needed --noconfirm` (Arch), and APT (Ubuntu/Debian/Proxmox).
+Arch installs refresh the sync database and perform a full system upgrade —
+installing against a stale database 404s on mirrors, and refreshing without
+upgrading is unsupported on Arch. Homebrew Bundle and APT do not upgrade. Before
 APT runs, it audits `dpkg`; any pending configuration stops with manual
 `sudo dpkg --configure -a` guidance. It never auto-repairs, upgrades, removes,
 retries, or changes Proxmox repositories. Root runs it directly; non-root
@@ -72,7 +74,7 @@ chezmoi apply
 ```
 
 Package installation uses Homebrew Bundle on macOS,
-`pacman -S --needed --noconfirm` on Arch, and APT on Ubuntu, Debian, and
+`pacman -Syu --needed --noconfirm` on Arch, and APT on Ubuntu, Debian, and
 Proxmox. Package and post-apply setup hooks are `run_onchange` scripts: they
 run when their rendered script/input changes, not for package drift or every
 apply. Bootstrap never applies changes.

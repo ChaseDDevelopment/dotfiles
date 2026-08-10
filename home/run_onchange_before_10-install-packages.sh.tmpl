@@ -22,7 +22,10 @@ cask "{{ . }}"
 {{ end -}}
 EOF
 {{ else if eq .chezmoi.osRelease.id "arch" -}}
-sudo pacman -S --needed --noconfirm{{ range .packages.pacman }} {{ . }}{{ end }}
+# -Syu, not -S: installing against a stale sync DB 404s (mirrors drop old
+# package files), and refreshing without upgrading creates a partial-upgrade
+# state Arch does not support. Arch applies therefore do a full upgrade.
+sudo pacman -Syu --needed --noconfirm{{ range .packages.pacman }} {{ . }}{{ end }}
 {{ else if and (eq .chezmoi.os "linux") (or (eq .chezmoi.osRelease.id "ubuntu") (eq .chezmoi.osRelease.id "debian")) -}}
 if [ "$(id -u)" -eq 0 ]; then
     run_root() {

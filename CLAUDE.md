@@ -35,8 +35,10 @@
 - APT audits `dpkg` first and stops for manual repair; it never upgrades,
   removes, auto-repairs, retries, or changes Proxmox repositories. Root runs
   directly; non-root uses `sudo`.
-- Arch uses `pacman -S --needed --noconfirm`, which may upgrade outdated listed
-  packages; Homebrew Bundle and APT do not upgrade them.
+- Arch uses `pacman -Syu --needed --noconfirm`: package installs refresh the
+  sync DB and perform a full system upgrade (stale DBs 404 on mirrors, and
+  refresh-without-upgrade is unsupported partial-upgrade territory). Homebrew
+  Bundle and APT never upgrade.
 - Homebrew installs Herdr on macOS. Linux hosts must install it separately
   using <https://herdr.dev/docs/install/>; chezmoi only syncs its configuration.
 - The only upstream Neovim binary fallback is checksum-pinned v0.12.4 on APT
