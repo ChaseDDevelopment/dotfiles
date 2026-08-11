@@ -8,7 +8,11 @@ vim.o.clipboard = 'unnamedplus'
 -- system clipboard. Built-in auto-detection is gated on $SSH_TTY which
 -- tmux often drops; SSH_CONNECTION survives tmux and is set by sshd.
 -- Requires `set -g allow-passthrough on` on every tmux layer in the chain.
+-- Herdr remote bridges clipboard writes, not OSC 52 read responses.
 if vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY then
+    if vim.env.HERDR_ENV == '1' then
+        vim.o.clipboard = ''
+    end
     vim.g.clipboard = {
         name = 'OSC 52',
         copy = {

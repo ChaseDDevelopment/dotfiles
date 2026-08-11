@@ -30,6 +30,13 @@ grep -Fq 'https://herdr.dev/docs/install/' "$repo_root/AGENTS.md" &&
     grep -Fq 'Linux hosts must install it separately' "$repo_root/AGENTS.md" || \
     fail "agent guidance must document the Herdr Linux prerequisite"
 
+nvim_options="$repo_root/home/dot_config/nvim/lua/core/options.lua"
+herdr_clipboard_guard=$(grep -A4 -F \
+    'if vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY then' \
+    "$nvim_options")
+[[ "$herdr_clipboard_guard" == $'if vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY then\n    if vim.env.HERDR_ENV == \'1\' then\n        vim.o.clipboard = \'\'\n    end\n    vim.g.clipboard = {' ]] || \
+    fail "remote Herdr Neovim must keep OSC 52 copy without routing normal paste through the clipboard"
+
 required_paths=(
     home/.chezmoi.toml.tmpl
     home/.chezmoiignore.tmpl
