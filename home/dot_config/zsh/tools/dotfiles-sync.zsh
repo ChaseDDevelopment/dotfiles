@@ -13,7 +13,10 @@ _dotfiles_sync() {
     (( $+commands[chezmoi] )) || return 0
     (( $+commands[git] )) || return 0
 
-    local interval=$(( 6 * 3600 ))
+    # 15 minutes: cheap (ff-only pull, apply only if HEAD moved) and short
+    # enough that a push-then-ssh the same evening still picks up the AI
+    # source. Override with DOTFILES_SYNC_FORCE=1.
+    local interval=$(( 15 * 60 ))
     local state_dir="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-sync"
     local stamp="$state_dir/last-sync"
     mkdir -p "$state_dir" 2>/dev/null || return 0
