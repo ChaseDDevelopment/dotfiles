@@ -8,20 +8,43 @@ vim.o.clipboard = 'unnamedplus'
 -- system clipboard. Built-in auto-detection is gated on $SSH_TTY which
 -- tmux often drops; SSH_CONNECTION survives tmux and is set by sshd.
 -- Requires `set -g allow-passthrough on` on every tmux layer in the chain.
--- Herdr remote bridges clipboard writes, not OSC 52 read responses.
-if vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY then
-    if vim.env.HERDR_ENV == '1' then
-        vim.o.clipboard = ''
+-- Herdr bridges clipboard writes, not OSC 52 read responses, including
+-- when the server is local (hr <host> attaches; panes often have no SSH_*).
+local osc52 = require('vim.ui.clipboard.osc52')
+local in_herdr = vim.env.HERDR_ENV == '1'
+local over_ssh = vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY
+if in_herdr then
+    vim.o.clipboard = ''
+    local function no_paste()
+        return 0
     end
     vim.g.clipboard = {
         name = 'OSC 52',
         copy = {
-            ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
-            ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+            ['+'] = osc52.copy('+'),
+            ['*'] = osc52.copy('*'),
         },
         paste = {
-            ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
-            ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+            ['+'] = no_paste,
+            ['*'] = no_paste,
+        },
+    }
+    vim.api.nvim_create_autocmd('TextYankPost', {
+        group = vim.api.nvim_create_augroup('HerdrOsc52Copy', { clear = true }),
+        callback = function()
+            osc52.copy('+')(vim.v.event.regcontents)
+        end,
+    })
+elseif over_ssh then
+    vim.g.clipboard = {
+        name = 'OSC 52',
+        copy = {
+            ['+'] = osc52.copy('+'),
+            ['*'] = osc52.copy('*'),
+        },
+        paste = {
+            ['+'] = osc52.paste('+'),
+            ['*'] = osc52.paste('*'),
         },
     }
 end

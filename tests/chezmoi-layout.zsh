@@ -31,11 +31,23 @@ grep -Fq 'https://herdr.dev/docs/install/' "$repo_root/AGENTS.md" &&
     fail "agent guidance must document the Herdr Linux prerequisite"
 
 nvim_options="$repo_root/home/dot_config/nvim/lua/core/options.lua"
-herdr_clipboard_guard=$(grep -A4 -F \
-    'if vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY then' \
-    "$nvim_options")
-[[ "$herdr_clipboard_guard" == $'if vim.env.SSH_CONNECTION or vim.env.SSH_CLIENT or vim.env.SSH_TTY then\n    if vim.env.HERDR_ENV == \'1\' then\n        vim.o.clipboard = \'\'\n    end\n    vim.g.clipboard = {' ]] || \
-    fail "remote Herdr Neovim must keep OSC 52 copy without routing normal paste through the clipboard"
+grep -Fq "local in_herdr = vim.env.HERDR_ENV == '1'" "$nvim_options" || \
+    fail "Herdr clipboard guard must key off HERDR_ENV, not only SSH_*"
+grep -Fq "if in_herdr then" "$nvim_options" || \
+    fail "Herdr clipboard path must be the outer branch"
+grep -Fq "vim.o.clipboard = ''" "$nvim_options" || \
+    fail "Herdr Neovim must not route y/p through unnamedplus"
+grep -Fq "local function no_paste()" "$nvim_options" &&
+    grep -Fq "return 0" "$nvim_options" || \
+    fail "Herdr Neovim must no-op OSC 52 paste"
+herdr_branch=$(awk '/if in_herdr then/,/^elseif over_ssh then/' "$nvim_options")
+[[ "$herdr_branch" == *'osc52.paste'* ]] && \
+    fail "Herdr Neovim must not call osc52.paste"
+[[ "$herdr_branch" != *'TextYankPost'* || "$herdr_branch" != *"osc52.copy('+')"* ]] && \
+    fail "Herdr Neovim must OSC 52-copy yanks via TextYankPost"
+grep -Fq 'sync_with_ring = vim.env.HERDR_ENV ~= "1"' \
+    "$repo_root/home/dot_config/nvim/lua/plugins/yanky.lua" || \
+    fail "Yanky must not poll the system clipboard inside Herdr"
 
 required_paths=(
     home/.chezmoi.toml.tmpl

@@ -1,5 +1,8 @@
 require("yanky").setup({
 	highlight = { timer = 150 },
+	system_clipboard = {
+		sync_with_ring = vim.env.HERDR_ENV ~= "1",
+	},
 })
 
 vim.keymap.set({ "n", "x" }, "y", "<Plug>(YankyYank)", { desc = "Yank" })
